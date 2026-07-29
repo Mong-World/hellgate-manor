@@ -1,58 +1,31 @@
-# Hellgate Manor — Prototype 0.1
+# Hellgate Manor — bundled Portals project
 
-A Three.js browser-game prototype inspired by the grab-and-throw loop of classic castle-defence games.
+This version uses Vite and installs Three.js as a local npm dependency. There are no remote JavaScript imports in the source.
 
-## Included
+## Portals GitHub import
 
-- Fixed 2.5D camera
-- Gothic two-storey manor with side towers and iron gate
-- Modern dark horror presentation
-- One procedural Husk enemy
-- Mouse grabbing with spring-like weight
-- Momentum-based throwing
-- Binary ground-impact death threshold
-- Black ash death effect
-- Soul ember collection
-- Automatic Husk respawning
+Upload the complete contents of this folder to the repository root, then import with:
+
+- Branch: `main`
+- Project directory: repository root
+- Entry file: `index.html`
+
+The build command is `npm run build` and Vite outputs the deployable game to `dist`.
 
 ## Run locally
 
-Because the project uses ES modules, run it through a local web server rather than double-clicking `index.html`.
+```bash
+npm install
+npm run dev
+```
 
-### VS Code
-Install the **Live Server** extension, then right-click `index.html` and choose **Open with Live Server**.
-
-### Python
-From the project folder:
+## Production build
 
 ```bash
-python -m http.server 8080
+npm install
+npm run build
 ```
 
-Then open `http://localhost:8080`.
+## Important
 
-## Deploy to Portals
-
-Upload the ZIP directly. `index.html` is at the ZIP root.
-
-## GitHub
-
-Create a new repository and upload all files while preserving the folders:
-
-```text
-index.html
-style.css
-js/
-README.md
-```
-
-Then connect that repository and branch in Portals.
-
-## Tuning
-
-The easiest gameplay values to adjust are:
-
-- `killThreshold` in `js/Husk.js`
-- `walkSpeed` in `js/Husk.js`
-- spring `stiffness` and `damping` in `js/GrabSystem.js`
-- throw scaling in `calculateReleaseVelocity()` in `js/GrabSystem.js`
+Keep `package.json`, `vite.config.js`, `index.html`, `style.css`, and `src/` in the repository. Do not upload only the old prototype files, because those contained CDN imports.
