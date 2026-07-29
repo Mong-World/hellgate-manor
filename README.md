@@ -1,31 +1,29 @@
-# Hellgate Manor — bundled Portals project
+# Hellgate Manor — Portals Source Project
 
-This version uses Vite and installs Three.js as a local npm dependency. There are no remote JavaScript imports in the source.
+This repository keeps the editable Vite source on the `main` branch.
 
-## Portals GitHub import
+A GitHub Actions workflow automatically builds the game and publishes the finished static files to a branch named:
 
-Upload the complete contents of this folder to the repository root, then import with:
-
-- Branch: `main`
-- Project directory: repository root
-- Entry file: `index.html`
-
-The build command is `npm run build` and Vite outputs the deployable game to `dist`.
-
-## Run locally
-
-```bash
-npm install
-npm run dev
+```text
+portals-build
 ```
 
-## Production build
+## First setup
 
-```bash
-npm install
-npm run build
+1. Upload all project files to the repository's `main` branch.
+2. Open the repository's **Actions** tab.
+3. Wait for **Build for Portals** to finish successfully.
+4. Confirm that the repository now has a `portals-build` branch.
+5. In Portals, import using:
+
+```text
+Branch: portals-build
+Project directory: repository root
+Entry file: index.html
 ```
 
-## Important
+Do not point Portals at `main`. `main` contains source files that require Vite. `portals-build` contains the browser-ready game.
 
-Keep `package.json`, `vite.config.js`, `index.html`, `style.css`, and `src/` in the repository. Do not upload only the old prototype files, because those contained CDN imports.
+## Development
+
+Make edits on `main`. Every push automatically replaces `portals-build` with a fresh production build.
