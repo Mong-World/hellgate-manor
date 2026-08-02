@@ -1,0 +1,16 @@
+* { box-sizing: border-box; }
+html, body {
+  width: 100%; height: 100%; margin: 0; overflow: hidden;
+  background: #050506; user-select: none;
+}
+body { cursor: grab; }
+body.grabbing { cursor: grabbing; }
+#game-shell, canvas { position: fixed; inset: 0; }
+canvas { display: block; touch-action: none; }
+#loading {
+  position: fixed; inset: 0; z-index: 20; display: grid; place-items: center;
+  background: #050506; color: #ff7a32;
+  font: 700 12px/1.2 system-ui, sans-serif; letter-spacing: .24em;
+  transition: opacity 500ms ease; pointer-events: none;
+}
+#loading.hidden { opacity: 0; }

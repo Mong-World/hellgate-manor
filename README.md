@@ -1,29 +1,29 @@
-# Hellgate Manor — Portals Source Project
+# Hellgate Manor — Procedural Visual Test v0.5
 
-This repository keeps the editable Vite source on the `main` branch.
+This build replaces most placeholder shapes with a more developed procedural art pass while keeping the project free of external 3D assets.
 
-A GitHub Actions workflow automatically builds the game and publishes the finished static files to a branch named:
+## Changes in v0.5
 
-```text
-portals-build
-```
+- More detailed symmetrical two-storey Gothic manor
+- Side towers, layered facade, Gothic windows, roofs, chimneys, buttresses and iron details
+- All trees moved to the far-left forest
+- Wide, uncluttered central battlefield
+- Redesigned Husk with ribcage, abdomen, split jaw, spine, articulated limbs, hands and fingers
+- More reliable downward ground slams
+- Greater depth/side movement while dragging
+- Stronger throw momentum and tumbling
+- Impact rings, improved ash burst and subtle camera shake
+- No permanent HTML HUD; only a temporary loading screen remains
 
-## First setup
+## Update an existing repository
 
-1. Upload all project files to the repository's `main` branch.
-2. Open the repository's **Actions** tab.
-3. Wait for **Build for Portals** to finish successfully.
-4. Confirm that the repository now has a `portals-build` branch.
-5. In Portals, import using:
+Replace these files/folders from the ZIP:
 
-```text
-Branch: portals-build
-Project directory: repository root
-Entry file: index.html
-```
+- `index.html`
+- `style.css`
+- `src/`
+- `README.md`
 
-Do not point Portals at `main`. `main` contains source files that require Vite. `portals-build` contains the browser-ready game.
+Keep your existing `.github/workflows/build-portals.yml` if it is already producing a green tick. The included workflow is also compatible.
 
-## Development
-
-Make edits on `main`. Every push automatically replaces `portals-build` with a fresh production build.
+Commit to `main`, wait for the GitHub Action to finish, and refresh/sync the `portals-build` branch in Portals.
