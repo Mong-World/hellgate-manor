@@ -14,7 +14,7 @@ export class ImpactRing {
       transparent: true,
       opacity: 0.6,
       side: THREE.DoubleSide,
-      depthWrite: false,
+      depthWrite: false
     });
 
     this.mesh = new THREE.Mesh(this.geometry, this.material);
@@ -27,9 +27,10 @@ export class ImpactRing {
     this.age += dt;
     const t = Math.min(this.age / this.life, 1);
     const scale = 1 + t * (this.strength * 0.24);
+
     this.mesh.scale.setScalar(scale);
     this.material.opacity = (1 - t) * 0.6;
-    this.mesh.position.y += dt * 0.015;
+
     if (t >= 1) this.finished = true;
   }
 

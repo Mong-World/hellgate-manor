@@ -17,12 +17,13 @@ export class AshExplosion {
       this.positions[i * 3 + 1] = position.y;
       this.positions[i * 3 + 2] = position.z;
 
-      const velocity = new THREE.Vector3(
-        THREE.MathUtils.randFloatSpread(5.5),
-        THREE.MathUtils.randFloat(1.2, 7),
-        THREE.MathUtils.randFloatSpread(4.5)
+      this.velocities.push(
+        new THREE.Vector3(
+          THREE.MathUtils.randFloatSpread(5.5),
+          THREE.MathUtils.randFloat(1.2, 7),
+          THREE.MathUtils.randFloatSpread(4.5)
+        )
       );
-      this.velocities.push(velocity);
     }
 
     this.geometry.setAttribute(
@@ -36,7 +37,7 @@ export class AshExplosion {
       transparent: true,
       opacity: 0.95,
       depthWrite: false,
-      sizeAttenuation: true,
+      sizeAttenuation: true
     });
 
     this.points = new THREE.Points(this.geometry, this.material);

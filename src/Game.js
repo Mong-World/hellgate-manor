@@ -12,28 +12,27 @@ export class Game {
     this.clock = new THREE.Clock();
     this.enemy = null;
     this.effects = [];
-    this.souls = 0;
     this.respawnTimer = 0;
     this.running = false;
     this.cameraShake = 0;
-    this.cameraBase = new THREE.Vector3(-0.4, 8.6, 28.2);
+    this.cameraBase = new THREE.Vector3(0, 9.2, 27.5);
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x05060a);
-    this.scene.fog = new THREE.FogExp2(0x08090c, 0.0175);
+    this.scene.background = new THREE.Color(0x050609);
+    this.scene.fog = new THREE.FogExp2(0x08090d, 0.018);
 
     this.camera = new THREE.PerspectiveCamera(
-      43,
+      44,
       window.innerWidth / window.innerHeight,
       0.1,
       180
     );
     this.camera.position.copy(this.cameraBase);
-    this.camera.lookAt(2.6, 3.2, 0);
+    this.camera.lookAt(1.8, 3.1, 0);
 
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,
-      powerPreference: "high-performance",
+      powerPreference: "high-performance"
     });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -41,26 +40,26 @@ export class Game {
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.12;
+    this.renderer.toneMappingExposure = 1.15;
     this.container.appendChild(this.renderer.domElement);
 
     this.world = new World(this.scene);
     this.grabSystem = new GrabSystem({
       camera: this.camera,
       domElement: this.renderer.domElement,
-      getEnemy: () => this.enemy,
+      getEnemy: () => this.enemy
     });
 
-    this.soulValueElement = document.getElementById("soul-value");
     this.loadingElement = document.getElementById("loading");
-
     this.onResize = this.onResize.bind(this);
     this.animate = this.animate.bind(this);
     window.addEventListener("resize", this.onResize);
   }
 
-  start() {
-    this.spawnHusk();
+  async start() {
+    await this.world.load();
+    await this.spawnHusk();
+
     this.running = true;
     requestAnimationFrame(this.animate);
 
@@ -70,21 +69,24 @@ export class Game {
     });
   }
 
-  spawnHusk() {
+  async spawnHusk() {
     this.enemy?.dispose();
-    this.enemy = new Husk({
+
+    const husk = new Husk({
       scene: this.scene,
-      position: new THREE.Vector3(-18.8, 0, THREE.MathUtils.randFloat(-3.7, 3.7)),
-      targetX: 13.1,
+      position: new THREE.Vector3(-18.5, 0, THREE.MathUtils.randFloat(-3.6, 3.6)),
       onDeath: (data) => this.handleEnemyDeath(data),
-      onImpact: (data) => this.handleImpact(data),
+      onImpact: (data) => this.handleImpact(data)
     });
+
+    await husk.load();
+    this.enemy = husk;
   }
 
   handleImpact({ position, strength }) {
     if (strength < 3.5) return;
     this.effects.push(new ImpactRing(this.scene, position, strength));
-    this.cameraShake = Math.max(this.cameraShake, Math.min(strength / 52, 0.18));
+    this.cameraShake = Math.max(this.cameraShake, Math.min(strength / 52, 0.2));
   }
 
   handleEnemyDeath({ position, impactStrength }) {
@@ -92,27 +94,26 @@ export class Game {
 
     this.enemy.kill();
     this.grabSystem.forceRelease();
-    this.cameraShake = Math.max(this.cameraShake, 0.25);
+    this.cameraShake = Math.max(this.cameraShake, 0.26);
 
     this.effects.push(new AshExplosion(this.scene, position));
-    this.effects.push(new ImpactRing(this.scene, position.clone().setY(0.04), impactStrength + 6));
+    this.effects.push(
+      new ImpactRing(this.scene, position.clone().setY(0.04), impactStrength + 6)
+    );
     this.effects.push(
       new SoulEmber({
         scene: this.scene,
         start: position.clone().add(new THREE.Vector3(0, 0.8, 0)),
-        target: new THREE.Vector3(13.9, 4.5, 0),
-        onCollected: () => {
-          this.souls += 1;
-          this.soulValueElement.textContent = String(this.souls);
-        },
+        target: new THREE.Vector3(14.7, 4.3, 0)
       })
     );
 
-    this.respawnTimer = 0.95;
+    this.respawnTimer = 1;
   }
 
   updateCamera(dt) {
-    this.cameraShake = Math.max(0, this.cameraShake - dt * 2.0);
+    this.cameraShake = Math.max(0, this.cameraShake - dt * 1.9);
+
     if (this.cameraShake > 0) {
       const a = this.cameraShake;
       this.camera.position.set(
@@ -123,7 +124,8 @@ export class Game {
     } else {
       this.camera.position.lerp(this.cameraBase, 0.18);
     }
-    this.camera.lookAt(2.6, 3.2, 0);
+
+    this.camera.lookAt(1.8, 3.1, 0);
   }
 
   animate() {
@@ -137,13 +139,14 @@ export class Game {
     this.enemy?.update(dt, elapsed, this.grabSystem.isHolding(this.enemy));
 
     if (this.enemy && !this.enemy.dead && this.enemy.position.x >= 13.2) {
-      this.enemy.position.set(-18.8, 0, THREE.MathUtils.randFloat(-3.7, 3.7));
+      this.enemy.position.set(-18.5, 0, THREE.MathUtils.randFloat(-3.6, 3.6));
       this.enemy.resetMotion();
     }
 
     for (let i = this.effects.length - 1; i >= 0; i -= 1) {
       const effect = this.effects[i];
       effect.update(dt);
+
       if (effect.finished) {
         effect.dispose();
         this.effects.splice(i, 1);
@@ -152,7 +155,10 @@ export class Game {
 
     if (this.respawnTimer > 0) {
       this.respawnTimer -= dt;
-      if (this.respawnTimer <= 0) this.spawnHusk();
+      if (this.respawnTimer <= 0) {
+        this.respawnTimer = 0;
+        this.spawnHusk().catch(console.error);
+      }
     }
 
     this.world.update(elapsed, dt);

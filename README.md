@@ -1,25 +1,30 @@
-# Hellgate Manor — Procedural Geometry Pass v0.7
+# Hellgate Manor Asset Test v0.8
 
-This pass is a stricter rebuild intended to avoid the obvious primitive look from earlier versions.
+This build replaces the procedural manor and Husk with:
 
-## Main changes
+- `assets/manor.glb`
+- `assets/husk.glb`
 
-- Husk rebuilt from custom lofted `BufferGeometry` sections rather than simple cylinders/capsules
-- Head and split jaw rebuilt with custom geometry and a clearer hollow mouth silhouette
-- Manor repositioned and rebuilt so the facade reads more clearly in frame
-- Manor uses custom extruded / lofted architectural forms, arches, buttresses, layered roofs and towers
-- Improved battlefield readability and lighting
-- Open ground remains clear for gameplay and throwing
+The first animation clip containing `walk`, `run`, or `move` in its name is used. If none match, the first animation clip is played.
 
-## Files included
+## Upload
 
-- Vite project structure
-- `src/Husk.js`
-- `src/World.js`
-- `src/Game.js`
-- `src/GrabSystem.js`
-- effect files in `src/effects/`
+Keep your existing `assets` folder in the repository.
 
-## Use
+Replace the project code with the files in this ZIP, then commit to `main`. GitHub Actions will rebuild `portals-build`.
 
-Replace the contents of your existing repo with this project, then build as normal.
+## Quick orientation fixes
+
+In `src/Husk.js`:
+
+```js
+const HUSK_ROTATION_Y = Math.PI / 2;
+```
+
+In `src/World.js`:
+
+```js
+const MANOR_ROTATION_Y = Math.PI;
+```
+
+These can be changed if either model faces the wrong way.
