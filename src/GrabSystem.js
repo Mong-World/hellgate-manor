@@ -17,7 +17,7 @@ export class GrabSystem {
     this.heldEnemy = null;
     this.springVelocity = new THREE.Vector3();
     this.pointerHistory = [];
-    this.maxHistoryAge = 0.145;
+    this.maxHistoryAge = 0.15;
     this.depthDrift = 0;
 
     this.onPointerDown = this.onPointerDown.bind(this);
@@ -69,11 +69,7 @@ export class GrabSystem {
     if (!this.heldEnemy) return;
 
     const horizontalDelta = this.pointer.x - this.previousPointer.x;
-    this.depthDrift = THREE.MathUtils.clamp(
-      this.depthDrift + horizontalDelta * 5.4,
-      -3.8,
-      3.8
-    );
+    this.depthDrift = THREE.MathUtils.clamp(this.depthDrift + horizontalDelta * 6.2, -4.5, 4.5);
     this.updateTargetFromPointer();
     this.recordHistory();
   }
@@ -83,10 +79,10 @@ export class GrabSystem {
     if (!this.raycaster.ray.intersectPlane(this.dragPlane, this.planeHit)) return;
 
     this.target.copy(this.planeHit);
-    this.target.x = THREE.MathUtils.clamp(this.target.x, -25, 18.5);
-    this.target.y = THREE.MathUtils.clamp(this.target.y, 0.08, 14.5);
+    this.target.x = THREE.MathUtils.clamp(this.target.x, -23, 17.5);
+    this.target.y = THREE.MathUtils.clamp(this.target.y, 0.04, 14.8);
     this.target.z = THREE.MathUtils.clamp(
-      this.initialGrabPosition.z + this.depthDrift + this.planeHit.z * 0.18,
+      this.initialGrabPosition.z + this.depthDrift + this.planeHit.z * 0.15,
       -6.6,
       6.6
     );
@@ -95,17 +91,16 @@ export class GrabSystem {
   recordHistory() {
     const now = performance.now() / 1000;
     this.pointerHistory.push({ time: now, position: this.target.clone() });
-    while (
-      this.pointerHistory.length > 2 &&
-      now - this.pointerHistory[0].time > this.maxHistoryAge
-    ) this.pointerHistory.shift();
+    while (this.pointerHistory.length > 2 && now - this.pointerHistory[0].time > this.maxHistoryAge) {
+      this.pointerHistory.shift();
+    }
   }
 
   update(dt) {
     if (!this.heldEnemy) return;
 
-    const stiffness = 88;
-    const damping = 11.2;
+    const stiffness = 92;
+    const damping = 10.8;
     const displacement = this.target.clone().sub(this.heldEnemy.position);
 
     this.springVelocity.addScaledVector(displacement, stiffness * dt);
@@ -114,18 +109,18 @@ export class GrabSystem {
 
     this.heldEnemy.group.rotation.z = THREE.MathUtils.lerp(
       this.heldEnemy.group.rotation.z,
-      -this.springVelocity.x * 0.046,
-      0.2
+      -this.springVelocity.x * 0.048,
+      0.18
     );
     this.heldEnemy.group.rotation.x = THREE.MathUtils.lerp(
       this.heldEnemy.group.rotation.x,
-      this.springVelocity.z * 0.04,
-      0.2
+      this.springVelocity.z * 0.045,
+      0.18
     );
     this.heldEnemy.group.rotation.y = THREE.MathUtils.lerp(
       this.heldEnemy.group.rotation.y,
-      this.springVelocity.x * 0.018,
-      0.15
+      this.springVelocity.x * 0.02,
+      0.14
     );
 
     this.recordHistory();
@@ -139,14 +134,10 @@ export class GrabSystem {
     const elapsed = Math.max(last.time - first.time, 0.016);
     const pointerVelocity = last.position.clone().sub(first.position).divideScalar(elapsed);
 
-    const release = pointerVelocity
-      .multiplyScalar(1.04)
-      .addScaledVector(this.springVelocity, 0.54);
-
-    // Downward motions are deliberately amplified so a quick slam is dependable.
-    if (release.y < 0) release.y *= 1.34;
-    release.z *= 1.18;
-    return release.clampLength(0, 39);
+    const release = pointerVelocity.multiplyScalar(1.05).addScaledVector(this.springVelocity, 0.58);
+    if (release.y < 0) release.y *= 1.38;
+    release.z *= 1.15;
+    return release.clampLength(0, 40);
   }
 
   onPointerUp() {
@@ -168,7 +159,9 @@ export class GrabSystem {
     document.body.classList.remove("grabbing");
   }
 
-  isHolding(enemy) { return this.heldEnemy === enemy; }
+  isHolding(enemy) {
+    return this.heldEnemy === enemy;
+  }
 
   dispose() {
     this.domElement.removeEventListener("pointerdown", this.onPointerDown);

@@ -15,20 +15,20 @@ export class Game {
     this.respawnTimer = 0;
     this.running = false;
     this.cameraShake = 0;
-    this.cameraBase = new THREE.Vector3(0, 10.8, 31.8);
+    this.cameraBase = new THREE.Vector3(0.8, 9.2, 26.5);
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x050507);
-    this.scene.fog = new THREE.FogExp2(0x08080a, 0.0215);
+    this.scene.background = new THREE.Color(0x040508);
+    this.scene.fog = new THREE.FogExp2(0x07080b, 0.0195);
 
     this.camera = new THREE.PerspectiveCamera(
-      45,
+      44,
       window.innerWidth / window.innerHeight,
       0.1,
-      190
+      180
     );
     this.camera.position.copy(this.cameraBase);
-    this.camera.lookAt(1.8, 3.25, 0);
+    this.camera.lookAt(1.2, 2.9, 0);
 
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -40,7 +40,7 @@ export class Game {
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.12;
+    this.renderer.toneMappingExposure = 1.1;
     this.container.appendChild(this.renderer.domElement);
 
     this.world = new World(this.scene);
@@ -60,6 +60,7 @@ export class Game {
     this.spawnHusk();
     this.running = true;
     requestAnimationFrame(this.animate);
+
     requestAnimationFrame(() => {
       this.loadingElement.classList.add("hidden");
       window.setTimeout(() => this.loadingElement.remove(), 700);
@@ -67,21 +68,20 @@ export class Game {
   }
 
   spawnHusk() {
-    if (this.enemy) this.enemy.dispose();
-
+    this.enemy?.dispose();
     this.enemy = new Husk({
       scene: this.scene,
-      position: new THREE.Vector3(-20.5, 0, THREE.MathUtils.randFloat(-4.4, 4.4)),
-      targetX: 13.2,
+      position: new THREE.Vector3(-18.8, 0, THREE.MathUtils.randFloat(-3.9, 3.9)),
+      targetX: 13.3,
       onDeath: (data) => this.handleEnemyDeath(data),
       onImpact: (data) => this.handleImpact(data),
     });
   }
 
   handleImpact({ position, strength }) {
-    if (strength < 3.5) return;
+    if (strength < 3.4) return;
     this.effects.push(new ImpactRing(this.scene, position, strength));
-    this.cameraShake = Math.max(this.cameraShake, Math.min(strength / 45, 0.24));
+    this.cameraShake = Math.max(this.cameraShake, Math.min(strength / 50, 0.2));
   }
 
   handleEnemyDeath({ position, impactStrength }) {
@@ -89,32 +89,34 @@ export class Game {
 
     this.enemy.kill();
     this.grabSystem.forceRelease();
-    this.cameraShake = Math.max(this.cameraShake, 0.28);
+    this.cameraShake = Math.max(this.cameraShake, 0.26);
 
     this.effects.push(new AshExplosion(this.scene, position, impactStrength));
-    this.effects.push(new ImpactRing(this.scene, position.clone().setY(0.04), impactStrength + 5));
-    this.effects.push(new SoulEmber({
-      scene: this.scene,
-      start: position.clone().add(new THREE.Vector3(0, 0.7, 0)),
-      target: new THREE.Vector3(16.8, 4.7, 0),
-    }));
+    this.effects.push(new ImpactRing(this.scene, position.clone().setY(0.04), impactStrength + 6));
+    this.effects.push(
+      new SoulEmber({
+        scene: this.scene,
+        start: position.clone().add(new THREE.Vector3(0, 0.8, 0)),
+        target: new THREE.Vector3(16.1, 4.4, 0),
+      })
+    );
 
-    this.respawnTimer = 1.05;
+    this.respawnTimer = 0.95;
   }
 
   updateCamera(dt) {
-    this.cameraShake = Math.max(0, this.cameraShake - dt * 1.7);
+    this.cameraShake = Math.max(0, this.cameraShake - dt * 1.9);
     if (this.cameraShake > 0) {
-      const amount = this.cameraShake;
+      const a = this.cameraShake;
       this.camera.position.set(
-        this.cameraBase.x + THREE.MathUtils.randFloatSpread(amount),
-        this.cameraBase.y + THREE.MathUtils.randFloatSpread(amount * 0.55),
-        this.cameraBase.z + THREE.MathUtils.randFloatSpread(amount * 0.35)
+        this.cameraBase.x + THREE.MathUtils.randFloatSpread(a),
+        this.cameraBase.y + THREE.MathUtils.randFloatSpread(a * 0.55),
+        this.cameraBase.z + THREE.MathUtils.randFloatSpread(a * 0.35)
       );
     } else {
       this.camera.position.lerp(this.cameraBase, 0.18);
     }
-    this.camera.lookAt(1.8, 3.25, 0);
+    this.camera.lookAt(1.2, 2.9, 0);
   }
 
   animate() {
@@ -127,8 +129,8 @@ export class Game {
     this.grabSystem.update(dt);
     this.enemy?.update(dt, elapsed, this.grabSystem.isHolding(this.enemy));
 
-    if (this.enemy && !this.enemy.dead && this.enemy.position.x >= 13.3) {
-      this.enemy.position.set(-20.5, 0, THREE.MathUtils.randFloat(-4.4, 4.4));
+    if (this.enemy && !this.enemy.dead && this.enemy.position.x >= 13.5) {
+      this.enemy.position.set(-18.8, 0, THREE.MathUtils.randFloat(-3.9, 3.9));
       this.enemy.resetMotion();
     }
 
