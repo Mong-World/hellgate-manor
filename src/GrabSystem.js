@@ -1,0 +1,179 @@
+import * as THREE from "three";
+
+export class GrabSystem {
+  constructor({ camera, domElement, getEnemy }) {
+    this.camera = camera;
+    this.domElement = domElement;
+    this.getEnemy = getEnemy;
+
+    this.raycaster = new THREE.Raycaster();
+    this.pointer = new THREE.Vector2();
+    this.previousPointer = new THREE.Vector2();
+    this.dragPlane = new THREE.Plane();
+    this.planeHit = new THREE.Vector3();
+    this.target = new THREE.Vector3();
+    this.initialGrabPosition = new THREE.Vector3();
+
+    this.heldEnemy = null;
+    this.springVelocity = new THREE.Vector3();
+    this.pointerHistory = [];
+    this.maxHistoryAge = 0.145;
+    this.depthDrift = 0;
+
+    this.onPointerDown = this.onPointerDown.bind(this);
+    this.onPointerMove = this.onPointerMove.bind(this);
+    this.onPointerUp = this.onPointerUp.bind(this);
+
+    this.domElement.addEventListener("pointerdown", this.onPointerDown);
+    window.addEventListener("pointermove", this.onPointerMove);
+    window.addEventListener("pointerup", this.onPointerUp);
+    window.addEventListener("pointercancel", this.onPointerUp);
+  }
+
+  setPointer(event) {
+    const rect = this.domElement.getBoundingClientRect();
+    this.previousPointer.copy(this.pointer);
+    this.pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    this.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+  }
+
+  onPointerDown(event) {
+    if (event.button !== 0) return;
+    const enemy = this.getEnemy();
+    if (!enemy || enemy.dead) return;
+
+    this.setPointer(event);
+    this.raycaster.setFromCamera(this.pointer, this.camera);
+    const hits = this.raycaster.intersectObject(enemy.group, true);
+    if (!hits.length) return;
+
+    this.heldEnemy = hits[0].object.userData.enemy ?? enemy;
+    this.initialGrabPosition.copy(this.heldEnemy.position);
+    this.springVelocity.copy(this.heldEnemy.velocity);
+    this.heldEnemy.velocity.set(0, 0, 0);
+    this.depthDrift = 0;
+
+    const cameraDirection = new THREE.Vector3();
+    this.camera.getWorldDirection(cameraDirection);
+    this.dragPlane.setFromNormalAndCoplanarPoint(cameraDirection, this.heldEnemy.position);
+
+    this.updateTargetFromPointer();
+    this.pointerHistory.length = 0;
+    this.recordHistory();
+    document.body.classList.add("grabbing");
+    this.domElement.setPointerCapture?.(event.pointerId);
+  }
+
+  onPointerMove(event) {
+    this.setPointer(event);
+    if (!this.heldEnemy) return;
+
+    const horizontalDelta = this.pointer.x - this.previousPointer.x;
+    this.depthDrift = THREE.MathUtils.clamp(
+      this.depthDrift + horizontalDelta * 5.4,
+      -3.8,
+      3.8
+    );
+    this.updateTargetFromPointer();
+    this.recordHistory();
+  }
+
+  updateTargetFromPointer() {
+    this.raycaster.setFromCamera(this.pointer, this.camera);
+    if (!this.raycaster.ray.intersectPlane(this.dragPlane, this.planeHit)) return;
+
+    this.target.copy(this.planeHit);
+    this.target.x = THREE.MathUtils.clamp(this.target.x, -25, 18.5);
+    this.target.y = THREE.MathUtils.clamp(this.target.y, 0.08, 14.5);
+    this.target.z = THREE.MathUtils.clamp(
+      this.initialGrabPosition.z + this.depthDrift + this.planeHit.z * 0.18,
+      -6.6,
+      6.6
+    );
+  }
+
+  recordHistory() {
+    const now = performance.now() / 1000;
+    this.pointerHistory.push({ time: now, position: this.target.clone() });
+    while (
+      this.pointerHistory.length > 2 &&
+      now - this.pointerHistory[0].time > this.maxHistoryAge
+    ) this.pointerHistory.shift();
+  }
+
+  update(dt) {
+    if (!this.heldEnemy) return;
+
+    const stiffness = 88;
+    const damping = 11.2;
+    const displacement = this.target.clone().sub(this.heldEnemy.position);
+
+    this.springVelocity.addScaledVector(displacement, stiffness * dt);
+    this.springVelocity.multiplyScalar(Math.exp(-damping * dt));
+    this.heldEnemy.position.addScaledVector(this.springVelocity, dt);
+
+    this.heldEnemy.group.rotation.z = THREE.MathUtils.lerp(
+      this.heldEnemy.group.rotation.z,
+      -this.springVelocity.x * 0.046,
+      0.2
+    );
+    this.heldEnemy.group.rotation.x = THREE.MathUtils.lerp(
+      this.heldEnemy.group.rotation.x,
+      this.springVelocity.z * 0.04,
+      0.2
+    );
+    this.heldEnemy.group.rotation.y = THREE.MathUtils.lerp(
+      this.heldEnemy.group.rotation.y,
+      this.springVelocity.x * 0.018,
+      0.15
+    );
+
+    this.recordHistory();
+  }
+
+  calculateReleaseVelocity() {
+    if (this.pointerHistory.length < 2) return this.springVelocity.clone();
+
+    const first = this.pointerHistory[0];
+    const last = this.pointerHistory[this.pointerHistory.length - 1];
+    const elapsed = Math.max(last.time - first.time, 0.016);
+    const pointerVelocity = last.position.clone().sub(first.position).divideScalar(elapsed);
+
+    const release = pointerVelocity
+      .multiplyScalar(1.04)
+      .addScaledVector(this.springVelocity, 0.54);
+
+    // Downward motions are deliberately amplified so a quick slam is dependable.
+    if (release.y < 0) release.y *= 1.34;
+    release.z *= 1.18;
+    return release.clampLength(0, 39);
+  }
+
+  onPointerUp() {
+    if (!this.heldEnemy) return;
+    const enemy = this.heldEnemy;
+    const releaseVelocity = this.calculateReleaseVelocity();
+
+    this.heldEnemy = null;
+    this.pointerHistory.length = 0;
+    this.springVelocity.set(0, 0, 0);
+    document.body.classList.remove("grabbing");
+    enemy.launch(releaseVelocity);
+  }
+
+  forceRelease() {
+    this.heldEnemy = null;
+    this.pointerHistory.length = 0;
+    this.springVelocity.set(0, 0, 0);
+    document.body.classList.remove("grabbing");
+  }
+
+  isHolding(enemy) { return this.heldEnemy === enemy; }
+
+  dispose() {
+    this.domElement.removeEventListener("pointerdown", this.onPointerDown);
+    window.removeEventListener("pointermove", this.onPointerMove);
+    window.removeEventListener("pointerup", this.onPointerUp);
+    window.removeEventListener("pointercancel", this.onPointerUp);
+  }
+}
