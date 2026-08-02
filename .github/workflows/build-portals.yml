@@ -28,11 +28,15 @@ jobs:
       - name: Build production game
         run: npm run build
 
+      - name: Copy game assets
+        run: |
+          mkdir -p dist/assets
+          cp -R assets/. dist/assets/
+
       - name: Publish Portals build branch
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cp -R assets dist/assets
           cd dist
           touch .nojekyll
           git init
