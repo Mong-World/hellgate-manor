@@ -5,30 +5,31 @@ export class ImpactRing {
     this.scene = scene;
     this.finished = false;
     this.age = 0;
-    this.life = 0.42;
+    this.life = 0.34;
+    this.strength = strength;
 
-    this.geometry = new THREE.RingGeometry(0.2, 0.27, 32);
+    this.geometry = new THREE.RingGeometry(0.28, 0.42, 32);
     this.material = new THREE.MeshBasicMaterial({
-      color: strength >= 8 ? 0xff4d14 : 0x8c776f,
+      color: 0xff7a34,
       transparent: true,
-      opacity: strength >= 8 ? 0.72 : 0.32,
+      opacity: 0.6,
       side: THREE.DoubleSide,
       depthWrite: false,
     });
+
     this.mesh = new THREE.Mesh(this.geometry, this.material);
     this.mesh.rotation.x = -Math.PI / 2;
-    this.mesh.position.copy(position);
-    this.mesh.position.y = 0.035;
+    this.mesh.position.copy(position).setY(0.05);
     this.scene.add(this.mesh);
-    this.maxScale = THREE.MathUtils.clamp(strength * 0.34, 2.2, 6.2);
   }
 
   update(dt) {
     this.age += dt;
     const t = Math.min(this.age / this.life, 1);
-    const scale = 1 + t * this.maxScale;
+    const scale = 1 + t * (this.strength * 0.24);
     this.mesh.scale.setScalar(scale);
-    this.material.opacity *= 0.88;
+    this.material.opacity = (1 - t) * 0.6;
+    this.mesh.position.y += dt * 0.015;
     if (t >= 1) this.finished = true;
   }
 

@@ -12,23 +12,24 @@ export class Game {
     this.clock = new THREE.Clock();
     this.enemy = null;
     this.effects = [];
+    this.souls = 0;
     this.respawnTimer = 0;
     this.running = false;
     this.cameraShake = 0;
-    this.cameraBase = new THREE.Vector3(0.8, 9.2, 26.5);
+    this.cameraBase = new THREE.Vector3(-0.4, 8.6, 28.2);
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x040508);
-    this.scene.fog = new THREE.FogExp2(0x07080b, 0.0195);
+    this.scene.background = new THREE.Color(0x05060a);
+    this.scene.fog = new THREE.FogExp2(0x08090c, 0.0175);
 
     this.camera = new THREE.PerspectiveCamera(
-      44,
+      43,
       window.innerWidth / window.innerHeight,
       0.1,
       180
     );
     this.camera.position.copy(this.cameraBase);
-    this.camera.lookAt(1.2, 2.9, 0);
+    this.camera.lookAt(2.6, 3.2, 0);
 
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -40,7 +41,7 @@ export class Game {
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.1;
+    this.renderer.toneMappingExposure = 1.12;
     this.container.appendChild(this.renderer.domElement);
 
     this.world = new World(this.scene);
@@ -50,7 +51,9 @@ export class Game {
       getEnemy: () => this.enemy,
     });
 
+    this.soulValueElement = document.getElementById("soul-value");
     this.loadingElement = document.getElementById("loading");
+
     this.onResize = this.onResize.bind(this);
     this.animate = this.animate.bind(this);
     window.addEventListener("resize", this.onResize);
@@ -71,17 +74,17 @@ export class Game {
     this.enemy?.dispose();
     this.enemy = new Husk({
       scene: this.scene,
-      position: new THREE.Vector3(-18.8, 0, THREE.MathUtils.randFloat(-3.9, 3.9)),
-      targetX: 13.3,
+      position: new THREE.Vector3(-18.8, 0, THREE.MathUtils.randFloat(-3.7, 3.7)),
+      targetX: 13.1,
       onDeath: (data) => this.handleEnemyDeath(data),
       onImpact: (data) => this.handleImpact(data),
     });
   }
 
   handleImpact({ position, strength }) {
-    if (strength < 3.4) return;
+    if (strength < 3.5) return;
     this.effects.push(new ImpactRing(this.scene, position, strength));
-    this.cameraShake = Math.max(this.cameraShake, Math.min(strength / 50, 0.2));
+    this.cameraShake = Math.max(this.cameraShake, Math.min(strength / 52, 0.18));
   }
 
   handleEnemyDeath({ position, impactStrength }) {
@@ -89,15 +92,19 @@ export class Game {
 
     this.enemy.kill();
     this.grabSystem.forceRelease();
-    this.cameraShake = Math.max(this.cameraShake, 0.26);
+    this.cameraShake = Math.max(this.cameraShake, 0.25);
 
-    this.effects.push(new AshExplosion(this.scene, position, impactStrength));
+    this.effects.push(new AshExplosion(this.scene, position));
     this.effects.push(new ImpactRing(this.scene, position.clone().setY(0.04), impactStrength + 6));
     this.effects.push(
       new SoulEmber({
         scene: this.scene,
         start: position.clone().add(new THREE.Vector3(0, 0.8, 0)),
-        target: new THREE.Vector3(16.1, 4.4, 0),
+        target: new THREE.Vector3(13.9, 4.5, 0),
+        onCollected: () => {
+          this.souls += 1;
+          this.soulValueElement.textContent = String(this.souls);
+        },
       })
     );
 
@@ -105,7 +112,7 @@ export class Game {
   }
 
   updateCamera(dt) {
-    this.cameraShake = Math.max(0, this.cameraShake - dt * 1.9);
+    this.cameraShake = Math.max(0, this.cameraShake - dt * 2.0);
     if (this.cameraShake > 0) {
       const a = this.cameraShake;
       this.camera.position.set(
@@ -116,7 +123,7 @@ export class Game {
     } else {
       this.camera.position.lerp(this.cameraBase, 0.18);
     }
-    this.camera.lookAt(1.2, 2.9, 0);
+    this.camera.lookAt(2.6, 3.2, 0);
   }
 
   animate() {
@@ -129,8 +136,8 @@ export class Game {
     this.grabSystem.update(dt);
     this.enemy?.update(dt, elapsed, this.grabSystem.isHolding(this.enemy));
 
-    if (this.enemy && !this.enemy.dead && this.enemy.position.x >= 13.5) {
-      this.enemy.position.set(-18.8, 0, THREE.MathUtils.randFloat(-3.9, 3.9));
+    if (this.enemy && !this.enemy.dead && this.enemy.position.x >= 13.2) {
+      this.enemy.position.set(-18.8, 0, THREE.MathUtils.randFloat(-3.7, 3.7));
       this.enemy.resetMotion();
     }
 
