@@ -27,6 +27,11 @@ export class Husk {
       : [CONFIG.enemy.normalSpeedMin, CONFIG.enemy.normalSpeedMax];
 
     this.walkSpeed = THREE.MathUtils.randFloat(speedRange[0], speedRange[1]);
+    this.walkAnimationSpeed = THREE.MathUtils.clamp(
+      0.86 + this.walkSpeed * 0.25,
+      this.fast ? 1.72 : 1.28,
+      this.fast ? 2.05 : 1.48
+    );
     this.soulValue = fast
       ? CONFIG.enemy.fastSoulValue
       : CONFIG.enemy.normalSoulValue;
@@ -94,7 +99,7 @@ export class Husk {
       }
 
       this.playAction("walk", 0);
-      if (this.actions.walk) this.actions.walk.timeScale = this.walkSpeed;
+      if (this.actions.walk) this.actions.walk.timeScale = this.walkAnimationSpeed;
     }
 
     this.markPickable();
@@ -264,7 +269,7 @@ export class Husk {
         this.group.rotation.set(0, 0, 0);
         this.state = "walking";
         this.playAction("walk", 0.15);
-        if (this.actions.walk) this.actions.walk.timeScale = this.walkSpeed;
+        if (this.actions.walk) this.actions.walk.timeScale = this.walkAnimationSpeed;
       }
       return;
     }
@@ -285,7 +290,7 @@ export class Husk {
     this.state = "walking";
     this.position.x += this.walkSpeed * dt;
     this.playAction("walk", 0.15);
-    if (this.actions.walk) this.actions.walk.timeScale = this.walkSpeed;
+    if (this.actions.walk) this.actions.walk.timeScale = this.walkAnimationSpeed;
   }
 
   kill() {

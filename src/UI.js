@@ -1,15 +1,19 @@
 import { CONFIG } from "./Config.js";
 
 const C = {
-  panel: "rgba(8,9,12,.91)",
-  panel2: "rgba(19,19,24,.95)",
-  border: "rgba(255,102,38,.55)",
-  borderSoft: "rgba(255,102,38,.25)",
+  panel: "rgba(7,8,11,.94)",
+  panel2: "rgba(15,15,19,.97)",
+  panelTop: "rgba(35,24,21,.98)",
+  border: "rgba(255,112,49,.78)",
+  borderHot: "rgba(255,147,84,.95)",
+  borderSoft: "rgba(255,102,38,.28)",
+  iron: "rgba(114,105,102,.38)",
   orange: "#ff6a28",
-  orangeLight: "#ffb17b",
-  text: "#f2e8df",
-  muted: "#a8a2a0",
-  red: "#ef514e"
+  orangeLight: "#ffc09a",
+  text: "#f4ebe3",
+  muted: "#aaa19d",
+  red: "#ef514e",
+  black: "#07070a"
 };
 
 export class UI {
@@ -105,34 +109,122 @@ export class UI {
   }
 
   font(size, weight = 700) {
-    return `${weight} ${size}px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif`;
+    return `${weight} ${size}px "Arial Narrow","Roboto Condensed",system-ui,sans-serif`;
+  }
+
+  titleFont(size, weight = 700) {
+    return `${weight} ${size}px Georgia,"Times New Roman",serif`;
+  }
+
+  angularPath(x, y, w, h, cut = 11) {
+    const ctx = this.ctx;
+    const c = Math.min(cut, w * 0.16, h * 0.28);
+    ctx.beginPath();
+    ctx.moveTo(x + c, y);
+    ctx.lineTo(x + w - c, y);
+    ctx.lineTo(x + w, y + c);
+    ctx.lineTo(x + w, y + h - c);
+    ctx.lineTo(x + w - c, y + h);
+    ctx.lineTo(x + c, y + h);
+    ctx.lineTo(x, y + h - c);
+    ctx.lineTo(x, y + c);
+    ctx.closePath();
+  }
+
+  cornerMarks(x, y, w, h, size = 13) {
+    const ctx = this.ctx;
+    ctx.strokeStyle = C.borderHot;
+    ctx.lineWidth = 1.35;
+    const inset = 5;
+    const s = Math.min(size, w * 0.12, h * 0.28);
+
+    const corners = [
+      [x + inset, y + inset, 1, 1],
+      [x + w - inset, y + inset, -1, 1],
+      [x + inset, y + h - inset, 1, -1],
+      [x + w - inset, y + h - inset, -1, -1]
+    ];
+
+    for (const [cx, cy, sx, sy] of corners) {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy + sy * s);
+      ctx.lineTo(cx, cy);
+      ctx.lineTo(cx + sx * s, cy);
+      ctx.stroke();
+    }
   }
 
   panel(x, y, w, h, radius = 10, fill = C.panel) {
     const ctx = this.ctx;
-    ctx.beginPath();
-    ctx.roundRect(x, y, w, h, radius);
+    const cut = Math.max(7, Math.min(15, radius + 2));
+
+    ctx.save();
+    ctx.shadowColor = "rgba(255,70,18,.22)";
+    ctx.shadowBlur = 16;
+    this.angularPath(x, y, w, h, cut);
     ctx.fillStyle = fill;
     ctx.fill();
-    ctx.strokeStyle = C.borderSoft;
-    ctx.lineWidth = 1.5;
+
+    ctx.shadowBlur = 0;
+    const gradient = ctx.createLinearGradient(x, y, x, y + h);
+    gradient.addColorStop(0, "rgba(255,255,255,.045)");
+    gradient.addColorStop(0.18, "rgba(255,255,255,.012)");
+    gradient.addColorStop(1, "rgba(0,0,0,.24)");
+    this.angularPath(x, y, w, h, cut);
+    ctx.fillStyle = gradient;
+    ctx.fill();
+
+    this.angularPath(x, y, w, h, cut);
+    ctx.strokeStyle = C.border;
+    ctx.lineWidth = 2;
     ctx.stroke();
+
+    this.angularPath(x + 5, y + 5, w - 10, h - 10, Math.max(4, cut - 4));
+    ctx.strokeStyle = C.iron;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    this.cornerMarks(x, y, w, h, 12);
+    ctx.restore();
   }
 
   button(label, x, y, w, h, onClick, disabled = false) {
     const ctx = this.ctx;
-    ctx.beginPath();
-    ctx.roundRect(x, y, w, h, 7);
-    ctx.fillStyle = disabled ? "rgba(45,45,49,.92)" : "rgba(34,20,16,.97)";
+    const cut = Math.min(10, h * 0.22);
+
+    ctx.save();
+    this.angularPath(x, y, w, h, cut);
+
+    const gradient = ctx.createLinearGradient(x, y, x, y + h);
+    if (disabled) {
+      gradient.addColorStop(0, "rgba(46,46,50,.96)");
+      gradient.addColorStop(1, "rgba(25,25,29,.96)");
+    } else {
+      gradient.addColorStop(0, "rgba(62,31,21,.98)");
+      gradient.addColorStop(0.5, "rgba(35,19,16,.99)");
+      gradient.addColorStop(1, "rgba(16,12,13,.99)");
+    }
+
+    ctx.fillStyle = gradient;
     ctx.fill();
-    ctx.strokeStyle = disabled ? "rgba(120,120,120,.25)" : C.border;
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = disabled ? "rgba(120,120,120,.25)" : C.borderHot;
+    ctx.lineWidth = disabled ? 1 : 1.8;
     ctx.stroke();
+
+    this.angularPath(x + 4, y + 4, w - 8, h - 8, Math.max(3, cut - 4));
+    ctx.strokeStyle = disabled ? "rgba(255,255,255,.04)" : C.borderSoft;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
     ctx.fillStyle = disabled ? "#777" : C.text;
-    ctx.font = this.font(Math.min(18, h * 0.34), 760);
+    ctx.font = this.font(Math.min(18, h * 0.34), 800);
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
+    ctx.shadowColor = disabled ? "transparent" : "rgba(255,90,28,.7)";
+    ctx.shadowBlur = disabled ? 0 : 7;
     ctx.fillText(label, x + w / 2, y + h / 2);
+    ctx.restore();
+
     this.buttons.push({ x, y, w, h, onClick, disabled });
   }
 
@@ -145,8 +237,17 @@ export class UI {
     const ctx = this.ctx;
     ctx.textAlign = "center";
     ctx.fillStyle = C.text;
-    ctx.font = this.font(Math.min(42, w * 0.045), 820);
+    ctx.font = this.titleFont(Math.min(44, w * 0.047), 700);
+    ctx.shadowColor = "rgba(255,80,24,.65)";
+    ctx.shadowBlur = 12;
     ctx.fillText("HELLGATE MANOR", w / 2, y + 72);
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = C.borderSoft;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x + 70, y + 95);
+    ctx.lineTo(x + pw - 70, y + 95);
+    ctx.stroke();
     ctx.fillStyle = C.muted;
     ctx.font = this.font(16, 650);
     ctx.fillText("THE GATES ARE OPEN. KEEP THE MANOR SAFE.", w / 2, y + 118);
@@ -230,7 +331,7 @@ export class UI {
     ctx.globalAlpha = Math.min(1, this.bannerTimer / 0.35);
     ctx.textAlign = "center";
     ctx.fillStyle = C.text;
-    ctx.font = this.font(Math.min(48, w * 0.055), 860);
+    ctx.font = this.titleFont(Math.min(50, w * 0.058), 700);
     ctx.fillText(this.bannerTitle, w / 2, h * 0.42);
     if (this.bannerSubtitle) {
       ctx.fillStyle = C.orangeLight;
@@ -252,8 +353,11 @@ export class UI {
 
     ctx.textAlign = "center";
     ctx.fillStyle = C.text;
-    ctx.font = this.font(35, 860);
+    ctx.font = this.titleFont(37, 700);
+    ctx.shadowColor = "rgba(255,80,24,.5)";
+    ctx.shadowBlur = 9;
     ctx.fillText(`WAVE ${this.wave} SURVIVED`, w / 2, y + 54);
+    ctx.shadowBlur = 0;
     ctx.fillStyle = C.muted;
     ctx.font = this.font(15, 650);
     ctx.fillText(
@@ -282,7 +386,7 @@ export class UI {
       x: x + 16 + cardW + gap, y: cardY, w: cardW, h: cardH,
       title: "HELLFIRE DEFENCE",
       description: this.turretLevel === 0
-        ? "Mount a defence that fires every 5 seconds."
+        ? "Mount an automatic Hellfire defence on the manor."
         : "Add another Hellfire shot to each volley.",
       cost: turretCost,
       status: `LEVEL ${this.turretLevel} / ${CONFIG.defence.turretMaxLevel}`,
@@ -308,7 +412,7 @@ export class UI {
     this.panel(x, y, w, h, 9, C.panel2);
     ctx.textAlign = "center";
     ctx.fillStyle = disabled ? "#777" : C.orangeLight;
-    ctx.font = this.font(18, 850);
+    ctx.font = this.titleFont(18, 700);
     ctx.fillText(title, x + w / 2, y + 38);
     ctx.fillStyle = disabled ? "#6f6f72" : C.text;
     ctx.font = this.font(14, 600);
@@ -348,7 +452,7 @@ export class UI {
     this.panel(x, y, pw, ph, 12);
     ctx.textAlign = "center";
     ctx.fillStyle = C.red;
-    ctx.font = this.font(39, 860);
+    ctx.font = this.titleFont(41, 700);
     ctx.fillText("THE MANOR HAS FALLEN", w / 2, y + 70);
     ctx.fillStyle = C.muted;
     ctx.font = this.font(15, 650);
@@ -368,10 +472,10 @@ export class UI {
     this.panel(x, y, pw, ph, 12);
     ctx.textAlign = "center";
     ctx.fillStyle = C.orangeLight;
-    ctx.font = this.font(35, 860);
+    ctx.font = this.titleFont(37, 700);
     ctx.fillText("WAVE 5 SURVIVED", w / 2, y + 70);
     ctx.fillStyle = C.text;
-    ctx.font = this.font(27, 820);
+    ctx.font = this.titleFont(28, 700);
     ctx.fillText("THANK YOU FOR TRYING OUR GAME", w / 2, y + 132);
     ctx.fillStyle = C.muted;
     ctx.font = this.font(18, 650);

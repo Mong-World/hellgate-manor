@@ -20,10 +20,10 @@ export const CONFIG = Object.freeze({
     normalAttackDamage: 4,
     fastAttackDamage: 6,
     attackInterval: 1.4,
-    normalSpeedMin: 0.94,
-    normalSpeedMax: 1.08,
-    fastSpeedMin: 1.48,
-    fastSpeedMax: 1.68,
+    normalSpeedMin: 1.88,
+    normalSpeedMax: 2.16,
+    fastSpeedMin: 4.44,
+    fastSpeedMax: 5.04,
     groundDeathScreenFraction: 0.5,
     hardSurfaceKillSpeed: 10.5,
     treeKillSpeed: 10.5,
@@ -37,10 +37,10 @@ export const CONFIG = Object.freeze({
     bombMaxCharges: 3
   },
   waves: [
-    { total: 5, fast: 0, maxActive: 2, spawnGap: 3.0 },
-    { total: 10, fast: 2, maxActive: 3, spawnGap: 2.5 },
-    { total: 15, fast: 4, maxActive: 4, spawnGap: 2.0 },
-    { total: 20, fast: 7, maxActive: 5, spawnGap: 1.6 },
-    { total: 25, fast: 10, maxActive: 7, spawnGap: 1.2 }
+    { total: 5, fast: 0, maxActive: 2, spawnGap: 2.6 },
+    { total: 10, fast: 2, maxActive: 3, spawnGap: 2.1 },
+    { total: 15, fast: 4, maxActive: 4, spawnGap: 1.6 },
+    { total: 20, fast: 7, maxActive: 5, spawnGap: 1.2 },
+    { total: 25, fast: 10, maxActive: 7, spawnGap: 0.85 }
   ]
 });
