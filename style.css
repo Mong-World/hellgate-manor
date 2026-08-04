@@ -4,20 +4,21 @@ html, body {
   height: 100%;
   margin: 0;
   overflow: hidden;
-  background: #050506;
+  background: #050609;
   user-select: none;
 }
 body { cursor: grab; }
 body.grabbing { cursor: grabbing; }
-#game-shell, canvas { position: fixed; inset: 0; }
-canvas { display: block; touch-action: none; }
+#game-shell, #ui-canvas, canvas { position: fixed; inset: 0; }
+#game-shell canvas { display: block; touch-action: none; }
+#ui-canvas { width: 100%; height: 100%; z-index: 10; pointer-events: none; }
 #loading {
   position: fixed;
   inset: 0;
   z-index: 20;
   display: grid;
   place-items: center;
-  background: #050506;
+  background: #050609;
   color: #ff7a32;
   font: 700 12px/1.2 system-ui, sans-serif;
   letter-spacing: .24em;
