@@ -1,55 +1,51 @@
 import * as THREE from "three";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-
-const MANOR_URL = "./assets/manor.glb";
-const MANOR_HEIGHT = 10.5;
-const MANOR_ROTATION_Y = Math.PI;
+import { AssetLibrary } from "./AssetLibrary.js";
 
 export class World {
-  constructor(scene) {
+  constructor(scene, assets) {
     this.scene = scene;
+    this.assets = assets;
     this.disposables = [];
     this.flames = [];
-    this.manor = null;
+    this.treeColliders = [];
+    this.manorHolder = null;
+    this.manorBounds = new THREE.Box3();
+    this.manorBarrierX = 13;
+    this.turretMounts = [];
 
     this.createMaterials();
     this.createLights();
     this.createGround();
     this.createForest();
-    this.createAtmosphere();
   }
 
   async load() {
-    await this.loadManor();
+    this.loadManor();
   }
 
   createMaterials() {
     this.materials = {
-      earth: new THREE.MeshStandardMaterial({
-        color: 0x15161a,
-        roughness: 1
-      }),
-      forest: new THREE.MeshStandardMaterial({
-        color: 0x0d0f13,
-        roughness: 1
-      }),
+      earth: new THREE.MeshStandardMaterial({ color: 0x15161a, roughness: 1 }),
+      forest: new THREE.MeshStandardMaterial({ color: 0x0d0f13, roughness: 1 }),
       iron: new THREE.MeshStandardMaterial({
         color: 0x101217,
-        roughness: 0.5,
-        metalness: 0.75
+        roughness: 0.48,
+        metalness: 0.78
       }),
-      ember: new THREE.MeshBasicMaterial({
-        color: 0xff5a18
+      ember: new THREE.MeshStandardMaterial({
+        color: 0xff6725,
+        emissive: 0xff2f08,
+        emissiveIntensity: 4.2,
+        roughness: 0.3
       })
     };
-
     this.disposables.push(...Object.values(this.materials));
   }
 
   createLights() {
-    this.scene.add(new THREE.HemisphereLight(0x7889aa, 0x110b0b, 1.6));
+    this.scene.add(new THREE.HemisphereLight(0x8294ba, 0x120b0b, 1.75));
 
-    const moon = new THREE.DirectionalLight(0xaec5f0, 3.3);
+    const moon = new THREE.DirectionalLight(0xb2c8f3, 3.65);
     moon.position.set(-18, 24, 13);
     moon.castShadow = true;
     moon.shadow.mapSize.set(2048, 2048);
@@ -62,7 +58,11 @@ export class World {
     moon.shadow.bias = -0.00035;
     this.scene.add(moon);
 
-    this.hellGlow = new THREE.PointLight(0xff4810, 34, 24, 1.8);
+    const rim = new THREE.DirectionalLight(0x6f91d6, 1.5);
+    rim.position.set(-12, 7, 12);
+    this.scene.add(rim);
+
+    this.hellGlow = new THREE.PointLight(0xff4810, 35, 24, 1.8);
     this.hellGlow.position.set(15.5, 4, 0);
     this.scene.add(this.hellGlow);
   }
@@ -70,23 +70,20 @@ export class World {
   createGround() {
     const geometry = new THREE.PlaneGeometry(80, 27, 64, 18);
     geometry.rotateX(-Math.PI / 2);
-
     const positions = geometry.attributes.position;
+
     for (let i = 0; i < positions.count; i += 1) {
       const x = positions.getX(i);
       const z = positions.getZ(i);
-
       let y =
         Math.sin(x * 0.16) * 0.05 +
         Math.cos(z * 0.5) * 0.035 +
         Math.sin((x + z) * 0.12) * 0.025;
-
-      if (x > -14 && x < 12) y *= 0.3;
+      if (x > -14 && x < 12) y *= 0.25;
       positions.setY(i, y);
     }
 
     geometry.computeVertexNormals();
-
     const ground = new THREE.Mesh(geometry, this.materials.earth);
     ground.position.y = -0.05;
     ground.receiveShadow = true;
@@ -99,14 +96,14 @@ export class World {
     const branchGeometry = new THREE.CylinderGeometry(0.035, 0.075, 2.4, 5);
     this.disposables.push(trunkGeometry, branchGeometry);
 
-    for (let i = 0; i < 32; i += 1) {
+    for (let i = 0; i < 34; i += 1) {
       const tree = new THREE.Group();
       tree.position.set(
         THREE.MathUtils.randFloat(-31, -19),
         0,
         THREE.MathUtils.randFloat(-12, 12)
       );
-      tree.scale.setScalar(THREE.MathUtils.randFloat(0.75, 1.45));
+      tree.scale.setScalar(THREE.MathUtils.randFloat(0.78, 1.48));
       this.scene.add(tree);
 
       const trunk = new THREE.Mesh(trunkGeometry, this.materials.forest);
@@ -126,50 +123,38 @@ export class World {
         branch.castShadow = true;
         tree.add(branch);
       }
+
+      this.treeColliders.push({
+        position: tree.position.clone(),
+        radius: 0.5 * tree.scale.x,
+        height: 8.5 * tree.scale.y
+      });
     }
   }
 
-  async loadManor() {
-    const loader = new GLTFLoader();
-    const gltf = await loader.loadAsync(MANOR_URL);
-    const model = gltf.scene;
-
-    model.traverse((object) => {
-      if (object.isMesh) {
-        object.castShadow = true;
-        object.receiveShadow = true;
-      }
-    });
-
-    model.updateMatrixWorld(true);
-    const initialBox = new THREE.Box3().setFromObject(model);
-    const size = initialBox.getSize(new THREE.Vector3());
-    const scale = MANOR_HEIGHT / Math.max(size.y, 0.001);
-
-    model.scale.setScalar(scale);
-    model.rotation.y = MANOR_ROTATION_Y;
-    model.updateMatrixWorld(true);
-
-    const scaledBox = new THREE.Box3().setFromObject(model);
-    const centre = scaledBox.getCenter(new THREE.Vector3());
-
-    model.position.x -= centre.x;
-    model.position.z -= centre.z;
-    model.position.y -= scaledBox.min.y;
+  loadManor() {
+    const model = this.assets.createManorClone();
+    AssetLibrary.prepareModel(model);
+    AssetLibrary.fitModelToHeight(model, 10.5, Math.PI);
 
     const holder = new THREE.Group();
     holder.position.set(16.2, 0, 0);
     holder.add(model);
     this.scene.add(holder);
 
-    this.manor = holder;
+    holder.updateMatrixWorld(true);
+    this.manorHolder = holder;
+    this.manorBounds.setFromObject(holder);
+    this.manorBarrierX = this.manorBounds.min.x - 0.12;
+
     this.createBraziers();
+    this.createTurretMounts();
   }
 
   createBraziers() {
     for (const z of [-4.2, 4.2]) {
       const group = new THREE.Group();
-      group.position.set(11.9, 0, z);
+      group.position.set(this.manorBarrierX - 1.1, 0, z);
       this.scene.add(group);
 
       const standGeometry = new THREE.CylinderGeometry(0.18, 0.3, 1.2, 10);
@@ -188,42 +173,71 @@ export class World {
       const light = new THREE.PointLight(0xff5516, 10, 8, 2);
       light.position.y = 1.42;
       group.add(light);
-
-      this.flames.push({
-        flame,
-        light,
-        phase: Math.random() * Math.PI * 2
-      });
+      this.flames.push({ flame, light, phase: Math.random() * Math.PI * 2 });
     }
   }
 
-  createAtmosphere() {
-    const geometry = new THREE.BufferGeometry();
-    const count = 130;
-    const positions = new Float32Array(count * 3);
+  createTurretMounts() {
+    const y = Math.min(this.manorBounds.max.y * 0.62, 6.4);
+    const zPositions = [-2.8, 0, 2.8];
 
-    for (let i = 0; i < count; i += 1) {
-      positions[i * 3] = THREE.MathUtils.randFloat(6, 21);
-      positions[i * 3 + 1] = THREE.MathUtils.randFloat(0.3, 10);
-      positions[i * 3 + 2] = THREE.MathUtils.randFloat(-8, 8);
+    for (let i = 0; i < 3; i += 1) {
+      const group = new THREE.Group();
+      group.position.set(this.manorBarrierX + 0.25, y + i * 0.35, zPositions[i]);
+      group.visible = false;
+      this.scene.add(group);
+
+      const baseGeometry = new THREE.CylinderGeometry(0.22, 0.32, 0.55, 10);
+      const base = new THREE.Mesh(baseGeometry, this.materials.iron);
+      base.rotation.z = Math.PI / 2;
+      base.castShadow = true;
+      group.add(base);
+      this.disposables.push(baseGeometry);
+
+      const orbGeometry = new THREE.IcosahedronGeometry(0.24, 1);
+      const orb = new THREE.Mesh(orbGeometry, this.materials.ember);
+      orb.position.x = -0.36;
+      group.add(orb);
+      this.disposables.push(orbGeometry);
+
+      const light = new THREE.PointLight(0xff4f16, 6, 5, 2);
+      light.position.copy(orb.position);
+      group.add(light);
+      this.turretMounts.push({ group, orb, light, phase: i * 1.2 });
     }
+  }
 
-    geometry.setAttribute(
-      "position",
-      new THREE.BufferAttribute(positions, 3)
-    );
-
-    const material = new THREE.PointsMaterial({
-      color: 0xff5b18,
-      size: 0.055,
-      transparent: true,
-      opacity: 0.7,
-      depthWrite: false
+  setTurretLevel(level) {
+    this.turretMounts.forEach((mount, index) => {
+      mount.group.visible = index < level;
     });
+  }
 
-    this.embers = new THREE.Points(geometry, material);
-    this.scene.add(this.embers);
-    this.disposables.push(geometry, material);
+  getTurretOrigin(index) {
+    const mount = this.turretMounts[index];
+    if (!mount) return new THREE.Vector3(this.manorBarrierX, 4.5, 0);
+    const origin = new THREE.Vector3();
+    mount.orb.getWorldPosition(origin);
+    return origin;
+  }
+
+  isInsideManorCollision(position) {
+    return (
+      position.x >= this.manorBarrierX &&
+      position.y <= this.manorBounds.max.y + 1 &&
+      position.z >= this.manorBounds.min.z - 0.8 &&
+      position.z <= this.manorBounds.max.z + 0.8
+    );
+  }
+
+  findTreeCollision(position) {
+    for (const tree of this.treeColliders) {
+      if (position.y > tree.height) continue;
+      const dx = position.x - tree.position.x;
+      const dz = position.z - tree.position.z;
+      if (dx * dx + dz * dz <= tree.radius * tree.radius) return tree;
+    }
+    return null;
   }
 
   update(elapsed) {
@@ -232,14 +246,17 @@ export class World {
         0.9 +
         Math.sin(elapsed * 8 + phase) * 0.12 +
         Math.sin(elapsed * 15 + phase) * 0.04;
-
       flame.scale.set(0.9 / pulse, 1.2 * pulse, 0.9 / pulse);
       light.intensity = 9 + pulse * 2.5;
     });
 
+    this.turretMounts.forEach(({ orb, light, phase }) => {
+      const pulse = 1 + Math.sin(elapsed * 5 + phase) * 0.12;
+      orb.scale.setScalar(pulse);
+      light.intensity = 5.5 + pulse * 1.8;
+    });
+
     this.hellGlow.intensity = 33 + Math.sin(elapsed * 2.1) * 2;
-    this.embers.rotation.y = elapsed * 0.014;
-    this.embers.position.y = Math.sin(elapsed * 0.4) * 0.08;
   }
 
   dispose() {
