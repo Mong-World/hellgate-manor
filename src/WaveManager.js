@@ -82,7 +82,14 @@ export class WaveManager {
       scene: this.scene,
       assets: this.assets,
       camera: this.camera,
-      position: new THREE.Vector3(THREE.MathUtils.randFloat(-19.4, -18.2), 0, z),
+      position: new THREE.Vector3(
+        THREE.MathUtils.randFloat(
+          CONFIG.enemy.spawnXMin,
+          CONFIG.enemy.spawnXMax
+        ),
+        0,
+        z
+      ),
       fast,
       onDeath: (data) => this.handleEnemyDeath(data),
       onAttack: (target) => this.onEnemyAttack?.(target)

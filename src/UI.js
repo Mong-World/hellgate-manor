@@ -1,19 +1,17 @@
 import { CONFIG } from "./Config.js";
 
 const C = {
-  panel: "rgba(7,8,11,.94)",
-  panel2: "rgba(15,15,19,.97)",
-  panelTop: "rgba(35,24,21,.98)",
-  border: "rgba(255,112,49,.78)",
-  borderHot: "rgba(255,147,84,.95)",
-  borderSoft: "rgba(255,102,38,.28)",
-  iron: "rgba(114,105,102,.38)",
+  panel: "rgba(7,8,11,.93)",
+  panel2: "rgba(14,14,18,.96)",
+  border: "rgba(255,112,49,.72)",
+  borderHot: "rgba(255,153,91,.94)",
+  borderSoft: "rgba(255,102,38,.25)",
+  iron: "rgba(125,117,113,.30)",
   orange: "#ff6a28",
-  orangeLight: "#ffc09a",
+  orangeLight: "#ffc39e",
   text: "#f4ebe3",
   muted: "#aaa19d",
-  red: "#ef514e",
-  black: "#07070a"
+  red: "#ef514e"
 };
 
 export class UI {
@@ -40,6 +38,7 @@ export class UI {
 
     this.onPointerDown = this.onPointerDown.bind(this);
     this.resize = this.resize.bind(this);
+
     window.addEventListener("pointerdown", this.onPointerDown, true);
     window.addEventListener("resize", this.resize);
     this.resize();
@@ -54,25 +53,45 @@ export class UI {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  setMode(mode) { this.mode = mode; }
-  setHUD(data) { Object.assign(this, data); }
+  setMode(mode) {
+    this.mode = mode;
+  }
+
+  setHUD(data) {
+    Object.assign(this, data);
+  }
+
   showBanner(title, subtitle = "", duration = 2.2) {
     this.bannerTitle = title;
     this.bannerSubtitle = subtitle;
     this.bannerTimer = duration;
   }
-  flashHealth() { this.healthFlash = 0.5; }
-  pulseSouls() { this.soulPulse = 0.45; }
+
+  flashHealth() {
+    this.healthFlash = 0.5;
+  }
+
+  pulseSouls() {
+    this.soulPulse = 0.45;
+  }
 
   onPointerDown(event) {
     const x = event.clientX;
     const y = event.clientY;
+
     for (let i = this.buttons.length - 1; i >= 0; i -= 1) {
-      const b = this.buttons[i];
-      if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h && !b.disabled) {
+      const button = this.buttons[i];
+
+      if (
+        x >= button.x &&
+        x <= button.x + button.w &&
+        y >= button.y &&
+        y <= button.y + button.h &&
+        !button.disabled
+      ) {
         event.preventDefault();
         event.stopImmediatePropagation();
-        b.onClick?.();
+        button.onClick?.();
         return;
       }
     }
@@ -86,401 +105,562 @@ export class UI {
 
   draw() {
     const ctx = this.ctx;
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    ctx.clearRect(0, 0, w, h);
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+
+    ctx.clearRect(0, 0, width, height);
     this.buttons = [];
 
-    if (this.mode === "start") return this.drawStart(w, h);
-    if (this.mode === "playing") {
-      this.drawHUD(w, h);
-      if (this.bannerTimer > 0) this.drawBanner(w, h);
+    if (this.mode === "start") {
+      this.drawStart(width, height);
       return;
     }
+
+    if (this.mode === "playing") {
+      this.drawHUD(width, height);
+
+      if (this.bannerTimer > 0) {
+        this.drawBanner(width, height);
+      }
+
+      return;
+    }
+
     if (this.mode === "intermission") {
-      this.drawHUD(w, h);
-      return this.drawIntermission(w, h);
+      this.drawHUD(width, height);
+      this.drawIntermission(width, height);
+      return;
     }
+
     if (this.mode === "gameOver") {
-      this.drawHUD(w, h);
-      return this.drawGameOver(w, h);
+      this.drawHUD(width, height);
+      this.drawGameOver(width, height);
+      return;
     }
-    if (this.mode === "complete") return this.drawComplete(w, h);
+
+    if (this.mode === "complete") {
+      this.drawComplete(width, height);
+    }
   }
 
-  font(size, weight = 700) {
+  font(size) {
+    return `${size}px "Lansbury", Georgia, serif`;
+  }
+
+  dataFont(size, weight = 700) {
     return `${weight} ${size}px "Arial Narrow","Roboto Condensed",system-ui,sans-serif`;
   }
 
-  titleFont(size, weight = 700) {
-    return `${weight} ${size}px Georgia,"Times New Roman",serif`;
-  }
-
-  angularPath(x, y, w, h, cut = 11) {
+  angularPath(x, y, width, height, cut = 10) {
     const ctx = this.ctx;
-    const c = Math.min(cut, w * 0.16, h * 0.28);
+    const corner = Math.min(cut, width * 0.14, height * 0.26);
+
     ctx.beginPath();
-    ctx.moveTo(x + c, y);
-    ctx.lineTo(x + w - c, y);
-    ctx.lineTo(x + w, y + c);
-    ctx.lineTo(x + w, y + h - c);
-    ctx.lineTo(x + w - c, y + h);
-    ctx.lineTo(x + c, y + h);
-    ctx.lineTo(x, y + h - c);
-    ctx.lineTo(x, y + c);
+    ctx.moveTo(x + corner, y);
+    ctx.lineTo(x + width - corner, y);
+    ctx.lineTo(x + width, y + corner);
+    ctx.lineTo(x + width, y + height - corner);
+    ctx.lineTo(x + width - corner, y + height);
+    ctx.lineTo(x + corner, y + height);
+    ctx.lineTo(x, y + height - corner);
+    ctx.lineTo(x, y + corner);
     ctx.closePath();
   }
 
-  cornerMarks(x, y, w, h, size = 13) {
+  panel(x, y, width, height, fill = C.panel, cut = 10) {
     const ctx = this.ctx;
-    ctx.strokeStyle = C.borderHot;
-    ctx.lineWidth = 1.35;
-    const inset = 5;
-    const s = Math.min(size, w * 0.12, h * 0.28);
-
-    const corners = [
-      [x + inset, y + inset, 1, 1],
-      [x + w - inset, y + inset, -1, 1],
-      [x + inset, y + h - inset, 1, -1],
-      [x + w - inset, y + h - inset, -1, -1]
-    ];
-
-    for (const [cx, cy, sx, sy] of corners) {
-      ctx.beginPath();
-      ctx.moveTo(cx, cy + sy * s);
-      ctx.lineTo(cx, cy);
-      ctx.lineTo(cx + sx * s, cy);
-      ctx.stroke();
-    }
-  }
-
-  panel(x, y, w, h, radius = 10, fill = C.panel) {
-    const ctx = this.ctx;
-    const cut = Math.max(7, Math.min(15, radius + 2));
 
     ctx.save();
-    ctx.shadowColor = "rgba(255,70,18,.22)";
-    ctx.shadowBlur = 16;
-    this.angularPath(x, y, w, h, cut);
+    ctx.shadowColor = "rgba(255,70,18,.20)";
+    ctx.shadowBlur = 12;
+    this.angularPath(x, y, width, height, cut);
     ctx.fillStyle = fill;
     ctx.fill();
 
     ctx.shadowBlur = 0;
-    const gradient = ctx.createLinearGradient(x, y, x, y + h);
-    gradient.addColorStop(0, "rgba(255,255,255,.045)");
-    gradient.addColorStop(0.18, "rgba(255,255,255,.012)");
+    const gradient = ctx.createLinearGradient(x, y, x, y + height);
+    gradient.addColorStop(0, "rgba(255,255,255,.035)");
     gradient.addColorStop(1, "rgba(0,0,0,.24)");
-    this.angularPath(x, y, w, h, cut);
+    this.angularPath(x, y, width, height, cut);
     ctx.fillStyle = gradient;
     ctx.fill();
 
-    this.angularPath(x, y, w, h, cut);
+    this.angularPath(x, y, width, height, cut);
     ctx.strokeStyle = C.border;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    this.angularPath(x + 5, y + 5, w - 10, h - 10, Math.max(4, cut - 4));
+    this.angularPath(
+      x + 4,
+      y + 4,
+      width - 8,
+      height - 8,
+      Math.max(3, cut - 4)
+    );
     ctx.strokeStyle = C.iron;
     ctx.lineWidth = 1;
     ctx.stroke();
-
-    this.cornerMarks(x, y, w, h, 12);
     ctx.restore();
   }
 
-  button(label, x, y, w, h, onClick, disabled = false) {
+  button(label, x, y, width, height, onClick, disabled = false) {
     const ctx = this.ctx;
-    const cut = Math.min(10, h * 0.22);
 
     ctx.save();
-    this.angularPath(x, y, w, h, cut);
+    this.angularPath(x, y, width, height, 8);
+    const gradient = ctx.createLinearGradient(x, y, x, y + height);
 
-    const gradient = ctx.createLinearGradient(x, y, x, y + h);
     if (disabled) {
-      gradient.addColorStop(0, "rgba(46,46,50,.96)");
-      gradient.addColorStop(1, "rgba(25,25,29,.96)");
+      gradient.addColorStop(0, "rgba(49,49,53,.96)");
+      gradient.addColorStop(1, "rgba(24,24,28,.96)");
     } else {
-      gradient.addColorStop(0, "rgba(62,31,21,.98)");
-      gradient.addColorStop(0.5, "rgba(35,19,16,.99)");
-      gradient.addColorStop(1, "rgba(16,12,13,.99)");
+      gradient.addColorStop(0, "rgba(66,32,20,.98)");
+      gradient.addColorStop(1, "rgba(18,12,13,.99)");
     }
 
     ctx.fillStyle = gradient;
     ctx.fill();
-    ctx.strokeStyle = disabled ? "rgba(120,120,120,.25)" : C.borderHot;
-    ctx.lineWidth = disabled ? 1 : 1.8;
-    ctx.stroke();
-
-    this.angularPath(x + 4, y + 4, w - 8, h - 8, Math.max(3, cut - 4));
-    ctx.strokeStyle = disabled ? "rgba(255,255,255,.04)" : C.borderSoft;
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = disabled
+      ? "rgba(120,120,120,.22)"
+      : C.borderHot;
+    ctx.lineWidth = disabled ? 1 : 1.6;
     ctx.stroke();
 
     ctx.fillStyle = disabled ? "#777" : C.text;
-    ctx.font = this.font(Math.min(18, h * 0.34), 800);
+    ctx.font = this.font(Math.min(25, height * 0.55));
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.shadowColor = disabled ? "transparent" : "rgba(255,90,28,.7)";
-    ctx.shadowBlur = disabled ? 0 : 7;
-    ctx.fillText(label, x + w / 2, y + h / 2);
+    ctx.shadowColor = disabled ? "transparent" : "rgba(255,85,28,.6)";
+    ctx.shadowBlur = disabled ? 0 : 6;
+    ctx.fillText(label, x + width / 2, y + height / 2 + 1);
     ctx.restore();
 
-    this.buttons.push({ x, y, w, h, onClick, disabled });
+    this.buttons.push({
+      x,
+      y,
+      w: width,
+      h: height,
+      onClick,
+      disabled
+    });
   }
 
-  drawStart(w, h) {
-    const pw = Math.min(620, w - 40);
-    const ph = 270;
-    const x = (w - pw) / 2;
-    const y = (h - ph) / 2;
-    this.panel(x, y, pw, ph, 12);
+  drawStart(width, height) {
+    const panelWidth = Math.min(560, width - 44);
+    const panelHeight = 240;
+    const x = (width - panelWidth) / 2;
+    const y = (height - panelHeight) / 2;
+
+    this.panel(x, y, panelWidth, panelHeight, C.panel, 14);
+
     const ctx = this.ctx;
     ctx.textAlign = "center";
     ctx.fillStyle = C.text;
-    ctx.font = this.titleFont(Math.min(44, w * 0.047), 700);
-    ctx.shadowColor = "rgba(255,80,24,.65)";
-    ctx.shadowBlur = 12;
-    ctx.fillText("HELLGATE MANOR", w / 2, y + 72);
+    ctx.font = this.font(Math.min(58, width * 0.06));
+    ctx.shadowColor = "rgba(255,80,24,.7)";
+    ctx.shadowBlur = 13;
+    ctx.fillText("HELLGATE MANOR", width / 2, y + 72);
     ctx.shadowBlur = 0;
+
     ctx.strokeStyle = C.borderSoft;
-    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(x + 70, y + 95);
-    ctx.lineTo(x + pw - 70, y + 95);
+    ctx.moveTo(x + 70, y + 96);
+    ctx.lineTo(x + panelWidth - 70, y + 96);
     ctx.stroke();
+
     ctx.fillStyle = C.muted;
-    ctx.font = this.font(16, 650);
-    ctx.fillText("THE GATES ARE OPEN. KEEP THE MANOR SAFE.", w / 2, y + 118);
-    this.button("START", w / 2 - 110, y + 160, 220, 62, () => this.callbacks.onStart?.());
+    ctx.font = this.dataFont(13, 700);
+    ctx.fillText(
+      "THE GATES ARE OPEN. KEEP THE MANOR SAFE.",
+      width / 2,
+      y + 126
+    );
+
+    this.button(
+      "START",
+      width / 2 - 95,
+      y + 157,
+      190,
+      50,
+      () => this.callbacks.onStart?.()
+    );
   }
 
-  drawHUD(w, h) {
-    const ctx = this.ctx;
-    const margin = 22;
+  drawHUD(width, height) {
+    const margin = 14;
+    const hudHeight = 52;
+    const y = height - margin - hudHeight;
+    const compact = width < 850;
 
-    this.panel(margin, margin, 200, 78, 8);
+    const waveWidth = compact ? 145 : 165;
+    const soulWidth = compact ? 105 : 125;
+    const healthWidth = Math.min(compact ? 285 : 340, width * 0.39);
+    const waveX = margin;
+    const healthX = (width - healthWidth) / 2;
+    const soulX = width - margin - soulWidth;
+    const ctx = this.ctx;
+
+    this.panel(waveX, y, waveWidth, hudHeight, C.panel, 8);
     ctx.textAlign = "left";
     ctx.fillStyle = C.orangeLight;
-    ctx.font = this.font(17, 820);
-    ctx.fillText(`WAVE ${this.wave} / ${this.waveTotal}`, margin + 16, margin + 30);
-    ctx.fillStyle = C.text;
-    ctx.font = this.font(14, 650);
-    ctx.fillText(`HUSKS REMAINING: ${this.remaining}`, margin + 16, margin + 57);
+    ctx.font = this.font(compact ? 19 : 21);
+    ctx.fillText(
+      `WAVE ${this.wave}/${this.waveTotal}`,
+      waveX + 12,
+      y + 23
+    );
 
-    const healthW = Math.min(440, w * 0.34);
-    const healthX = (w - healthW) / 2;
-    this.panel(healthX, margin, healthW, 78, 8);
+    ctx.fillStyle = C.text;
+    ctx.font = this.dataFont(compact ? 10 : 11, 750);
+    ctx.fillText(
+      `${this.remaining} HUSKS REMAIN`,
+      waveX + 12,
+      y + 41
+    );
+
+    this.panel(healthX, y, healthWidth, hudHeight, C.panel, 8);
     ctx.textAlign = "center";
     ctx.fillStyle = C.text;
-    ctx.font = this.font(14, 760);
-    ctx.fillText("MANOR HEALTH", w / 2, margin + 25);
+    ctx.font = this.font(compact ? 17 : 19);
+    ctx.fillText("MANOR", width / 2, y + 20);
 
-    const barX = healthX + 18;
-    const barY = margin + 39;
-    const barW = healthW - 36;
-    const barH = 20;
+    const barX = healthX + 14;
+    const barY = y + 29;
+    const barWidth = healthWidth - 28;
+    const barHeight = 12;
     const ratio = Math.max(0, Math.min(1, this.health / this.maxHealth));
-    ctx.fillStyle = "rgba(255,255,255,.08)";
-    ctx.fillRect(barX, barY, barW, barH);
-    ctx.fillStyle = this.healthFlash > 0 || ratio <= 0.35 ? C.red : C.orange;
-    ctx.fillRect(barX, barY, barW * ratio, barH);
-    ctx.strokeStyle = "rgba(255,255,255,.18)";
-    ctx.strokeRect(barX, barY, barW, barH);
-    ctx.fillStyle = C.text;
-    ctx.font = this.font(12, 800);
-    ctx.fillText(`${Math.ceil(this.health)} / ${this.maxHealth}`, w / 2, barY + 15);
 
-    const soulW = 150;
-    const soulX = w - margin - soulW;
-    const pulse = this.soulPulse > 0 ? 1 + this.soulPulse * 0.18 : 1;
+    ctx.fillStyle = "rgba(255,255,255,.07)";
+    ctx.fillRect(barX, barY, barWidth, barHeight);
+    ctx.fillStyle =
+      this.healthFlash > 0 || ratio <= 0.35
+        ? C.red
+        : C.orange;
+    ctx.fillRect(barX, barY, barWidth * ratio, barHeight);
+    ctx.strokeStyle = "rgba(255,255,255,.16)";
+    ctx.strokeRect(barX, barY, barWidth, barHeight);
+
+    ctx.fillStyle = C.text;
+    ctx.font = this.dataFont(10, 800);
+    ctx.fillText(
+      `${Math.ceil(this.health)} / ${this.maxHealth}`,
+      width / 2,
+      barY + 10
+    );
+
+    const pulse =
+      this.soulPulse > 0
+        ? 1 + this.soulPulse * 0.14
+        : 1;
+
     ctx.save();
-    ctx.translate(soulX + soulW / 2, margin + 39);
+    ctx.translate(soulX + soulWidth / 2, y + hudHeight / 2);
     ctx.scale(pulse, pulse);
-    ctx.translate(-(soulX + soulW / 2), -(margin + 39));
-    this.panel(soulX, margin, soulW, 78, 8);
+    ctx.translate(-(soulX + soulWidth / 2), -(y + hudHeight / 2));
+
+    this.panel(soulX, y, soulWidth, hudHeight, C.panel, 8);
     ctx.fillStyle = C.orange;
     ctx.beginPath();
-    ctx.arc(soulX + 28, margin + 39, 10, 0, Math.PI * 2);
+    ctx.arc(soulX + 20, y + 26, 7, 0, Math.PI * 2);
     ctx.fill();
-    ctx.shadowColor = C.orange;
-    ctx.shadowBlur = 14;
-    ctx.fill();
-    ctx.shadowBlur = 0;
+
     ctx.fillStyle = C.text;
     ctx.textAlign = "left";
-    ctx.font = this.font(23, 820);
-    ctx.fillText(String(this.souls), soulX + 50, margin + 48);
+    ctx.font = this.dataFont(compact ? 18 : 20, 800);
+    ctx.fillText(String(this.souls), soulX + 35, y + 33);
     ctx.restore();
 
     if (this.bombs > 0) {
       this.button(
         `HELL BOMB × ${this.bombs}`,
-        w - margin - 190,
-        h - margin - 58,
-        190,
-        58,
+        width - margin - 145,
+        y - 42,
+        145,
+        34,
         () => this.callbacks.onBomb?.(),
         this.remaining <= 0
       );
     }
   }
 
-  drawBanner(w, h) {
+  drawBanner(width, height) {
     const ctx = this.ctx;
+
     ctx.save();
     ctx.globalAlpha = Math.min(1, this.bannerTimer / 0.35);
     ctx.textAlign = "center";
     ctx.fillStyle = C.text;
-    ctx.font = this.titleFont(Math.min(50, w * 0.058), 700);
-    ctx.fillText(this.bannerTitle, w / 2, h * 0.42);
+    ctx.font = this.font(Math.min(58, width * 0.058));
+    ctx.shadowColor = "rgba(255,80,24,.7)";
+    ctx.shadowBlur = 10;
+    ctx.fillText(this.bannerTitle, width / 2, height * 0.38);
+    ctx.shadowBlur = 0;
+
     if (this.bannerSubtitle) {
       ctx.fillStyle = C.orangeLight;
-      ctx.font = this.font(18, 700);
-      ctx.fillText(this.bannerSubtitle, w / 2, h * 0.42 + 42);
+      ctx.font = this.dataFont(15, 750);
+      ctx.fillText(
+        this.bannerSubtitle,
+        width / 2,
+        height * 0.38 + 34
+      );
     }
+
     ctx.restore();
   }
 
-  drawIntermission(w, h) {
+  drawIntermission(width, height) {
     const ctx = this.ctx;
-    ctx.fillStyle = "rgba(0,0,0,.58)";
-    ctx.fillRect(0, 0, w, h);
-    const pw = Math.min(880, w - 34);
-    const ph = Math.min(580, h - 44);
-    const x = (w - pw) / 2;
-    const y = (h - ph) / 2;
-    this.panel(x, y, pw, ph, 12);
+    ctx.fillStyle = "rgba(0,0,0,.66)";
+    ctx.fillRect(0, 0, width, height);
+
+    const panelWidth = Math.min(790, width - 56);
+    const panelHeight = Math.min(600, height - 54);
+    const x = (width - panelWidth) / 2;
+    const y = (height - panelHeight) / 2;
+
+    this.panel(x, y, panelWidth, panelHeight, C.panel, 15);
 
     ctx.textAlign = "center";
     ctx.fillStyle = C.text;
-    ctx.font = this.titleFont(37, 700);
-    ctx.shadowColor = "rgba(255,80,24,.5)";
+    ctx.font = this.font(45);
+    ctx.shadowColor = "rgba(255,80,24,.55)";
     ctx.shadowBlur = 9;
-    ctx.fillText(`WAVE ${this.wave} SURVIVED`, w / 2, y + 54);
+    ctx.fillText(`WAVE ${this.wave} SURVIVED`, width / 2, y + 58);
     ctx.shadowBlur = 0;
+
     ctx.fillStyle = C.muted;
-    ctx.font = this.font(15, 650);
+    ctx.font = this.dataFont(12, 750);
     ctx.fillText(
-      this.purchaseUsed ? "PURCHASE COMPLETE — CONTINUE WHEN READY" : "CHOOSE ONE REPAIR OR UPGRADE",
-      w / 2,
-      y + 83
+      this.purchaseUsed
+        ? "PURCHASE COMPLETE — CONTINUE WHEN READY"
+        : "CHOOSE ONE REPAIR OR UPGRADE",
+      width / 2,
+      y + 84
     );
 
-    const gap = 16;
-    const cardW = (pw - 64 - gap * 2) / 3;
-    const cardY = y + 112;
-    const cardH = 310;
+    const nextWave = Math.min(this.wave + 1, this.waveTotal);
+    const turretUnlocked =
+      nextWave >= CONFIG.defence.turretUnlockWave;
+    const bombUnlocked =
+      nextWave >= CONFIG.defence.bombUnlockWave;
 
-    this.card({
-      x: x + 16, y: cardY, w: cardW, h: cardH,
+    const rowX = x + 34;
+    const rowWidth = panelWidth - 68;
+    const rowHeight = 104;
+    const gap = 18;
+    const firstY = y + 116;
+
+    this.upgradeRow({
+      x: rowX,
+      y: firstY,
+      width: rowWidth,
+      height: rowHeight,
       title: "REPAIR MANOR",
-      description: `Restore ${CONFIG.manor.repairAmount} health.`,
-      cost: CONFIG.manor.repairCost,
-      status: `${Math.ceil(this.health)} / ${this.maxHealth}`,
-      disabled: this.purchaseUsed || this.souls < CONFIG.manor.repairCost || this.health >= this.maxHealth,
+      description: `Restore ${CONFIG.manor.repairAmount} manor health.`,
+      status: `${Math.ceil(this.health)} / ${this.maxHealth} HEALTH`,
+      price: `${CONFIG.manor.repairCost} SOULS`,
+      disabled:
+        this.purchaseUsed ||
+        this.souls < CONFIG.manor.repairCost ||
+        this.health >= this.maxHealth,
       onClick: () => this.callbacks.onPurchase?.("repair")
     });
 
-    const turretCost = CONFIG.defence.turretCosts[Math.min(this.turretLevel, CONFIG.defence.turretCosts.length - 1)];
-    this.card({
-      x: x + 16 + cardW + gap, y: cardY, w: cardW, h: cardH,
+    const turretCost =
+      CONFIG.defence.turretCosts[
+        Math.min(
+          this.turretLevel,
+          CONFIG.defence.turretCosts.length - 1
+        )
+      ];
+
+    this.upgradeRow({
+      x: rowX,
+      y: firstY + rowHeight + gap,
+      width: rowWidth,
+      height: rowHeight,
       title: "HELLFIRE DEFENCE",
-      description: this.turretLevel === 0
-        ? "Mount an automatic Hellfire defence on the manor."
-        : "Add another Hellfire shot to each volley.",
-      cost: turretCost,
-      status: `LEVEL ${this.turretLevel} / ${CONFIG.defence.turretMaxLevel}`,
-      disabled: this.purchaseUsed || this.turretLevel >= CONFIG.defence.turretMaxLevel || this.souls < turretCost,
+      description:
+        this.turretLevel === 0
+          ? "Mount an automatic defence on the manor."
+          : "Add another shot to each Hellfire volley.",
+      status: turretUnlocked
+        ? `LEVEL ${this.turretLevel} / ${CONFIG.defence.turretMaxLevel}`
+        : `UNLOCKS FOR WAVE ${CONFIG.defence.turretUnlockWave}`,
+      price: turretUnlocked ? `${turretCost} SOULS` : "LOCKED",
+      disabled:
+        !turretUnlocked ||
+        this.purchaseUsed ||
+        this.turretLevel >= CONFIG.defence.turretMaxLevel ||
+        this.souls < turretCost,
       onClick: () => this.callbacks.onPurchase?.("turret")
     });
 
-    this.card({
-      x: x + 16 + (cardW + gap) * 2, y: cardY, w: cardW, h: cardH,
+    this.upgradeRow({
+      x: rowX,
+      y: firstY + (rowHeight + gap) * 2,
+      width: rowWidth,
+      height: rowHeight,
       title: "HELL BOMB",
-      description: "Adds one charge. During a wave it destroys every active Husk.",
-      cost: CONFIG.defence.bombCost,
-      status: `${this.bombs} / ${CONFIG.defence.bombMaxCharges} CHARGES`,
-      disabled: this.purchaseUsed || this.bombs >= CONFIG.defence.bombMaxCharges || this.souls < CONFIG.defence.bombCost,
+      description:
+        "Adds one charge that destroys every active Husk.",
+      status: bombUnlocked
+        ? `${this.bombs} / ${CONFIG.defence.bombMaxCharges} CHARGES`
+        : `UNLOCKS FOR WAVE ${CONFIG.defence.bombUnlockWave}`,
+      price: bombUnlocked
+        ? `${CONFIG.defence.bombCost} SOULS`
+        : "LOCKED",
+      disabled:
+        !bombUnlocked ||
+        this.purchaseUsed ||
+        this.bombs >= CONFIG.defence.bombMaxCharges ||
+        this.souls < CONFIG.defence.bombCost,
       onClick: () => this.callbacks.onPurchase?.("bomb")
     });
 
-    this.button("CONTINUE", w / 2 - 120, y + ph - 76, 240, 56, () => this.callbacks.onContinue?.());
+    this.button(
+      "CONTINUE",
+      width / 2 - 100,
+      y + panelHeight - 65,
+      200,
+      44,
+      () => this.callbacks.onContinue?.()
+    );
   }
 
-  card({ x, y, w, h, title, description, cost, status, disabled, onClick }) {
+  upgradeRow({
+    x,
+    y,
+    width,
+    height,
+    title,
+    description,
+    status,
+    price,
+    disabled,
+    onClick
+  }) {
     const ctx = this.ctx;
-    this.panel(x, y, w, h, 9, C.panel2);
+    this.panel(x, y, width, height, C.panel2, 9);
+
+    ctx.textAlign = "left";
+    ctx.fillStyle = disabled ? "#797979" : C.orangeLight;
+    ctx.font = this.font(27);
+    ctx.fillText(title, x + 22, y + 34);
+
+    ctx.fillStyle = disabled ? "#69696d" : C.text;
+    ctx.font = this.dataFont(12, 650);
+    ctx.fillText(description, x + 22, y + 58);
+
+    ctx.fillStyle = disabled ? "#656569" : C.muted;
+    ctx.font = this.dataFont(10, 750);
+    ctx.fillText(status, x + 22, y + 81);
+
+    const buttonWidth = 132;
+    const buttonX = x + width - buttonWidth - 18;
+
     ctx.textAlign = "center";
-    ctx.fillStyle = disabled ? "#777" : C.orangeLight;
-    ctx.font = this.titleFont(18, 700);
-    ctx.fillText(title, x + w / 2, y + 38);
-    ctx.fillStyle = disabled ? "#6f6f72" : C.text;
-    ctx.font = this.font(14, 600);
-    this.wrap(description, x + w / 2, y + 80, w - 34, 21);
-    ctx.fillStyle = disabled ? "#666" : C.muted;
-    ctx.font = this.font(13, 700);
-    ctx.fillText(status, x + w / 2, y + h - 105);
-    ctx.fillStyle = disabled ? "#666" : C.orange;
-    ctx.font = this.font(25, 850);
-    ctx.fillText(`${cost} SOULS`, x + w / 2, y + h - 72);
-    this.button("PURCHASE", x + 18, y + h - 52, w - 36, 38, onClick, disabled);
+    ctx.fillStyle = disabled ? "#69696d" : C.orange;
+    ctx.font = this.dataFont(14, 850);
+    ctx.fillText(price, buttonX + buttonWidth / 2, y + 28);
+
+    this.button(
+      disabled && price === "LOCKED" ? "LOCKED" : "PURCHASE",
+      buttonX,
+      y + 45,
+      buttonWidth,
+      39,
+      onClick,
+      disabled
+    );
   }
 
-  wrap(text, x, y, maxWidth, lineHeight) {
-    const words = text.split(" ");
-    let line = "";
-    let yy = y;
-    for (const word of words) {
-      const test = `${line}${word} `;
-      if (this.ctx.measureText(test).width > maxWidth && line) {
-        this.ctx.fillText(line.trim(), x, yy);
-        line = `${word} `;
-        yy += lineHeight;
-      } else line = test;
-    }
-    this.ctx.fillText(line.trim(), x, yy);
-  }
-
-  drawGameOver(w, h) {
+  drawGameOver(width, height) {
     const ctx = this.ctx;
-    ctx.fillStyle = "rgba(0,0,0,.68)";
-    ctx.fillRect(0, 0, w, h);
-    const pw = Math.min(560, w - 34);
-    const ph = 310;
-    const x = (w - pw) / 2;
-    const y = (h - ph) / 2;
-    this.panel(x, y, pw, ph, 12);
+    ctx.fillStyle = "rgba(0,0,0,.70)";
+    ctx.fillRect(0, 0, width, height);
+
+    const panelWidth = Math.min(550, width - 44);
+    const panelHeight = 290;
+    const x = (width - panelWidth) / 2;
+    const y = (height - panelHeight) / 2;
+
+    this.panel(x, y, panelWidth, panelHeight, C.panel, 14);
+
     ctx.textAlign = "center";
     ctx.fillStyle = C.red;
-    ctx.font = this.titleFont(41, 700);
-    ctx.fillText("THE MANOR HAS FALLEN", w / 2, y + 70);
+    ctx.font = this.font(48);
+    ctx.fillText("THE MANOR HAS FALLEN", width / 2, y + 72);
+
     ctx.fillStyle = C.muted;
-    ctx.font = this.font(15, 650);
-    ctx.fillText("Retry the wave with the state you had when it began.", w / 2, y + 111);
-    this.button("RETRY WAVE", w / 2 - 190, y + 165, 180, 58, () => this.callbacks.onRetry?.());
-    this.button("RESTART GAME", w / 2 + 10, y + 165, 180, 58, () => this.callbacks.onRestart?.());
+    ctx.font = this.dataFont(12, 700);
+    ctx.fillText(
+      "Retry with the state you had when this wave began.",
+      width / 2,
+      y + 112
+    );
+
+    this.button(
+      "RETRY WAVE",
+      width / 2 - 180,
+      y + 165,
+      165,
+      48,
+      () => this.callbacks.onRetry?.()
+    );
+
+    this.button(
+      "RESTART GAME",
+      width / 2 + 15,
+      y + 165,
+      165,
+      48,
+      () => this.callbacks.onRestart?.()
+    );
   }
 
-  drawComplete(w, h) {
+  drawComplete(width, height) {
     const ctx = this.ctx;
-    ctx.fillStyle = "rgba(0,0,0,.65)";
-    ctx.fillRect(0, 0, w, h);
-    const pw = Math.min(650, w - 34);
-    const ph = 380;
-    const x = (w - pw) / 2;
-    const y = (h - ph) / 2;
-    this.panel(x, y, pw, ph, 12);
+    ctx.fillStyle = "rgba(0,0,0,.68)";
+    ctx.fillRect(0, 0, width, height);
+
+    const panelWidth = Math.min(620, width - 44);
+    const panelHeight = 350;
+    const x = (width - panelWidth) / 2;
+    const y = (height - panelHeight) / 2;
+
+    this.panel(x, y, panelWidth, panelHeight, C.panel, 14);
+
     ctx.textAlign = "center";
     ctx.fillStyle = C.orangeLight;
-    ctx.font = this.titleFont(37, 700);
-    ctx.fillText("WAVE 5 SURVIVED", w / 2, y + 70);
+    ctx.font = this.font(46);
+    ctx.fillText("WAVE 5 SURVIVED", width / 2, y + 72);
+
     ctx.fillStyle = C.text;
-    ctx.font = this.titleFont(28, 700);
-    ctx.fillText("THANK YOU FOR TRYING OUR GAME", w / 2, y + 132);
+    ctx.font = this.font(35);
+    ctx.fillText(
+      "THANK YOU FOR TRYING OUR GAME",
+      width / 2,
+      y + 132
+    );
+
     ctx.fillStyle = C.muted;
-    ctx.font = this.font(18, 650);
-    ctx.fillText("THE FULL GAME IS COMING SOON", w / 2, y + 176);
-    this.button("PLAY AGAIN", w / 2 - 120, y + 240, 240, 62, () => this.callbacks.onRestart?.());
+    ctx.font = this.dataFont(15, 700);
+    ctx.fillText(
+      "THE FULL GAME IS COMING SOON",
+      width / 2,
+      y + 173
+    );
+
+    this.button(
+      "PLAY AGAIN",
+      width / 2 - 100,
+      y + 230,
+      200,
+      50,
+      () => this.callbacks.onRestart?.()
+    );
   }
 
   dispose() {

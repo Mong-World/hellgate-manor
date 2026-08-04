@@ -73,6 +73,12 @@ export class Game {
 
   async start() {
     await this.assets.loadAll();
+
+    try {
+      await document.fonts?.load('32px "Lansbury"');
+    } catch (error) {
+      console.warn("Lansbury font could not be preloaded.", error);
+    }
     this.world = new World(this.scene, this.assets);
     await this.world.load();
 
@@ -222,6 +228,8 @@ export class Game {
       this.souls -= CONFIG.manor.repairCost;
       this.manorHealth = Math.min(this.manorMaxHealth, this.manorHealth + CONFIG.manor.repairAmount);
     } else if (type === "turret") {
+      const nextWave = this.waveIndex + 2;
+      if (nextWave < CONFIG.defence.turretUnlockWave) return;
       if (this.turretLevel >= CONFIG.defence.turretMaxLevel) return;
       const cost = CONFIG.defence.turretCosts[this.turretLevel];
       if (this.souls < cost) return;
@@ -229,6 +237,8 @@ export class Game {
       this.turretLevel += 1;
       this.defence.setLevel(this.turretLevel);
     } else if (type === "bomb") {
+      const nextWave = this.waveIndex + 2;
+      if (nextWave < CONFIG.defence.bombUnlockWave) return;
       if (this.bombs >= CONFIG.defence.bombMaxCharges || this.souls < CONFIG.defence.bombCost) return;
       this.souls -= CONFIG.defence.bombCost;
       this.bombs += 1;

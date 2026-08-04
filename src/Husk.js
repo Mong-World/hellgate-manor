@@ -28,9 +28,9 @@ export class Husk {
 
     this.walkSpeed = THREE.MathUtils.randFloat(speedRange[0], speedRange[1]);
     this.walkAnimationSpeed = THREE.MathUtils.clamp(
-      0.86 + this.walkSpeed * 0.25,
-      this.fast ? 1.72 : 1.28,
-      this.fast ? 2.05 : 1.48
+      0.92 + this.walkSpeed * 0.17,
+      this.fast ? 2.25 : 1.55,
+      this.fast ? 2.75 : 1.95
     );
     this.soulValue = fast
       ? CONFIG.enemy.fastSoulValue
