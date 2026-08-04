@@ -1,5 +1,15 @@
-* { box-sizing: border-box; }
-html, body {
+@font-face {
+  font-family: "Lansbury";
+  src: url("./fonts/lansbury.ttf") format("truetype");
+  font-display: swap;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
   width: 100%;
   height: 100%;
   margin: 0;
@@ -7,11 +17,34 @@ html, body {
   background: #050609;
   user-select: none;
 }
-body { cursor: grab; }
-body.grabbing { cursor: grabbing; }
-#game-shell, #ui-canvas, canvas { position: fixed; inset: 0; }
-#game-shell canvas { display: block; touch-action: none; }
-#ui-canvas { width: 100%; height: 100%; z-index: 10; pointer-events: none; }
+
+body {
+  cursor: grab;
+}
+
+body.grabbing {
+  cursor: grabbing;
+}
+
+#game-shell,
+#ui-canvas,
+canvas {
+  position: fixed;
+  inset: 0;
+}
+
+#game-shell canvas {
+  display: block;
+  touch-action: none;
+}
+
+#ui-canvas {
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+  pointer-events: none;
+}
+
 #loading {
   position: fixed;
   inset: 0;
@@ -20,9 +53,12 @@ body.grabbing { cursor: grabbing; }
   place-items: center;
   background: #050609;
   color: #ff7a32;
-  font: 700 12px/1.2 system-ui, sans-serif;
-  letter-spacing: .24em;
+  font: 32px/1.2 "Lansbury", Georgia, serif;
+  letter-spacing: 0.08em;
   transition: opacity 500ms ease;
   pointer-events: none;
 }
-#loading.hidden { opacity: 0; }
+
+#loading.hidden {
+  opacity: 0;
+}

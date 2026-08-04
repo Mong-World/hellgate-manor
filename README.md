@@ -1,62 +1,35 @@
-# Hellgate Manor — Five-Wave Vertical Slice v0.10
+# Hellgate Manor — Five-Wave Vertical Slice v0.11
 
-This build expands the working GLB-based prototype into a five-wave gameplay loop.
+This update builds directly on the working v0.10 five-wave version.
 
-## Included
+## Required repository files
 
-- Live battlefield start screen with Start button
-- Five waves: 5, 10, 15, 20 and 25 Husks
-- Fast Husks from Wave 2 onward
-- Increasing simultaneous enemies and shorter spawn gaps
-- Several shallow depth lanes
-- Manor health, attacks, failure and Retry Wave
-- Souls: 10 slow, 15 fast, plus `20 × wave number` completion bonus
-- One strategic intermission purchase:
-  - Repair Manor: +25 health for 30 souls
-  - Hellfire Defence: permanent automatic shots every 5 seconds
-  - Hell Bomb: destroys all currently active Husks
-- Canvas-rendered HUD and menus
-- Wave 5 thank-you screen and Play Again
-- Ground death only after a drop covering at least half the visible screen height
-- Hard manor and tree impacts can kill
-- Husk-to-Husk impacts knock both down, but do not kill
-- Walk animation speed variation matched to movement speed
-- Automatic support for future animation clips named Walk/Run, Flail, Fall, GetUp, Attack and Idle
-
-## Required existing assets
-
-Keep these in your repository:
+Keep these existing files and folders:
 
 ```text
 assets/husk.glb
 assets/manor.glb
+fonts/lansbury.ttf
 ```
 
-This ZIP does not include or replace those files.
+The ZIP contains the revised game code and workflow, but it does not duplicate your GLB assets or font.
 
-## Upload
+## v0.11 changes
 
-Keep your existing `assets` folder. Replace the project code with the contents of this ZIP and commit to `main`.
+- The previous fast-Husk movement range is now used for standard Husks.
+- Fast Husks move at approximately twice the new standard speed.
+- Animation playback is increased but capped separately from world movement.
+- Husks now spawn fully off-screen to the left.
+- The left battlefield contains a glowing, animated breach with lava fissures, embers and infernal lighting.
+- The background now has a moon, stars and slowly drifting clouds.
+- Low ground fog drifts gently across the battlefield.
+- Hellfire Defence is locked until it can be purchased for Wave 3.
+- Hell Bombs are locked until they can be purchased for Wave 4.
+- Unlock rules are enforced both in the UI and in game logic.
+- The Lansbury font is used for titles, buttons and key UI labels.
+- The HUD is smaller and positioned along the bottom edge.
+- The intermission screen uses spacious horizontal upgrade rows with larger gaps and clearer mouse targets.
 
-The included workflow copies the repository `assets` folder into the finished `portals-build` branch.
+## Interpretation
 
-## Current one-animation fallback
-
-Because the current Husk only has its walk animation:
-
-- grabbed movement uses the walk clip plus procedural motion
-- throws use physics
-- surviving impacts rotate the Husk down, pause, then return it upright
-- attacks use a subtle movement pulse
-
-Later animation clips will be selected automatically when included in the same GLB with recognisable names.
-
-
-## v0.10 balancing and presentation update
-
-- Standard Husk movement is approximately twice as fast.
-- Fast Husk movement is approximately three times as fast.
-- Walk-animation playback is faster and varied, but capped so fast Husks do not look unnaturally accelerated.
-- Spawn gaps are tighter, especially in Waves 3–5.
-- The Hellfire upgrade no longer reveals its exact firing interval.
-- Canvas UI panels and buttons now use angular double borders, darker iron framing, ember accents and more distinctive title typography.
+The request for “stairs” in the sky was treated as “stars,” alongside the moon and clouds.
