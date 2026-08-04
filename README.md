@@ -1,4 +1,4 @@
-# Hellgate Manor — Five-Wave Vertical Slice v0.9
+# Hellgate Manor — Five-Wave Vertical Slice v0.10
 
 This build expands the working GLB-based prototype into a five-wave gameplay loop.
 
@@ -50,3 +50,13 @@ Because the current Husk only has its walk animation:
 - attacks use a subtle movement pulse
 
 Later animation clips will be selected automatically when included in the same GLB with recognisable names.
+
+
+## v0.10 balancing and presentation update
+
+- Standard Husk movement is approximately twice as fast.
+- Fast Husk movement is approximately three times as fast.
+- Walk-animation playback is faster and varied, but capped so fast Husks do not look unnaturally accelerated.
+- Spawn gaps are tighter, especially in Waves 3–5.
+- The Hellfire upgrade no longer reveals its exact firing interval.
+- Canvas UI panels and buttons now use angular double borders, darker iron framing, ember accents and more distinctive title typography.
