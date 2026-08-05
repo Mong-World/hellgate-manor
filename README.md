@@ -1,4 +1,4 @@
-# Hellgate Manor — Five-Wave Vertical Slice v0.14
+# Hellgate Manor — Five-Wave Vertical Slice v0.15
 
 This update builds directly on the working v0.10 five-wave version.
 
@@ -14,7 +14,7 @@ fonts/lansbury.ttf
 
 The ZIP contains the revised game code and workflow, but it does not duplicate your GLB assets or font.
 
-## v0.14 changes
+## v0.15 changes
 
 - The previous fast-Husk movement range is now used for standard Husks.
 - Fast Husks move at approximately twice the new standard speed.
@@ -35,7 +35,7 @@ The ZIP contains the revised game code and workflow, but it does not duplicate y
 The request for “stairs” in the sky was treated as “stars,” alongside the moon and clouds.
 
 
-## v0.14 visual and usability pass
+## v0.15 visual and usability pass
 
 - Added a much larger invisible grab collider around each Husk so selection is far less frustrating.
 - Enlarged and re-angled the manor so it now sits partly off the right edge of the screen.
@@ -45,7 +45,7 @@ The request for “stairs” in the sky was treated as “stars,” alongside th
 - Kept Lansbury for headers and key labels, but increased smaller menu text and made the supporting font bolder for readability.
 
 
-## v0.14 wave and defence pass
+## v0.15 wave and defence pass
 
 - Every wave can continue spawning until as many as 25 living Husks are present at once.
 - The enlarged manor has been fully reversed by 180 degrees rather than merely angled.
@@ -57,7 +57,7 @@ The request for “stairs” in the sky was treated as “stars,” alongside th
 - The first crossbow remains 60 souls; the second now costs 900 souls and cannot realistically be acquired during the five-wave demo.
 
 
-## v0.14 defence visibility and pacing
+## v0.15 defence visibility and pacing
 
 - Enlarged the gothic crossbow emplacements substantially and moved them in front of the manor so they are readable on mobile.
 - Rebuilt the projectile as a large flaming arrow with a bright fireball core, orange halo, layered flame and stronger light.
@@ -67,3 +67,17 @@ The request for “stairs” in the sky was treated as “stars,” alongside th
 - Removed rapid multi-Husk burst spawning.
 - All waves retain a maximum of 25 active Husks, but their arrival is more consistently spaced.
 - The second and third crossbows remain priced beyond the current five-wave demo.
+
+
+## v0.15 startup pre-warming
+
+- Added a staged loading screen with progress messages and a progress bar.
+- Loads the font, GLB assets, battlefield, waves and defence before showing Start.
+- Creates and renders a temporary animated Husk during loading.
+- Pre-warms normal ash, warm ash, soul, impact-ring and Hellfire projectile materials.
+- Temporarily reveals all defence mounts so their shaders are compiled.
+- Uses `renderer.compileAsync()` when available, with `renderer.compile()` as a fallback.
+- Renders several warm-up frames before gameplay.
+- Removes all temporary warm-up objects and effects before the Start screen appears.
+
+This targets the one-time hitch previously seen on the first Husk death.

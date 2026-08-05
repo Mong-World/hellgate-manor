@@ -51,12 +51,69 @@ canvas {
   z-index: 20;
   display: grid;
   place-items: center;
-  background: #050609;
-  color: #ff7a32;
-  font: 32px/1.2 "Lansbury", Georgia, serif;
-  letter-spacing: 0.08em;
+  background:
+    radial-gradient(circle at 50% 60%, rgba(104, 29, 10, 0.2), transparent 42%),
+    #050609;
+  color: #ffb17b;
   transition: opacity 500ms ease;
   pointer-events: none;
+}
+
+.loading-panel {
+  width: min(520px, calc(100vw - 42px));
+  padding: 30px 34px 26px;
+  text-align: center;
+  background: rgba(7, 8, 11, 0.92);
+  border: 1px solid rgba(255, 105, 40, 0.56);
+  box-shadow:
+    0 0 34px rgba(255, 62, 10, 0.14),
+    inset 0 0 22px rgba(255, 107, 40, 0.05);
+  clip-path: polygon(
+    14px 0,
+    calc(100% - 14px) 0,
+    100% 14px,
+    100% calc(100% - 14px),
+    calc(100% - 14px) 100%,
+    14px 100%,
+    0 calc(100% - 14px),
+    0 14px
+  );
+}
+
+.loading-title {
+  margin-bottom: 16px;
+  color: #f4ebe3;
+  font: 48px/1 "Lansbury", Georgia, serif;
+  text-shadow: 0 0 13px rgba(255, 78, 22, 0.55);
+}
+
+#loading-status {
+  min-height: 22px;
+  color: #d4cbc4;
+  font: 800 13px/1.4 "Segoe UI", Arial, sans-serif;
+  letter-spacing: 0.12em;
+}
+
+.loading-track {
+  height: 10px;
+  margin: 18px 0 9px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 130, 67, 0.24);
+}
+
+#loading-progress {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(90deg, #80230c, #ff681f, #ffc17f);
+  box-shadow: 0 0 13px rgba(255, 80, 20, 0.65);
+  transition: width 180ms ease;
+}
+
+#loading-percent {
+  color: #ff9a5d;
+  font: 900 12px/1 "Segoe UI", Arial, sans-serif;
+  letter-spacing: 0.08em;
 }
 
 #loading.hidden {
