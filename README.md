@@ -1,4 +1,4 @@
-# Hellgate Manor — Five-Wave Vertical Slice v0.12
+# Hellgate Manor — Five-Wave Vertical Slice v0.13
 
 This update builds directly on the working v0.10 five-wave version.
 
@@ -14,7 +14,7 @@ fonts/lansbury.ttf
 
 The ZIP contains the revised game code and workflow, but it does not duplicate your GLB assets or font.
 
-## v0.12 changes
+## v0.13 changes
 
 - The previous fast-Husk movement range is now used for standard Husks.
 - Fast Husks move at approximately twice the new standard speed.
@@ -35,7 +35,7 @@ The ZIP contains the revised game code and workflow, but it does not duplicate y
 The request for “stairs” in the sky was treated as “stars,” alongside the moon and clouds.
 
 
-## v0.12 visual and usability pass
+## v0.13 visual and usability pass
 
 - Added a much larger invisible grab collider around each Husk so selection is far less frustrating.
 - Enlarged and re-angled the manor so it now sits partly off the right edge of the screen.
@@ -43,3 +43,15 @@ The request for “stairs” in the sky was treated as “stars,” alongside th
 - Increased ground fog visibility and movement.
 - Reworked the ground with a darker textured surface instead of a flat plain look.
 - Kept Lansbury for headers and key labels, but increased smaller menu text and made the supporting font bolder for readability.
+
+
+## v0.13 wave and defence pass
+
+- Every wave can continue spawning until as many as 25 living Husks are present at once.
+- The enlarged manor has been fully reversed by 180 degrees rather than merely angled.
+- Hellfire Defence now fires continuously every 10 seconds, even with no enemy target.
+- Empty shots strike a random point on the battlefield.
+- Held Husks are excluded from target selection. If a Husk is grabbed after an arrow has launched, the arrow continues to the ground position where the Husk was instead of following it.
+- The old soul-like projectile has been replaced with a procedural gothic crossbow and visible flaming arrows.
+- Additional crossbows fire one second apart rather than simultaneously.
+- The first crossbow remains 60 souls; the second now costs 900 souls and cannot realistically be acquired during the five-wave demo.
