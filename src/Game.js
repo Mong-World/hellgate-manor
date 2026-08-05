@@ -9,6 +9,7 @@ import { UI } from "./UI.js";
 import { AshExplosion } from "./effects/AshExplosion.js";
 import { SoulEmber } from "./effects/SoulEmber.js";
 import { ImpactRing } from "./effects/ImpactRing.js";
+import { Husk } from "./Husk.js";
 
 export class Game {
   constructor(container) {
@@ -56,6 +57,9 @@ export class Game {
 
     this.assets = new AssetLibrary();
     this.loadingElement = document.getElementById("loading");
+    this.loadingStatus = document.getElementById("loading-status");
+    this.loadingProgress = document.getElementById("loading-progress");
+    this.loadingPercent = document.getElementById("loading-percent");
 
     this.ui = new UI(document.getElementById("ui-canvas"), {
       onStart: () => this.beginGame(),
@@ -72,16 +76,21 @@ export class Game {
   }
 
   async start() {
-    await this.assets.loadAll();
-
+    this.setLoadingProgress(4, "LOADING FONT");
     try {
       await document.fonts?.load('32px "Lansbury"');
     } catch (error) {
       console.warn("Lansbury font could not be preloaded.", error);
     }
+
+    this.setLoadingProgress(16, "LOADING MANOR AND HUSK");
+    await this.assets.loadAll();
+
+    this.setLoadingProgress(38, "BUILDING THE BATTLEFIELD");
     this.world = new World(this.scene, this.assets);
     await this.world.load();
 
+    this.setLoadingProgress(52, "PREPARING WAVES");
     this.waveManager = new WaveManager({
       scene: this.scene,
       assets: this.assets,
@@ -105,15 +114,119 @@ export class Game {
       (enemy) => this.grabSystem?.isHolding(enemy) ?? false
     );
 
+    this.setLoadingProgress(62, "WARMING CREATURE ANIMATIONS");
+    await this.preWarmGame();
+
+    this.setLoadingProgress(100, "THE GATE IS READY");
     this.syncUI();
     this.ui.setMode("start");
     this.running = true;
     requestAnimationFrame(this.animate);
 
-    requestAnimationFrame(() => {
-      this.loadingElement.classList.add("hidden");
-      window.setTimeout(() => this.loadingElement.remove(), 700);
+    await this.waitForFrame();
+    await new Promise((resolve) => window.setTimeout(resolve, 240));
+    this.loadingElement.classList.add("hidden");
+    window.setTimeout(() => this.loadingElement.remove(), 700);
+  }
+
+  setLoadingProgress(percent, message) {
+    const safePercent = THREE.MathUtils.clamp(percent, 0, 100);
+    if (this.loadingStatus) this.loadingStatus.textContent = message;
+    if (this.loadingProgress) this.loadingProgress.style.width = `${safePercent}%`;
+    if (this.loadingPercent) this.loadingPercent.textContent = `${Math.round(safePercent)}%`;
+  }
+
+  waitForFrame() {
+    return new Promise((resolve) => requestAnimationFrame(resolve));
+  }
+
+  async preWarmGame() {
+    const warmEffects = [];
+    const warmHusk = new Husk({
+      id: -1,
+      scene: this.scene,
+      assets: this.assets,
+      camera: this.camera,
+      position: new THREE.Vector3(0, 0, 0),
+      fast: false,
+      onDeath: () => {},
+      onAttack: () => {}
     });
+
+    warmHusk.update(1 / 30, 0, false);
+
+    this.setLoadingProgress(70, "WARMING DEATH EFFECTS");
+    warmEffects.push(
+      new AshExplosion(this.scene, new THREE.Vector3(-2, 1, 0), false),
+      new AshExplosion(this.scene, new THREE.Vector3(2, 1, 0), true),
+      new SoulEmber({
+        scene: this.scene,
+        start: new THREE.Vector3(0, 1, 0),
+        target: new THREE.Vector3(2, 4, 0)
+      }),
+      new ImpactRing(
+        this.scene,
+        new THREE.Vector3(0, 0.04, 1),
+        12,
+        0xff7a34
+      ),
+      new ImpactRing(
+        this.scene,
+        new THREE.Vector3(0, 0.04, -1),
+        15,
+        0xff3b12
+      )
+    );
+
+    this.setLoadingProgress(78, "WARMING HELLFIRE DEFENCE");
+    this.world.setTurretLevel(CONFIG.defence.turretMaxLevel);
+    this.defence.fireProjectile({
+      mountIndex: 0,
+      target: null,
+      destination: new THREE.Vector3(-2, 0.1, 0),
+      fallback: new THREE.Vector3(-2, 0.1, 0)
+    });
+    this.defence.createImpact(new THREE.Vector3(-1, 0.1, 1));
+
+    await this.waitForFrame();
+
+    this.setLoadingProgress(86, "COMPILING SHADERS");
+    if (typeof this.renderer.compileAsync === "function") {
+      await this.renderer.compileAsync(this.scene, this.camera);
+    } else {
+      this.renderer.compile(this.scene, this.camera);
+    }
+
+    for (let frame = 0; frame < 4; frame += 1) {
+      const dt = 1 / 30;
+      warmHusk.update(dt, frame * dt, false);
+      warmEffects.forEach((effect) => effect.update(dt));
+      this.defence.updateProjectiles(dt);
+      this.defence.updateImpacts(dt);
+      this.world.update(frame * dt, dt);
+      this.renderer.render(this.scene, this.camera);
+      await this.waitForFrame();
+    }
+
+    this.setLoadingProgress(94, "FINALISING");
+    warmEffects.forEach((effect) => effect.dispose());
+    warmHusk.dispose();
+
+    for (let i = this.defence.projectiles.length - 1; i >= 0; i -= 1) {
+      this.defence.removeProjectile(i);
+    }
+
+    for (const impact of this.defence.impacts) {
+      this.scene.remove(impact.mesh);
+      this.scene.remove(impact.light);
+      impact.geometry.dispose();
+      impact.material.dispose();
+    }
+    this.defence.impacts = [];
+    this.world.setTurretLevel(0);
+
+    this.renderer.render(this.scene, this.camera);
+    await this.waitForFrame();
   }
 
   beginGame() {
