@@ -7,7 +7,17 @@ function findClip(animations, pattern) {
 }
 
 export class Husk {
-  constructor({ id, scene, assets, camera, position, fast = false, onDeath, onAttack }) {
+  constructor({
+    id,
+    scene,
+    assets,
+    camera,
+    position,
+    fast = false,
+    onDeath,
+    onAttack,
+    onImpact
+  }) {
     this.id = id;
     this.scene = scene;
     this.assets = assets;
@@ -15,6 +25,7 @@ export class Husk {
     this.fast = fast;
     this.onDeath = onDeath;
     this.onAttack = onAttack;
+    this.onImpact = onImpact;
     this.dead = false;
     this.removed = false;
 
@@ -65,32 +76,13 @@ export class Husk {
   }
 
   loadModel() {
-    const clone = this.assets.createHuskClone();
+    const clone = this.assets.createHuskClone(this.fast);
     const model = clone.scene;
     AssetLibrary.prepareModel(model);
     AssetLibrary.fitModelToHeight(model, this.fast ? 3.85 : 4.2, Math.PI / 2);
 
     model.traverse((object) => {
-      if (!object.isMesh) return;
-      object.userData.enemy = this;
-      if (object.material) {
-        if (Array.isArray(object.material)) {
-          object.material = object.material.map((material) => {
-            const clone = material.clone();
-            if ("emissive" in clone) {
-              clone.emissive = new THREE.Color(this.fast ? 0x35170e : 0x142237);
-              clone.emissiveIntensity = this.fast ? 0.42 : 0.28;
-            }
-            return clone;
-          });
-        } else {
-          object.material = object.material.clone();
-          if ("emissive" in object.material) {
-            object.material.emissive = new THREE.Color(this.fast ? 0x35170e : 0x142237);
-            object.material.emissiveIntensity = this.fast ? 0.42 : 0.28;
-          }
-        }
-      }
+      if (object.isMesh) object.userData.enemy = this;
     });
 
     this.modelRoot.add(model);
@@ -113,11 +105,6 @@ export class Husk {
     this.grabCollider.renderOrder = -1000;
     this.modelRoot.add(this.grabCollider);
 
-    if (this.fast) {
-      const glow = new THREE.PointLight(0xff5a1d, 1.8, 3.6, 2);
-      glow.position.set(0, 1.8, 0);
-      this.modelRoot.add(glow);
-    }
     this.model = model;
     this.animations = clone.animations;
 
@@ -215,6 +202,11 @@ export class Husk {
 
   hitHardSurface(surface, strength) {
     if (this.dead) return;
+    this.onImpact?.({
+      enemy: this,
+      reason: surface,
+      impactStrength: strength
+    });
     this.onDeath?.({
       enemy: this,
       reason: surface,
@@ -265,6 +257,12 @@ export class Husk {
           (this.velocity.x * 0.22) ** 2 +
           (this.velocity.z * 0.22) ** 2
         );
+
+        this.onImpact?.({
+          enemy: this,
+          reason: "ground",
+          impactStrength
+        });
 
         if (this.getGroundDropFraction() >= CONFIG.enemy.groundDeathScreenFraction) {
           this.onDeath?.({
@@ -328,6 +326,61 @@ export class Husk {
     this.state = "walking";
     this.position.x += this.walkSpeed * dt;
     this.playAction("walk", 0.15);
+    if (this.actions.walk) this.actions.walk.timeScale = this.walkAnimationSpeed;
+  }
+
+  resetForSpawn(id, position) {
+    this.id = id;
+    this.dead = false;
+    this.removed = false;
+    this.group.visible = true;
+    this.group.position.copy(position);
+    this.group.rotation.set(0, 0, 0);
+    this.modelRoot.rotation.set(0, 0, 0);
+    this.modelRoot.scale.set(1, 1, 1);
+    this.velocity.set(0, 0, 0);
+    this.state = "walking";
+    this.attackTimer = 0;
+    this.fallTimer = 0;
+    this.getUpTimer = 0;
+    this.collisionCooldown = 0;
+    this.peakScreenY = 1;
+    this.peakWorldY = 0;
+    this.mixer?.stopAllAction();
+    this.currentAction = null;
+    this.playAction("walk", 0);
+    if (this.actions.walk) this.actions.walk.timeScale = this.walkAnimationSpeed;
+  }
+
+  deactivateForPool() {
+    this.dead = false;
+    this.removed = true;
+    this.state = "pooled";
+    this.velocity.set(0, 0, 0);
+    this.group.visible = false;
+    this.group.rotation.set(0, 0, 0);
+    this.modelRoot.rotation.set(0, 0, 0);
+    this.modelRoot.scale.set(1, 1, 1);
+    this.mixer?.stopAllAction();
+    this.currentAction = null;
+  }
+
+  preWarmAction(name, dt = 1 / 30) {
+    if (!this.actions[name] || !this.mixer) return false;
+    const loop = name === "walk" || name === "idle" || name === "flail";
+    this.playAction(name, 0, loop);
+    this.currentAction.timeScale = name === "walk"
+      ? this.walkAnimationSpeed
+      : 1;
+    this.mixer.update(dt);
+    return true;
+  }
+
+  resetAfterWarmup() {
+    this.group.rotation.set(0, 0, 0);
+    this.modelRoot.rotation.set(0, 0, 0);
+    this.state = "walking";
+    this.playAction("walk", 0);
     if (this.actions.walk) this.actions.walk.timeScale = this.walkAnimationSpeed;
   }
 

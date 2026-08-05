@@ -86,12 +86,15 @@ export class UI {
         x >= button.x &&
         x <= button.x + button.w &&
         y >= button.y &&
-        y <= button.y + button.h &&
-        !button.disabled
+        y <= button.y + button.h
       ) {
         event.preventDefault();
         event.stopImmediatePropagation();
-        button.onClick?.();
+        if (button.disabled) {
+          button.onDenied?.();
+        } else {
+          button.onClick?.();
+        }
         return;
       }
     }
@@ -203,7 +206,16 @@ export class UI {
     ctx.restore();
   }
 
-  button(label, x, y, width, height, onClick, disabled = false) {
+  button(
+    label,
+    x,
+    y,
+    width,
+    height,
+    onClick,
+    disabled = false,
+    onDenied = null
+  ) {
     const ctx = this.ctx;
 
     ctx.save();
@@ -241,7 +253,8 @@ export class UI {
       w: width,
       h: height,
       onClick,
-      disabled
+      disabled,
+      onDenied
     });
   }
 
@@ -572,7 +585,8 @@ export class UI {
       buttonWidth,
       43,
       onClick,
-      disabled
+      disabled,
+      () => this.callbacks.onDeniedPurchase?.()
     );
   }
 

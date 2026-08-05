@@ -4,12 +4,20 @@ import { CONFIG } from "./Config.js";
 const ARROW_FORWARD = new THREE.Vector3(0, 0, 1);
 
 export class DefenceSystem {
-  constructor(scene, world, getEnemies, onKillEnemy, isEnemyHeld) {
+  constructor(
+    scene,
+    world,
+    getEnemies,
+    onKillEnemy,
+    isEnemyHeld,
+    onFire
+  ) {
     this.scene = scene;
     this.world = world;
     this.getEnemies = getEnemies;
     this.onKillEnemy = onKillEnemy;
     this.isEnemyHeld = isEnemyHeld ?? (() => false);
+    this.onFire = onFire;
     this.level = 0;
     this.bombs = 0;
     this.mountTimers = [];
@@ -86,6 +94,7 @@ export class DefenceSystem {
       destination: targetPoint,
       fallback
     });
+    this.onFire?.({ mountIndex, target });
   }
 
   chooseTarget() {

@@ -3,12 +3,21 @@ import { CONFIG } from "./Config.js";
 import { Husk } from "./Husk.js";
 
 export class WaveManager {
-  constructor({ scene, assets, camera, onEnemyDeath, onEnemyAttack, onWaveComplete }) {
+  constructor({
+    scene,
+    assets,
+    camera,
+    onEnemyDeath,
+    onEnemyAttack,
+    onEnemyImpact,
+    onWaveComplete
+  }) {
     this.scene = scene;
     this.assets = assets;
     this.camera = camera;
     this.onEnemyDeath = onEnemyDeath;
     this.onEnemyAttack = onEnemyAttack;
+    this.onEnemyImpact = onEnemyImpact;
     this.onWaveComplete = onWaveComplete;
     this.waveIndex = -1;
     this.config = null;
@@ -19,6 +28,85 @@ export class WaveManager {
     this.running = false;
     this.nextEnemyId = 1;
     this.fastQueue = [];
+    this.normalPool = [];
+    this.fastPool = [];
+    this.pooledEnemies = new Set();
+  }
+
+  async preparePool({ normalCount, fastCount, onProgress = null }) {
+    const total = normalCount + fastCount;
+    let created = 0;
+
+    const makePooledEnemy = (fast) => {
+      const enemy = this.createEnemy({
+        id: -(created + 1),
+        fast,
+        position: new THREE.Vector3(-40, 0, 0)
+      });
+
+      Object.keys(enemy.actions).forEach((name) => {
+        enemy.preWarmAction(name);
+      });
+      enemy.resetAfterWarmup();
+      enemy.deactivateForPool();
+
+      const pool = fast ? this.fastPool : this.normalPool;
+      pool.push(enemy);
+      this.pooledEnemies.add(enemy);
+      created += 1;
+      onProgress?.(created / Math.max(total, 1));
+    };
+
+    for (let i = 0; i < normalCount; i += 1) {
+      makePooledEnemy(false);
+      if (i % 2 === 1) {
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      }
+    }
+
+    for (let i = 0; i < fastCount; i += 1) {
+      makePooledEnemy(true);
+      if (i % 2 === 1) {
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      }
+    }
+  }
+
+  createEnemy({ id, fast, position }) {
+    return new Husk({
+      id,
+      scene: this.scene,
+      assets: this.assets,
+      camera: this.camera,
+      position,
+      fast,
+      onDeath: (data) => this.handleEnemyDeath(data),
+      onAttack: (target) => this.onEnemyAttack?.(target),
+      onImpact: (data) => this.onEnemyImpact?.(data)
+    });
+  }
+
+  getWarmupSamples() {
+    return [
+      this.normalPool[0] ?? null,
+      this.fastPool[0] ?? null
+    ].filter(Boolean);
+  }
+
+  acquireEnemy(fast, id, position) {
+    const pool = fast ? this.fastPool : this.normalPool;
+    const enemy = pool.pop() ?? this.createEnemy({ id, fast, position });
+    this.pooledEnemies.delete(enemy);
+    enemy.resetForSpawn(id, position);
+    return enemy;
+  }
+
+  releaseEnemy(enemy) {
+    if (!enemy || this.pooledEnemies.has(enemy)) return;
+    enemy.deactivateForPool();
+    const pool = enemy.fast ? this.fastPool : this.normalPool;
+    pool.push(enemy);
+    this.pooledEnemies.add(enemy);
   }
 
   startWave(index) {
@@ -69,23 +157,18 @@ export class WaveManager {
     const z = lanes[Math.floor(Math.random() * lanes.length)] + THREE.MathUtils.randFloatSpread(0.28);
     const fast = this.fastQueue[this.spawned] ?? false;
 
-    const enemy = new Husk({
-      id: this.nextEnemyId++,
-      scene: this.scene,
-      assets: this.assets,
-      camera: this.camera,
-      position: new THREE.Vector3(
+    const enemy = this.acquireEnemy(
+      fast,
+      this.nextEnemyId++,
+      new THREE.Vector3(
         THREE.MathUtils.randFloat(
           CONFIG.enemy.spawnXMin,
           CONFIG.enemy.spawnXMax
         ),
         0,
         z
-      ),
-      fast,
-      onDeath: (data) => this.handleEnemyDeath(data),
-      onAttack: (target) => this.onEnemyAttack?.(target)
-    });
+      )
+    );
 
     this.enemies.push(enemy);
     this.spawned += 1;
@@ -97,7 +180,7 @@ export class WaveManager {
     enemy.kill();
     this.defeated += 1;
     this.onEnemyDeath?.(data);
-    window.setTimeout(() => enemy.dispose(), 90);
+    window.setTimeout(() => this.releaseEnemy(enemy), 90);
   }
 
   getAliveEnemies() {
@@ -114,8 +197,22 @@ export class WaveManager {
   }
 
   clear() {
-    this.enemies.forEach((enemy) => enemy.dispose());
+    this.enemies.forEach((enemy) => this.releaseEnemy(enemy));
     this.enemies = [];
+    this.running = false;
+  }
+
+  dispose() {
+    const allEnemies = new Set([
+      ...this.enemies,
+      ...this.normalPool,
+      ...this.fastPool
+    ]);
+    allEnemies.forEach((enemy) => enemy.dispose());
+    this.enemies = [];
+    this.normalPool = [];
+    this.fastPool = [];
+    this.pooledEnemies.clear();
     this.running = false;
   }
 }

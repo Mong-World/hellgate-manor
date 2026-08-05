@@ -8,6 +8,10 @@ export class AssetLibrary {
     this.loader = new GLTFLoader();
     this.huskAsset = null;
     this.manorAsset = null;
+    this.huskMaterialVariants = {
+      normal: new Map(),
+      fast: new Map()
+    };
   }
 
   async loadAll() {
@@ -19,10 +23,36 @@ export class AssetLibrary {
     this.manorAsset = manor;
   }
 
-  createHuskClone() {
+  createHuskClone(fast = false) {
     if (!this.huskAsset) throw new Error("Husk asset has not loaded.");
+    const scene = SkeletonUtils.clone(this.huskAsset.scene);
+    const variant = fast ? "fast" : "normal";
+
+    scene.traverse((object) => {
+      if (!object.isMesh || !object.material) return;
+      const materials = Array.isArray(object.material)
+        ? object.material
+        : [object.material];
+
+      const prepared = materials.map((material) => {
+        const key = material.uuid;
+        const cached = this.huskMaterialVariants[variant].get(key);
+        if (cached) return cached;
+
+        const clone = material.clone();
+        if ("emissive" in clone) {
+          clone.emissive = new THREE.Color(fast ? 0x35170e : 0x142237);
+          clone.emissiveIntensity = fast ? 0.42 : 0.28;
+        }
+        this.huskMaterialVariants[variant].set(key, clone);
+        return clone;
+      });
+
+      object.material = Array.isArray(object.material) ? prepared : prepared[0];
+    });
+
     return {
-      scene: SkeletonUtils.clone(this.huskAsset.scene),
+      scene,
       animations: this.huskAsset.animations
     };
   }

@@ -1,10 +1,11 @@
 import * as THREE from "three";
 
 export class GrabSystem {
-  constructor({ camera, domElement, getEnemies }) {
+  constructor({ camera, domElement, getEnemies, onRelease }) {
     this.camera = camera;
     this.domElement = domElement;
     this.getEnemies = getEnemies;
+    this.onRelease = onRelease;
     this.raycaster = new THREE.Raycaster();
     this.pointer = new THREE.Vector2();
     this.previousPointer = new THREE.Vector2();
@@ -139,6 +140,7 @@ export class GrabSystem {
     this.springVelocity.set(0, 0, 0);
     document.body.classList.remove("grabbing");
     enemy.launch(releaseVelocity);
+    this.onRelease?.({ enemy, velocity: releaseVelocity.clone() });
   }
 
   forceRelease() {

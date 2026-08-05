@@ -4,6 +4,22 @@ export const CONFIG = Object.freeze({
     manor: "./assets/manor.glb"
   },
 
+  sounds: {
+    ash: "./sounds/ashsound.mp3",
+    attack: "./sounds/attacksound.mp3",
+    background1: "./sounds/background1.mp3",
+    background2: "./sounds/background2.mp3",
+    bodyImpact: "./sounds/body impact sound.mp3",
+    bombExplosion: "./sounds/bomb-explosion.mp3",
+    crossbowFire: "./sounds/crossbow-fire-sound.mp3",
+    deniedPurchase: "./sounds/denied-purchase-sound.mp3",
+    gameOver: "./sounds/game-over-sound.mp3",
+    purchase: "./sounds/purchasesound.mp3",
+    soulCollect: "./sounds/soulcollectsound.mp3",
+    waveStart: "./sounds/wave-start-sound.MP3",
+    whoosh: "./sounds/whoosh.mp3"
+  },
+
   camera: {
     position: [0, 9.2, 27.5],
     target: [1.8, 3.1, 0],
