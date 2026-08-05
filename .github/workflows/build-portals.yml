@@ -33,6 +33,11 @@ jobs:
           mkdir -p dist/assets
           cp -R assets/. dist/assets/
 
+          if [ -d fonts ]; then
+            mkdir -p dist/fonts
+            cp -R fonts/. dist/fonts/
+          fi
+
       - name: Publish Portals build branch
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
