@@ -1,4 +1,4 @@
-# Hellgate Manor — Five-Wave Vertical Slice v0.11
+# Hellgate Manor — Five-Wave Vertical Slice v0.12
 
 This update builds directly on the working v0.10 five-wave version.
 
@@ -14,7 +14,7 @@ fonts/lansbury.ttf
 
 The ZIP contains the revised game code and workflow, but it does not duplicate your GLB assets or font.
 
-## v0.11 changes
+## v0.12 changes
 
 - The previous fast-Husk movement range is now used for standard Husks.
 - Fast Husks move at approximately twice the new standard speed.
@@ -33,3 +33,13 @@ The ZIP contains the revised game code and workflow, but it does not duplicate y
 ## Interpretation
 
 The request for “stairs” in the sky was treated as “stars,” alongside the moon and clouds.
+
+
+## v0.12 visual and usability pass
+
+- Added a much larger invisible grab collider around each Husk so selection is far less frustrating.
+- Enlarged and re-angled the manor so it now sits partly off the right edge of the screen.
+- Moved and intensified the infernal breach so the left-side glow reads properly on desktop.
+- Increased ground fog visibility and movement.
+- Reworked the ground with a darker textured surface instead of a flat plain look.
+- Kept Lansbury for headers and key labels, but increased smaller menu text and made the supporting font bolder for readability.
