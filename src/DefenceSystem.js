@@ -16,9 +16,9 @@ export class DefenceSystem {
     this.projectiles = [];
     this.impacts = [];
 
-    this.arrowShaftGeometry = new THREE.CylinderGeometry(0.055, 0.072, 1.72, 8);
+    this.arrowShaftGeometry = new THREE.CylinderGeometry(0.042, 0.052, 1.36, 8);
     this.arrowShaftGeometry.rotateX(Math.PI / 2);
-    this.arrowHeadGeometry = new THREE.ConeGeometry(0.17, 0.46, 8);
+    this.arrowHeadGeometry = new THREE.ConeGeometry(0.11, 0.32, 8);
     this.arrowHeadGeometry.rotateX(Math.PI / 2);
     this.arrowMaterial = new THREE.MeshStandardMaterial({
       color: 0x3a2518,
@@ -122,13 +122,13 @@ export class DefenceSystem {
 
   createArrowMesh() {
     const group = new THREE.Group();
-    group.scale.setScalar(1.35);
+    group.scale.setScalar(0.92);
 
     const shaft = new THREE.Mesh(
       this.arrowShaftGeometry,
       this.arrowMaterial
     );
-    shaft.position.z = 0.10;
+    shaft.position.z = 0.12;
     shaft.castShadow = true;
     group.add(shaft);
 
@@ -136,65 +136,71 @@ export class DefenceSystem {
       this.arrowHeadGeometry,
       this.arrowHeadMaterial
     );
-    head.position.z = 1.08;
+    head.position.z = 0.82;
     head.castShadow = true;
     group.add(head);
 
-    // A bright fireball at the back of the arrow makes the shot readable on mobile.
-    const fireballCoreGeometry = new THREE.IcosahedronGeometry(0.26, 1);
+    const tailFletchGeometry = new THREE.BoxGeometry(0.18, 0.02, 0.20);
+    const tailFletchMaterial = new THREE.MeshStandardMaterial({
+      color: 0x6d1f11,
+      emissive: 0x73210d,
+      emissiveIntensity: 0.5,
+      roughness: 0.55,
+      metalness: 0.05
+    });
+    const tailFletchA = new THREE.Mesh(tailFletchGeometry, tailFletchMaterial);
+    tailFletchA.position.set(0, 0, -0.58);
+    group.add(tailFletchA);
+    const tailFletchB = new THREE.Mesh(tailFletchGeometry, tailFletchMaterial);
+    tailFletchB.position.set(0, 0, -0.58);
+    tailFletchB.rotation.z = Math.PI / 2;
+    group.add(tailFletchB);
+
+    const fireballCoreGeometry = new THREE.SphereGeometry(0.16, 10, 10);
     const fireballCoreMaterial = new THREE.MeshBasicMaterial({
       color: 0xffd27a,
       transparent: true,
-      opacity: 1,
+      opacity: 0.98,
       blending: THREE.AdditiveBlending,
       depthWrite: false
     });
-    const fireballCore = new THREE.Mesh(
-      fireballCoreGeometry,
-      fireballCoreMaterial
-    );
-    fireballCore.position.z = -0.78;
+    const fireballCore = new THREE.Mesh(fireballCoreGeometry, fireballCoreMaterial);
+    fireballCore.position.z = -0.26;
     group.add(fireballCore);
 
-    const fireballHaloGeometry = new THREE.IcosahedronGeometry(0.48, 1);
+    const fireballHaloGeometry = new THREE.SphereGeometry(0.28, 10, 10);
     const fireballHaloMaterial = new THREE.MeshBasicMaterial({
-      color: 0xff4b0d,
+      color: 0xff5a10,
       transparent: true,
-      opacity: 0.55,
+      opacity: 0.40,
       blending: THREE.AdditiveBlending,
       depthWrite: false
     });
-    const fireballHalo = new THREE.Mesh(
-      fireballHaloGeometry,
-      fireballHaloMaterial
-    );
+    const fireballHalo = new THREE.Mesh(fireballHaloGeometry, fireballHaloMaterial);
     fireballHalo.position.copy(fireballCore.position);
     group.add(fireballHalo);
 
-    const flameGeometry = new THREE.ConeGeometry(0.30, 1.18, 9);
+    const flameGeometry = new THREE.ConeGeometry(0.14, 0.60, 8);
     flameGeometry.rotateX(-Math.PI / 2);
     const flame = new THREE.Mesh(flameGeometry, this.fireMaterial);
-    flame.position.z = -1.38;
+    flame.position.z = -0.58;
     group.add(flame);
 
-    const innerFlameGeometry = new THREE.ConeGeometry(0.16, 0.78, 8);
+    const innerFlameGeometry = new THREE.ConeGeometry(0.075, 0.34, 8);
     innerFlameGeometry.rotateX(-Math.PI / 2);
     const innerFlameMaterial = new THREE.MeshBasicMaterial({
-      color: 0xffd36b,
+      color: 0xffdf8e,
       transparent: true,
-      opacity: 0.92,
+      opacity: 0.9,
       blending: THREE.AdditiveBlending,
       depthWrite: false
     });
-    const innerFlame = new THREE.Mesh(
-      innerFlameGeometry,
-      innerFlameMaterial
-    );
-    innerFlame.position.z = -1.20;
+    const innerFlame = new THREE.Mesh(innerFlameGeometry, innerFlameMaterial);
+    innerFlame.position.z = -0.48;
     group.add(innerFlame);
 
-    const light = new THREE.PointLight(0xff4b12, 22, 11, 1.7);
-    light.position.z = -0.74;
+    const light = new THREE.PointLight(0xff5a19, 10, 6, 1.9);
+    light.position.z = -0.12;
     group.add(light);
 
     return {
@@ -210,6 +216,8 @@ export class DefenceSystem {
       fireballHaloGeometry,
       fireballHaloMaterial,
       fireballHalo,
+      tailFletchGeometry,
+      tailFletchMaterial,
       light
     };
   }
@@ -224,7 +232,7 @@ export class DefenceSystem {
       target,
       destination: destination.clone(),
       fallback: fallback.clone(),
-      speed: 16.5,
+      speed: 15.5,
       age: 0
     });
   }
@@ -282,16 +290,16 @@ export class DefenceSystem {
       );
 
       const pulse = 0.92 + Math.sin(projectile.age * 24) * 0.16;
-      projectile.flame.scale.set(pulse, pulse, 1.1 + pulse * 0.34);
+      projectile.flame.scale.set(0.92 + pulse * 0.16, 0.92 + pulse * 0.16, 1 + pulse * 0.10);
       projectile.innerFlame.scale.set(
-        0.86 + pulse * 0.18,
-        0.86 + pulse * 0.18,
-        1.05 + pulse * 0.22
+        0.9 + pulse * 0.10,
+        0.9 + pulse * 0.10,
+        0.96 + pulse * 0.10
       );
-      projectile.fireballCore.scale.setScalar(0.88 + pulse * 0.20);
-      projectile.fireballHalo.scale.setScalar(0.92 + pulse * 0.34);
-      projectile.fireballHalo.material.opacity = 0.42 + pulse * 0.12;
-      projectile.light.intensity = 18 + pulse * 6;
+      projectile.fireballCore.scale.setScalar(0.94 + pulse * 0.10);
+      projectile.fireballHalo.scale.setScalar(0.96 + pulse * 0.16);
+      projectile.fireballHalo.material.opacity = 0.30 + pulse * 0.08;
+      projectile.light.intensity = 8 + pulse * 3.2;
     }
   }
 
@@ -305,6 +313,8 @@ export class DefenceSystem {
     projectile.fireballCoreMaterial.dispose();
     projectile.fireballHaloGeometry.dispose();
     projectile.fireballHaloMaterial.dispose();
+    projectile.tailFletchGeometry.dispose();
+    projectile.tailFletchMaterial.dispose();
     this.projectiles.splice(index, 1);
   }
 

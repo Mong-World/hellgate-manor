@@ -71,7 +71,26 @@ export class Husk {
     AssetLibrary.fitModelToHeight(model, this.fast ? 3.85 : 4.2, Math.PI / 2);
 
     model.traverse((object) => {
-      if (object.isMesh) object.userData.enemy = this;
+      if (!object.isMesh) return;
+      object.userData.enemy = this;
+      if (object.material) {
+        if (Array.isArray(object.material)) {
+          object.material = object.material.map((material) => {
+            const clone = material.clone();
+            if ("emissive" in clone) {
+              clone.emissive = new THREE.Color(this.fast ? 0x35170e : 0x142237);
+              clone.emissiveIntensity = this.fast ? 0.42 : 0.28;
+            }
+            return clone;
+          });
+        } else {
+          object.material = object.material.clone();
+          if ("emissive" in object.material) {
+            object.material.emissive = new THREE.Color(this.fast ? 0x35170e : 0x142237);
+            object.material.emissiveIntensity = this.fast ? 0.42 : 0.28;
+          }
+        }
+      }
     });
 
     this.modelRoot.add(model);

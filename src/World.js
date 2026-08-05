@@ -7,24 +7,25 @@ function makeMoonTexture() {
   canvas.height = 256;
   const ctx = canvas.getContext("2d");
 
-  const glow = ctx.createRadialGradient(128, 128, 28, 128, 128, 126);
-  glow.addColorStop(0, "rgba(255,248,222,1)");
-  glow.addColorStop(0.58, "rgba(225,229,219,1)");
-  glow.addColorStop(0.78, "rgba(169,186,194,.9)");
-  glow.addColorStop(1, "rgba(160,190,210,0)");
+  const glow = ctx.createRadialGradient(128, 128, 26, 128, 128, 96);
+  glow.addColorStop(0, "rgba(249,246,231,0.98)");
+  glow.addColorStop(0.62, "rgba(216,221,214,0.96)");
+  glow.addColorStop(0.84, "rgba(144,156,170,0.34)");
+  glow.addColorStop(1, "rgba(144,156,170,0)");
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, 256, 256);
 
   ctx.globalCompositeOperation = "multiply";
   const craters = [
-    [81, 92, 19, 0.14],
-    [151, 68, 13, 0.11],
-    [164, 142, 27, 0.12],
-    [101, 164, 12, 0.10],
-    [130, 115, 8, 0.08]
+    [81, 92, 18, 0.20],
+    [151, 68, 12, 0.18],
+    [164, 142, 25, 0.17],
+    [101, 164, 11, 0.14],
+    [130, 115, 8, 0.12],
+    [96, 122, 6, 0.13]
   ];
   for (const [x, y, radius, alpha] of craters) {
-    ctx.fillStyle = `rgba(70,82,88,${alpha})`;
+    ctx.fillStyle = `rgba(60,70,78,${alpha})`;
     ctx.beginPath();
     ctx.arc(x, y, radius, 0, Math.PI * 2);
     ctx.fill();
@@ -162,8 +163,8 @@ function makeGroundTexture() {
   return texture;
 }
 
-function pulseFogOpacity(material, elapsed, phase) {
-  material.opacity = 0.135 + Math.sin(elapsed * 0.24 + phase) * 0.028;
+function pulseFogOpacity(material, elapsed, phase, baseOpacity = 0.16) {
+  material.opacity = Math.max(0.05, baseOpacity + Math.sin(elapsed * 0.24 + phase) * 0.028);
 }
 
 export class World {
@@ -274,13 +275,13 @@ export class World {
     const moonMaterial = new THREE.SpriteMaterial({
       map: moonTexture,
       transparent: true,
-      opacity: 0.92,
+      opacity: 0.78,
       depthWrite: false,
       fog: false
     });
     this.moon = new THREE.Sprite(moonMaterial);
-    this.moon.position.set(-7.5, 17.6, -36);
-    this.moon.scale.set(5.9, 5.9, 1);
+    this.moon.position.set(-8.2, 17.2, -36);
+    this.moon.scale.set(5.0, 5.0, 1);
     this.scene.add(this.moon);
     this.disposables.push(moonTexture, moonMaterial);
 
@@ -313,9 +314,9 @@ export class World {
   }
 
   createLights() {
-    this.scene.add(new THREE.HemisphereLight(0x8294ba, 0x120b0b, 1.75));
+    this.scene.add(new THREE.HemisphereLight(0x7d8fb2, 0x120b0b, 1.7));
 
-    const moonLight = new THREE.DirectionalLight(0xb2c8f3, 3.65);
+    const moonLight = new THREE.DirectionalLight(0xb2c8f3, 3.25);
     moonLight.position.set(-18, 24, 13);
     moonLight.castShadow = true;
     moonLight.shadow.mapSize.set(2048, 2048);
@@ -328,16 +329,20 @@ export class World {
     moonLight.shadow.bias = -0.00035;
     this.scene.add(moonLight);
 
-    const rim = new THREE.DirectionalLight(0x6f91d6, 1.5);
+    const rim = new THREE.DirectionalLight(0x6f91d6, 1.2);
     rim.position.set(-12, 7, 12);
     this.scene.add(rim);
+
+    const huskFill = new THREE.DirectionalLight(0x89a7ea, 0.75);
+    huskFill.position.set(14, 8, 18);
+    this.scene.add(huskFill);
 
     this.hellGlow = new THREE.PointLight(0xff4810, 35, 24, 1.8);
     this.hellGlow.position.set(15.5, 4, 0);
     this.scene.add(this.hellGlow);
 
-    this.riftLight = new THREE.PointLight(0xff3a08, 82, 28, 1.55);
-    this.riftLight.position.set(-19.5, 2.2, 7.2);
+    this.riftLight = new THREE.PointLight(0xff3a08, 98, 32, 1.5);
+    this.riftLight.position.set(-24.4, 2.6, 8.8);
     this.scene.add(this.riftLight);
   }
 
@@ -362,24 +367,25 @@ export class World {
     this.scene.add(ground);
     this.disposables.push(geometry);
 
-    const ashPatchGeometry = new THREE.PlaneGeometry(72, 11);
-    ashPatchGeometry.rotateX(-Math.PI / 2);
-    const ashPatchMaterial = new THREE.MeshBasicMaterial({
-      color: 0x0b0b0d,
+    const sootGeometry = new THREE.CircleGeometry(18, 48);
+    sootGeometry.rotateX(-Math.PI / 2);
+    const sootMaterial = new THREE.MeshBasicMaterial({
+      color: 0x09090b,
       transparent: true,
-      opacity: 0.18,
+      opacity: 0.12,
       depthWrite: false,
       side: THREE.DoubleSide
     });
-    const ashPatch = new THREE.Mesh(ashPatchGeometry, ashPatchMaterial);
-    ashPatch.position.set(-1.8, 0.03, 0);
-    this.scene.add(ashPatch);
-    this.disposables.push(ashPatchGeometry, ashPatchMaterial);
+    const soot = new THREE.Mesh(sootGeometry, sootMaterial);
+    soot.position.set(-2.5, 0.025, 0.8);
+    soot.scale.set(1.6, 0.55, 1);
+    this.scene.add(soot);
+    this.disposables.push(sootGeometry, sootMaterial);
   }
 
   createHellRift() {
     this.riftGroup = new THREE.Group();
-    this.riftGroup.position.set(-19.6, 0.025, 7.2);
+    this.riftGroup.position.set(-24.6, 0.025, 8.8);
     this.scene.add(this.riftGroup);
 
     const breaches = [
@@ -427,6 +433,28 @@ export class World {
         this.disposables.push(geometry);
       }
     });
+
+    const glowTexture = makeFogTexture();
+    [
+      [-0.3, 2.6, 0.7, 5.2, 7.0, 0.28],
+      [0.8, 1.9, 2.3, 4.0, 5.4, 0.18]
+    ].forEach(([x, y, z, sx, sy, opacity], index) => {
+      const material = new THREE.SpriteMaterial({
+        map: glowTexture,
+        color: index === 0 ? 0xff6a1d : 0xff9a55,
+        transparent: true,
+        opacity,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        fog: false
+      });
+      const sprite = new THREE.Sprite(material);
+      sprite.position.set(x, y, z);
+      sprite.scale.set(sx, sy, 1);
+      this.riftGroup.add(sprite);
+      this.disposables.push(material);
+    });
+    this.disposables.push(glowTexture);
 
     const emberCount = 74;
     const positions = new Float32Array(emberCount * 3);
@@ -497,33 +525,41 @@ export class World {
   createGroundFog() {
     const texture = makeFogTexture();
     const fogData = [
-      [-20, 5.8, 20, 5.4, 0.16],
-      [-11, 2.2, 18, 4.8, 0.11],
-      [-1, -1.5, 20, 5.4, 0.13],
-      [10, 2.8, 18, 4.9, 0.10],
-      [21, -0.8, 17, 4.6, 0.09],
-      [2, 5.8, 24, 5.6, 0.12],
-      [14, 5.8, 19, 5.0, 0.08]
+      [-23, 6.8, 12.5, 4.6, 0.14],
+      [-17, 3.0, 11.8, 4.2, 0.12],
+      [-11, -1.0, 12.8, 4.4, 0.13],
+      [-5, 4.4, 13.2, 4.8, 0.11],
+      [1, -2.1, 13.8, 4.8, 0.11],
+      [8, 2.7, 12.4, 4.4, 0.10],
+      [15, -0.8, 12.0, 4.2, 0.095],
+      [21, 3.4, 11.2, 4.0, 0.09],
+      [4, 6.6, 14.5, 4.6, 0.10]
     ];
 
-    fogData.forEach(([x, z, sx, sz, speed], index) => {
-      const geometry = new THREE.PlaneGeometry(sx, sz);
-      geometry.rotateX(-Math.PI / 2);
-      const material = new THREE.MeshBasicMaterial({
+    fogData.forEach(([x, z, sx, sy, speed], index) => {
+      const material = new THREE.SpriteMaterial({
         map: texture,
-        color: index % 2 === 0 ? 0xb9c2ca : 0xd2d8df,
+        color: index % 2 === 0 ? 0xc4ccd4 : 0xd6dde4,
         transparent: true,
-        opacity: 0.15 + index * 0.008,
+        opacity: 0.12 + index * 0.008,
         depthWrite: false,
-        side: THREE.DoubleSide,
+        depthTest: true,
         fog: true
       });
-      const fog = new THREE.Mesh(geometry, material);
-      fog.position.set(x, 0.2 + index * 0.008, z);
+      const fog = new THREE.Sprite(material);
+      fog.position.set(x, 0.7 + index * 0.025, z);
+      fog.scale.set(sx, sy, 1);
       fog.renderOrder = 4;
       this.scene.add(fog);
-      this.groundFog.push({ mesh: fog, speed, phase: index * 1.7, baseZ: z });
-      this.disposables.push(geometry, material);
+      this.groundFog.push({
+        mesh: fog,
+        speed,
+        phase: index * 1.7,
+        baseZ: z,
+        baseY: 0.7 + index * 0.025,
+        baseOpacity: 0.12 + index * 0.008
+      });
+      this.disposables.push(material);
     });
     this.disposables.push(texture);
   }
@@ -574,119 +610,103 @@ export class World {
   }
 
   createTurretMounts() {
-    const baseY = Math.min(this.manorBounds.max.y * 0.40, 5.2);
-    const zPositions = [-2.4, 0.15, 2.7];
+    const baseY = Math.min(this.manorBounds.max.y * 0.34, 4.6);
+    const zPositions = [-3.1, -0.25, 2.6];
 
     for (let i = 0; i < 3; i += 1) {
       const mount = new THREE.Group();
-
-      // Place the weapons clearly in front of the manor rather than inside it.
       mount.position.set(
-        this.manorBarrierX - 1.35,
-        baseY + i * 0.48,
+        this.manorBarrierX + 0.28,
+        baseY + (i === 1 ? 0.05 : 0),
         zPositions[i]
       );
       mount.rotation.y = -Math.PI / 2;
-      mount.scale.setScalar(2.35);
+      mount.scale.setScalar(1.12);
       mount.visible = false;
       this.scene.add(mount);
 
       const pivot = new THREE.Group();
       mount.add(pivot);
 
-      const pedestalGeometry = new THREE.CylinderGeometry(0.55, 0.78, 0.72, 8);
-      const pedestalMaterial = new THREE.MeshStandardMaterial({
-        color: 0x242329,
-        roughness: 0.94,
-        metalness: 0.08
+      const bracketGeometry = new THREE.BoxGeometry(0.22, 0.28, 1.2);
+      const bracketMaterial = new THREE.MeshStandardMaterial({
+        color: 0x22140f,
+        roughness: 0.82,
+        metalness: 0.05
       });
-      const pedestal = new THREE.Mesh(pedestalGeometry, pedestalMaterial);
-      pedestal.position.y = -0.54;
-      pedestal.castShadow = true;
-      pedestal.receiveShadow = true;
-      pivot.add(pedestal);
+      const bracket = new THREE.Mesh(bracketGeometry, bracketMaterial);
+      bracket.position.set(0, -0.26, 0.14);
+      bracket.castShadow = true;
+      pivot.add(bracket);
 
-      const collarGeometry = new THREE.TorusGeometry(0.48, 0.09, 7, 12);
-      collarGeometry.rotateX(Math.PI / 2);
-      const collar = new THREE.Mesh(collarGeometry, this.materials.iron);
-      collar.position.y = -0.22;
-      collar.castShadow = true;
-      pivot.add(collar);
+      const wallPlateGeometry = new THREE.BoxGeometry(0.10, 0.62, 0.52);
+      const wallPlate = new THREE.Mesh(wallPlateGeometry, this.materials.iron);
+      wallPlate.position.set(0, -0.12, 0.82);
+      wallPlate.castShadow = true;
+      pivot.add(wallPlate);
 
-      const stockGeometry = new THREE.BoxGeometry(0.34, 0.30, 2.55);
+      const stockGeometry = new THREE.BoxGeometry(0.20, 0.18, 1.72);
       const stockMaterial = new THREE.MeshStandardMaterial({
         color: 0x2c1710,
         roughness: 0.76,
         metalness: 0.06
       });
       const stock = new THREE.Mesh(stockGeometry, stockMaterial);
-      stock.position.z = 0.20;
+      stock.position.z = 0.10;
       stock.castShadow = true;
       pivot.add(stock);
 
-      const railGeometry = new THREE.BoxGeometry(0.12, 0.11, 2.85);
+      const railGeometry = new THREE.BoxGeometry(0.08, 0.08, 1.95);
       const rail = new THREE.Mesh(railGeometry, this.materials.iron);
-      rail.position.set(0, 0.22, 0.08);
+      rail.position.set(0, 0.12, 0.02);
       rail.castShadow = true;
       pivot.add(rail);
 
       const bowCurve = new THREE.CatmullRomCurve3([
-        new THREE.Vector3(-1.48, 0.04, -0.88),
-        new THREE.Vector3(-0.84, 0.12, -1.15),
-        new THREE.Vector3(0, 0.18, -1.28),
-        new THREE.Vector3(0.84, 0.12, -1.15),
-        new THREE.Vector3(1.48, 0.04, -0.88)
+        new THREE.Vector3(-0.9, 0.03, -0.58),
+        new THREE.Vector3(-0.42, 0.12, -0.76),
+        new THREE.Vector3(0, 0.18, -0.82),
+        new THREE.Vector3(0.42, 0.12, -0.76),
+        new THREE.Vector3(0.9, 0.03, -0.58)
       ]);
-      const bowGeometry = new THREE.TubeGeometry(bowCurve, 24, 0.085, 7, false);
+      const bowGeometry = new THREE.TubeGeometry(bowCurve, 18, 0.055, 6, false);
       const bow = new THREE.Mesh(bowGeometry, this.materials.iron);
       bow.castShadow = true;
       pivot.add(bow);
 
       const stringGeometry = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(-1.48, 0.04, -0.88),
-        new THREE.Vector3(0, 0.18, -0.22),
-        new THREE.Vector3(1.48, 0.04, -0.88)
+        new THREE.Vector3(-0.9, 0.03, -0.58),
+        new THREE.Vector3(0, 0.17, -0.08),
+        new THREE.Vector3(0.9, 0.03, -0.58)
       ]);
       const stringMaterial = new THREE.LineBasicMaterial({
         color: 0xd2c0b2,
         transparent: true,
-        opacity: 0.82
+        opacity: 0.8
       });
       const string = new THREE.Line(stringGeometry, stringMaterial);
       pivot.add(string);
 
-      const spikeGeometry = new THREE.ConeGeometry(0.14, 0.60, 7);
+      const spikeGeometry = new THREE.ConeGeometry(0.09, 0.34, 6);
       for (const side of [-1, 1]) {
         const spike = new THREE.Mesh(spikeGeometry, this.materials.iron);
-        spike.position.set(side * 1.48, 0.04, -0.88);
+        spike.position.set(side * 0.92, 0.03, -0.58);
         spike.rotation.z = side * Math.PI / 2;
         spike.castShadow = true;
         pivot.add(spike);
       }
 
-      const skullGeometry = new THREE.IcosahedronGeometry(0.23, 1);
-      const skullMaterial = new THREE.MeshStandardMaterial({
-        color: 0x4b4440,
-        roughness: 0.78,
-        metalness: 0.18
-      });
-      const skull = new THREE.Mesh(skullGeometry, skullMaterial);
-      skull.scale.set(1.05, 0.82, 0.88);
-      skull.position.set(0, 0.34, 0.58);
-      skull.castShadow = true;
-      pivot.add(skull);
-
-      const emberGeometry = new THREE.IcosahedronGeometry(0.20, 1);
+      const emberGeometry = new THREE.IcosahedronGeometry(0.11, 1);
       const ember = new THREE.Mesh(emberGeometry, this.materials.ember);
-      ember.position.set(0, 0.28, -0.86);
+      ember.position.set(0, 0.14, -0.52);
       pivot.add(ember);
 
-      const emberLight = new THREE.PointLight(0xff4b13, 10, 7, 2);
+      const emberLight = new THREE.PointLight(0xff4b13, 6.5, 4.5, 2);
       emberLight.position.copy(ember.position);
       pivot.add(emberLight);
 
       const muzzle = new THREE.Object3D();
-      muzzle.position.set(0, 0.22, -1.55);
+      muzzle.position.set(0, 0.12, -1.02);
       pivot.add(muzzle);
 
       this.turretMounts.push({
@@ -699,9 +719,9 @@ export class World {
       });
 
       this.disposables.push(
-        pedestalGeometry,
-        pedestalMaterial,
-        collarGeometry,
+        bracketGeometry,
+        bracketMaterial,
+        wallPlateGeometry,
         stockGeometry,
         stockMaterial,
         railGeometry,
@@ -709,8 +729,6 @@ export class World {
         stringGeometry,
         stringMaterial,
         spikeGeometry,
-        skullGeometry,
-        skullMaterial,
         emberGeometry
       );
     }
@@ -782,11 +800,12 @@ export class World {
       if (sprite.position.x > 34) sprite.position.x = -34;
     });
 
-    this.groundFog.forEach(({ mesh, speed, phase, baseZ }) => {
+    this.groundFog.forEach(({ mesh, speed, phase, baseZ, baseY, baseOpacity }) => {
       mesh.position.x += speed * dt;
-      mesh.position.z = baseZ + Math.sin(elapsed * 0.17 + phase) * 0.35;
-      pulseFogOpacity(mesh.material, elapsed, phase);
-      if (mesh.position.x > 29) mesh.position.x = -29;
+      mesh.position.z = baseZ + Math.sin(elapsed * 0.17 + phase) * 0.38;
+      mesh.position.y = baseY + Math.sin(elapsed * 0.33 + phase) * 0.08;
+      pulseFogOpacity(mesh.material, elapsed, phase, baseOpacity);
+      if (mesh.position.x > 30) mesh.position.x = -30;
     });
 
     if (this.riftEmbers && this.riftEmberBase) {

@@ -287,14 +287,14 @@ export class UI {
   }
 
   drawHUD(width, height) {
-    const margin = 14;
-    const hudHeight = 52;
+    const margin = width < 900 ? 18 : 24;
+    const hudHeight = width < 900 ? 50 : 54;
     const y = height - margin - hudHeight;
     const compact = width < 850;
 
-    const waveWidth = compact ? 145 : 165;
-    const soulWidth = compact ? 105 : 125;
-    const healthWidth = Math.min(compact ? 285 : 340, width * 0.39);
+    const waveWidth = compact ? 140 : 172;
+    const soulWidth = compact ? 100 : 128;
+    const healthWidth = Math.min(compact ? 270 : 344, width * 0.37);
     const waveX = margin;
     const healthX = (width - healthWidth) / 2;
     const soulX = width - margin - soulWidth;
@@ -373,9 +373,9 @@ export class UI {
     if (this.bombs > 0) {
       this.button(
         `HELL BOMB × ${this.bombs}`,
-        width - margin - 145,
-        y - 42,
-        145,
+        width - margin - 156,
+        y - 46,
+        156,
         34,
         () => this.callbacks.onBomb?.(),
         this.remaining <= 0

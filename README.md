@@ -1,4 +1,4 @@
-# Hellgate Manor — Five-Wave Vertical Slice v0.15
+# Hellgate Manor — Five-Wave Vertical Slice v0.16
 
 This update builds directly on the working v0.10 five-wave version.
 
@@ -14,7 +14,7 @@ fonts/lansbury.ttf
 
 The ZIP contains the revised game code and workflow, but it does not duplicate your GLB assets or font.
 
-## v0.15 changes
+## v0.16 changes
 
 - The previous fast-Husk movement range is now used for standard Husks.
 - Fast Husks move at approximately twice the new standard speed.
@@ -35,7 +35,7 @@ The ZIP contains the revised game code and workflow, but it does not duplicate y
 The request for “stairs” in the sky was treated as “stars,” alongside the moon and clouds.
 
 
-## v0.15 visual and usability pass
+## v0.16 visual and usability pass
 
 - Added a much larger invisible grab collider around each Husk so selection is far less frustrating.
 - Enlarged and re-angled the manor so it now sits partly off the right edge of the screen.
@@ -45,7 +45,7 @@ The request for “stairs” in the sky was treated as “stars,” alongside th
 - Kept Lansbury for headers and key labels, but increased smaller menu text and made the supporting font bolder for readability.
 
 
-## v0.15 wave and defence pass
+## v0.16 wave and defence pass
 
 - Every wave can continue spawning until as many as 25 living Husks are present at once.
 - The enlarged manor has been fully reversed by 180 degrees rather than merely angled.
@@ -57,7 +57,7 @@ The request for “stairs” in the sky was treated as “stars,” alongside th
 - The first crossbow remains 60 souls; the second now costs 900 souls and cannot realistically be acquired during the five-wave demo.
 
 
-## v0.15 defence visibility and pacing
+## v0.16 defence visibility and pacing
 
 - Enlarged the gothic crossbow emplacements substantially and moved them in front of the manor so they are readable on mobile.
 - Rebuilt the projectile as a large flaming arrow with a bright fireball core, orange halo, layered flame and stronger light.
@@ -69,7 +69,7 @@ The request for “stairs” in the sky was treated as “stars,” alongside th
 - The second and third crossbows remain priced beyond the current five-wave demo.
 
 
-## v0.15 startup pre-warming
+## v0.16 startup pre-warming
 
 - Added a staged loading screen with progress messages and a progress bar.
 - Loads the font, GLB assets, battlefield, waves and defence before showing Start.
@@ -81,3 +81,15 @@ The request for “stairs” in the sky was treated as “stars,” alongside th
 - Removes all temporary warm-up objects and effects before the Start screen appears.
 
 This targets the one-time hitch previously seen on the first Husk death.
+
+
+## v0.16 visual readability pass
+
+- Reduced and re-mounted the gothic crossbows so they sit against the manor more cleanly.
+- Reworked defence projectiles into clearer flaming arrows with a more compact silhouette.
+- Added better Husk readability through cooler fill / emissive visibility tuning.
+- Replaced the blocky fog sheets with layered drifting sprite fog.
+- Brought the hell breach farther into view and added taller glow plumes so it reads on desktop.
+- Removed the obvious rectangular ground overlay and kept the battlefield cleaner.
+- Added larger HUD safe margins so panels are less likely to clip at the edges.
+- Toned down and sharpened the moon so it feels less blown out.
