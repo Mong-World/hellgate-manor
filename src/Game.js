@@ -101,7 +101,8 @@ export class Game {
       this.scene,
       this.world,
       () => this.waveManager.getAliveEnemies(),
-      (enemy, reason) => this.killEnemyByDefence(enemy, reason)
+      (enemy, reason) => this.killEnemyByDefence(enemy, reason),
+      (enemy) => this.grabSystem?.isHolding(enemy) ?? false
     );
 
     this.syncUI();

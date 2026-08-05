@@ -531,7 +531,7 @@ export class World {
   loadManor() {
     const model = this.assets.createManorClone();
     AssetLibrary.prepareModel(model);
-    AssetLibrary.fitModelToHeight(model, 13.8, Math.PI * 0.86);
+    AssetLibrary.fitModelToHeight(model, 13.8, 0);
 
     const holder = new THREE.Group();
     holder.position.set(20.8, 0, -1.1);
@@ -574,31 +574,120 @@ export class World {
   }
 
   createTurretMounts() {
-    const y = Math.min(this.manorBounds.max.y * 0.56, 6.9);
-    const zPositions = [-2.8, -0.2, 2.5];
+    const y = Math.min(this.manorBounds.max.y * 0.55, 7.2);
+    const zPositions = [-2.7, -0.1, 2.5];
+
     for (let i = 0; i < 3; i += 1) {
-      const group = new THREE.Group();
-      group.position.set(this.manorBarrierX + 0.18, y + i * 0.3, zPositions[i]);
-      group.visible = false;
-      this.scene.add(group);
+      const mount = new THREE.Group();
+      mount.position.set(
+        this.manorBarrierX + 0.18,
+        y + i * 0.32,
+        zPositions[i]
+      );
+      mount.rotation.y = -Math.PI / 2;
+      mount.visible = false;
+      this.scene.add(mount);
 
-      const baseGeometry = new THREE.CylinderGeometry(0.22, 0.32, 0.55, 10);
-      const base = new THREE.Mesh(baseGeometry, this.materials.iron);
-      base.rotation.z = Math.PI / 2;
-      base.castShadow = true;
-      group.add(base);
-      this.disposables.push(baseGeometry);
+      const pivot = new THREE.Group();
+      mount.add(pivot);
 
-      const orbGeometry = new THREE.IcosahedronGeometry(0.24, 1);
-      const orb = new THREE.Mesh(orbGeometry, this.materials.ember);
-      orb.position.x = -0.36;
-      group.add(orb);
-      this.disposables.push(orbGeometry);
+      const stoneGeometry = new THREE.CylinderGeometry(0.42, 0.55, 0.42, 8);
+      const stoneMaterial = new THREE.MeshStandardMaterial({
+        color: 0x242329,
+        roughness: 0.92,
+        metalness: 0.08
+      });
+      const stone = new THREE.Mesh(stoneGeometry, stoneMaterial);
+      stone.position.y = -0.38;
+      stone.castShadow = true;
+      stone.receiveShadow = true;
+      pivot.add(stone);
 
-      const light = new THREE.PointLight(0xff4f16, 6, 5, 2);
-      light.position.copy(orb.position);
-      group.add(light);
-      this.turretMounts.push({ group, orb, light, phase: i * 1.2 });
+      const stockGeometry = new THREE.BoxGeometry(0.24, 0.22, 1.75);
+      const stockMaterial = new THREE.MeshStandardMaterial({
+        color: 0x241813,
+        roughness: 0.78,
+        metalness: 0.08
+      });
+      const stock = new THREE.Mesh(stockGeometry, stockMaterial);
+      stock.position.z = 0.15;
+      stock.castShadow = true;
+      pivot.add(stock);
+
+      const railGeometry = new THREE.BoxGeometry(0.08, 0.08, 1.95);
+      const rail = new THREE.Mesh(railGeometry, this.materials.iron);
+      rail.position.set(0, 0.16, 0.08);
+      rail.castShadow = true;
+      pivot.add(rail);
+
+      const bowCurve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(-0.92, 0.04, -0.64),
+        new THREE.Vector3(-0.56, 0.08, -0.84),
+        new THREE.Vector3(0, 0.12, -0.92),
+        new THREE.Vector3(0.56, 0.08, -0.84),
+        new THREE.Vector3(0.92, 0.04, -0.64)
+      ]);
+      const bowGeometry = new THREE.TubeGeometry(bowCurve, 18, 0.055, 6, false);
+      const bow = new THREE.Mesh(bowGeometry, this.materials.iron);
+      bow.castShadow = true;
+      pivot.add(bow);
+
+      const stringGeometry = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(-0.92, 0.04, -0.64),
+        new THREE.Vector3(0, 0.12, -0.18),
+        new THREE.Vector3(0.92, 0.04, -0.64)
+      ]);
+      const stringMaterial = new THREE.LineBasicMaterial({
+        color: 0xb8a99d,
+        transparent: true,
+        opacity: 0.72
+      });
+      const string = new THREE.Line(stringGeometry, stringMaterial);
+      pivot.add(string);
+
+      const spikeGeometry = new THREE.ConeGeometry(0.09, 0.38, 6);
+      for (const side of [-1, 1]) {
+        const spike = new THREE.Mesh(spikeGeometry, this.materials.iron);
+        spike.position.set(side * 0.92, 0.04, -0.64);
+        spike.rotation.z = side * Math.PI / 2;
+        spike.castShadow = true;
+        pivot.add(spike);
+      }
+
+      const emberGeometry = new THREE.IcosahedronGeometry(0.12, 1);
+      const ember = new THREE.Mesh(emberGeometry, this.materials.ember);
+      ember.position.set(0, 0.18, -0.6);
+      pivot.add(ember);
+
+      const emberLight = new THREE.PointLight(0xff4b13, 4.5, 4.5, 2);
+      emberLight.position.copy(ember.position);
+      pivot.add(emberLight);
+
+      const muzzle = new THREE.Object3D();
+      muzzle.position.set(0, 0.14, -1.02);
+      pivot.add(muzzle);
+
+      this.turretMounts.push({
+        group: mount,
+        pivot,
+        muzzle,
+        ember,
+        light: emberLight,
+        phase: i * 1.2
+      });
+
+      this.disposables.push(
+        stoneGeometry,
+        stoneMaterial,
+        stockGeometry,
+        stockMaterial,
+        railGeometry,
+        bowGeometry,
+        stringGeometry,
+        stringMaterial,
+        spikeGeometry,
+        emberGeometry
+      );
     }
   }
 
@@ -612,8 +701,22 @@ export class World {
     const mount = this.turretMounts[index];
     if (!mount) return new THREE.Vector3(this.manorBarrierX, 4.5, 0);
     const origin = new THREE.Vector3();
-    mount.orb.getWorldPosition(origin);
+    mount.muzzle.getWorldPosition(origin);
     return origin;
+  }
+
+  aimTurret(index, target) {
+    const mount = this.turretMounts[index];
+    if (!mount || !target) return;
+
+    const localTarget = target.clone();
+    mount.group.worldToLocal(localTarget);
+    const yaw = Math.atan2(localTarget.x, -localTarget.z);
+    const horizontal = Math.hypot(localTarget.x, localTarget.z);
+    const pitch = -Math.atan2(localTarget.y, Math.max(horizontal, 0.001));
+
+    mount.pivot.rotation.y = THREE.MathUtils.clamp(yaw, -0.42, 0.42);
+    mount.pivot.rotation.x = THREE.MathUtils.clamp(pitch, -0.25, 0.28);
   }
 
   isInsideManorCollision(position) {
@@ -642,10 +745,10 @@ export class World {
       light.intensity = 9 + pulse * 2.5;
     });
 
-    this.turretMounts.forEach(({ orb, light, phase }) => {
+    this.turretMounts.forEach(({ ember, light, phase }) => {
       const pulse = 1 + Math.sin(elapsed * 5 + phase) * 0.12;
-      orb.scale.setScalar(pulse);
-      light.intensity = 5.5 + pulse * 1.8;
+      ember.scale.setScalar(pulse);
+      light.intensity = 4.2 + pulse * 1.5;
     });
 
     this.skyClouds.forEach(({ sprite, speed, baseY, phase }) => {
