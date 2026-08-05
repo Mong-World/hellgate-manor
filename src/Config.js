@@ -9,7 +9,7 @@ export const CONFIG = Object.freeze({
     attack: "./sounds/attacksound.mp3",
     background1: "./sounds/background1.mp3",
     background2: "./sounds/background2.mp3",
-    bodyImpact: "./sounds/body impact sound.mp3",
+    bodyImpact: "./sounds/body-impact-sound.mp3.mp3",
     bombExplosion: "./sounds/bomb-explosion.mp3",
     crossbowFire: "./sounds/crossbow-fire-sound.mp3",
     deniedPurchase: "./sounds/denied-purchase-sound.mp3",
