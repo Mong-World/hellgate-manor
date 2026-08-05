@@ -19,7 +19,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           registry-url: https://registry.npmjs.org
 
       - name: Install dependencies
@@ -36,6 +36,11 @@ jobs:
           if [ -d fonts ]; then
             mkdir -p dist/fonts
             cp -R fonts/. dist/fonts/
+          fi
+
+          if [ -d sounds ]; then
+            mkdir -p dist/sounds
+            cp -R sounds/. dist/sounds/
           fi
 
       - name: Publish Portals build branch
