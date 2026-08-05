@@ -1,13 +1,15 @@
 import * as THREE from "three";
 
 export class SoulEmber {
-  constructor({ scene, start, target }) {
+  constructor({ scene, start, target, onComplete = null }) {
     this.scene = scene;
     this.start = start.clone();
     this.target = target.clone();
     this.finished = false;
     this.age = 0;
     this.duration = 1.1;
+    this.onComplete = onComplete;
+    this.completionSent = false;
     this.group = new THREE.Group();
     this.group.position.copy(start);
     this.scene.add(this.group);
@@ -34,7 +36,13 @@ export class SoulEmber {
     const pulse = 1 + Math.sin(this.age * 18) * 0.14;
     this.core.scale.setScalar(pulse);
     this.light.intensity = 7 + pulse * 2;
-    if (t >= 1) this.finished = true;
+    if (t >= 1) {
+      this.finished = true;
+      if (!this.completionSent) {
+        this.completionSent = true;
+        this.onComplete?.();
+      }
+    }
   }
 
   dispose() {
