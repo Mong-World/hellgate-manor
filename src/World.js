@@ -574,97 +574,119 @@ export class World {
   }
 
   createTurretMounts() {
-    const y = Math.min(this.manorBounds.max.y * 0.55, 7.2);
-    const zPositions = [-2.7, -0.1, 2.5];
+    const baseY = Math.min(this.manorBounds.max.y * 0.40, 5.2);
+    const zPositions = [-2.4, 0.15, 2.7];
 
     for (let i = 0; i < 3; i += 1) {
       const mount = new THREE.Group();
+
+      // Place the weapons clearly in front of the manor rather than inside it.
       mount.position.set(
-        this.manorBarrierX + 0.18,
-        y + i * 0.32,
+        this.manorBarrierX - 1.35,
+        baseY + i * 0.48,
         zPositions[i]
       );
       mount.rotation.y = -Math.PI / 2;
+      mount.scale.setScalar(2.35);
       mount.visible = false;
       this.scene.add(mount);
 
       const pivot = new THREE.Group();
       mount.add(pivot);
 
-      const stoneGeometry = new THREE.CylinderGeometry(0.42, 0.55, 0.42, 8);
-      const stoneMaterial = new THREE.MeshStandardMaterial({
+      const pedestalGeometry = new THREE.CylinderGeometry(0.55, 0.78, 0.72, 8);
+      const pedestalMaterial = new THREE.MeshStandardMaterial({
         color: 0x242329,
-        roughness: 0.92,
+        roughness: 0.94,
         metalness: 0.08
       });
-      const stone = new THREE.Mesh(stoneGeometry, stoneMaterial);
-      stone.position.y = -0.38;
-      stone.castShadow = true;
-      stone.receiveShadow = true;
-      pivot.add(stone);
+      const pedestal = new THREE.Mesh(pedestalGeometry, pedestalMaterial);
+      pedestal.position.y = -0.54;
+      pedestal.castShadow = true;
+      pedestal.receiveShadow = true;
+      pivot.add(pedestal);
 
-      const stockGeometry = new THREE.BoxGeometry(0.24, 0.22, 1.75);
+      const collarGeometry = new THREE.TorusGeometry(0.48, 0.09, 7, 12);
+      collarGeometry.rotateX(Math.PI / 2);
+      const collar = new THREE.Mesh(collarGeometry, this.materials.iron);
+      collar.position.y = -0.22;
+      collar.castShadow = true;
+      pivot.add(collar);
+
+      const stockGeometry = new THREE.BoxGeometry(0.34, 0.30, 2.55);
       const stockMaterial = new THREE.MeshStandardMaterial({
-        color: 0x241813,
-        roughness: 0.78,
-        metalness: 0.08
+        color: 0x2c1710,
+        roughness: 0.76,
+        metalness: 0.06
       });
       const stock = new THREE.Mesh(stockGeometry, stockMaterial);
-      stock.position.z = 0.15;
+      stock.position.z = 0.20;
       stock.castShadow = true;
       pivot.add(stock);
 
-      const railGeometry = new THREE.BoxGeometry(0.08, 0.08, 1.95);
+      const railGeometry = new THREE.BoxGeometry(0.12, 0.11, 2.85);
       const rail = new THREE.Mesh(railGeometry, this.materials.iron);
-      rail.position.set(0, 0.16, 0.08);
+      rail.position.set(0, 0.22, 0.08);
       rail.castShadow = true;
       pivot.add(rail);
 
       const bowCurve = new THREE.CatmullRomCurve3([
-        new THREE.Vector3(-0.92, 0.04, -0.64),
-        new THREE.Vector3(-0.56, 0.08, -0.84),
-        new THREE.Vector3(0, 0.12, -0.92),
-        new THREE.Vector3(0.56, 0.08, -0.84),
-        new THREE.Vector3(0.92, 0.04, -0.64)
+        new THREE.Vector3(-1.48, 0.04, -0.88),
+        new THREE.Vector3(-0.84, 0.12, -1.15),
+        new THREE.Vector3(0, 0.18, -1.28),
+        new THREE.Vector3(0.84, 0.12, -1.15),
+        new THREE.Vector3(1.48, 0.04, -0.88)
       ]);
-      const bowGeometry = new THREE.TubeGeometry(bowCurve, 18, 0.055, 6, false);
+      const bowGeometry = new THREE.TubeGeometry(bowCurve, 24, 0.085, 7, false);
       const bow = new THREE.Mesh(bowGeometry, this.materials.iron);
       bow.castShadow = true;
       pivot.add(bow);
 
       const stringGeometry = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(-0.92, 0.04, -0.64),
-        new THREE.Vector3(0, 0.12, -0.18),
-        new THREE.Vector3(0.92, 0.04, -0.64)
+        new THREE.Vector3(-1.48, 0.04, -0.88),
+        new THREE.Vector3(0, 0.18, -0.22),
+        new THREE.Vector3(1.48, 0.04, -0.88)
       ]);
       const stringMaterial = new THREE.LineBasicMaterial({
-        color: 0xb8a99d,
+        color: 0xd2c0b2,
         transparent: true,
-        opacity: 0.72
+        opacity: 0.82
       });
       const string = new THREE.Line(stringGeometry, stringMaterial);
       pivot.add(string);
 
-      const spikeGeometry = new THREE.ConeGeometry(0.09, 0.38, 6);
+      const spikeGeometry = new THREE.ConeGeometry(0.14, 0.60, 7);
       for (const side of [-1, 1]) {
         const spike = new THREE.Mesh(spikeGeometry, this.materials.iron);
-        spike.position.set(side * 0.92, 0.04, -0.64);
+        spike.position.set(side * 1.48, 0.04, -0.88);
         spike.rotation.z = side * Math.PI / 2;
         spike.castShadow = true;
         pivot.add(spike);
       }
 
-      const emberGeometry = new THREE.IcosahedronGeometry(0.12, 1);
+      const skullGeometry = new THREE.IcosahedronGeometry(0.23, 1);
+      const skullMaterial = new THREE.MeshStandardMaterial({
+        color: 0x4b4440,
+        roughness: 0.78,
+        metalness: 0.18
+      });
+      const skull = new THREE.Mesh(skullGeometry, skullMaterial);
+      skull.scale.set(1.05, 0.82, 0.88);
+      skull.position.set(0, 0.34, 0.58);
+      skull.castShadow = true;
+      pivot.add(skull);
+
+      const emberGeometry = new THREE.IcosahedronGeometry(0.20, 1);
       const ember = new THREE.Mesh(emberGeometry, this.materials.ember);
-      ember.position.set(0, 0.18, -0.6);
+      ember.position.set(0, 0.28, -0.86);
       pivot.add(ember);
 
-      const emberLight = new THREE.PointLight(0xff4b13, 4.5, 4.5, 2);
+      const emberLight = new THREE.PointLight(0xff4b13, 10, 7, 2);
       emberLight.position.copy(ember.position);
       pivot.add(emberLight);
 
       const muzzle = new THREE.Object3D();
-      muzzle.position.set(0, 0.14, -1.02);
+      muzzle.position.set(0, 0.22, -1.55);
       pivot.add(muzzle);
 
       this.turretMounts.push({
@@ -677,8 +699,9 @@ export class World {
       });
 
       this.disposables.push(
-        stoneGeometry,
-        stoneMaterial,
+        pedestalGeometry,
+        pedestalMaterial,
+        collarGeometry,
         stockGeometry,
         stockMaterial,
         railGeometry,
@@ -686,6 +709,8 @@ export class World {
         stringGeometry,
         stringMaterial,
         spikeGeometry,
+        skullGeometry,
+        skullMaterial,
         emberGeometry
       );
     }

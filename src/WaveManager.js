@@ -51,14 +51,6 @@ export class WaveManager {
       if (this.spawnTimer <= 0) {
         this.spawnEnemy();
         this.spawnTimer = this.config.spawnGap;
-        if (
-          this.waveIndex >= 2 &&
-          this.spawned < this.config.total &&
-          aliveCount + 1 < this.config.maxActive &&
-          Math.random() < 0.28 + this.waveIndex * 0.08
-        ) {
-          this.spawnTimer = 0.28;
-        }
       }
     }
 

@@ -16,9 +16,9 @@ export class DefenceSystem {
     this.projectiles = [];
     this.impacts = [];
 
-    this.arrowShaftGeometry = new THREE.CylinderGeometry(0.028, 0.036, 1.05, 7);
+    this.arrowShaftGeometry = new THREE.CylinderGeometry(0.055, 0.072, 1.72, 8);
     this.arrowShaftGeometry.rotateX(Math.PI / 2);
-    this.arrowHeadGeometry = new THREE.ConeGeometry(0.095, 0.28, 7);
+    this.arrowHeadGeometry = new THREE.ConeGeometry(0.17, 0.46, 8);
     this.arrowHeadGeometry.rotateX(Math.PI / 2);
     this.arrowMaterial = new THREE.MeshStandardMaterial({
       color: 0x3a2518,
@@ -31,7 +31,7 @@ export class DefenceSystem {
       metalness: 0.82
     });
     this.fireMaterial = new THREE.MeshBasicMaterial({
-      color: 0xff6b1c,
+      color: 0xff7a22,
       transparent: true,
       opacity: 0.92,
       blending: THREE.AdditiveBlending,
@@ -122,12 +122,13 @@ export class DefenceSystem {
 
   createArrowMesh() {
     const group = new THREE.Group();
+    group.scale.setScalar(1.35);
 
     const shaft = new THREE.Mesh(
       this.arrowShaftGeometry,
       this.arrowMaterial
     );
-    shaft.position.z = 0.08;
+    shaft.position.z = 0.10;
     shaft.castShadow = true;
     group.add(shaft);
 
@@ -135,21 +136,82 @@ export class DefenceSystem {
       this.arrowHeadGeometry,
       this.arrowHeadMaterial
     );
-    head.position.z = 0.73;
+    head.position.z = 1.08;
     head.castShadow = true;
     group.add(head);
 
-    const flameGeometry = new THREE.ConeGeometry(0.14, 0.62, 8);
+    // A bright fireball at the back of the arrow makes the shot readable on mobile.
+    const fireballCoreGeometry = new THREE.IcosahedronGeometry(0.26, 1);
+    const fireballCoreMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffd27a,
+      transparent: true,
+      opacity: 1,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    const fireballCore = new THREE.Mesh(
+      fireballCoreGeometry,
+      fireballCoreMaterial
+    );
+    fireballCore.position.z = -0.78;
+    group.add(fireballCore);
+
+    const fireballHaloGeometry = new THREE.IcosahedronGeometry(0.48, 1);
+    const fireballHaloMaterial = new THREE.MeshBasicMaterial({
+      color: 0xff4b0d,
+      transparent: true,
+      opacity: 0.55,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    const fireballHalo = new THREE.Mesh(
+      fireballHaloGeometry,
+      fireballHaloMaterial
+    );
+    fireballHalo.position.copy(fireballCore.position);
+    group.add(fireballHalo);
+
+    const flameGeometry = new THREE.ConeGeometry(0.30, 1.18, 9);
     flameGeometry.rotateX(-Math.PI / 2);
     const flame = new THREE.Mesh(flameGeometry, this.fireMaterial);
-    flame.position.z = -0.55;
+    flame.position.z = -1.38;
     group.add(flame);
 
-    const light = new THREE.PointLight(0xff4b12, 8, 5.5, 2);
-    light.position.z = -0.32;
+    const innerFlameGeometry = new THREE.ConeGeometry(0.16, 0.78, 8);
+    innerFlameGeometry.rotateX(-Math.PI / 2);
+    const innerFlameMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffd36b,
+      transparent: true,
+      opacity: 0.92,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    const innerFlame = new THREE.Mesh(
+      innerFlameGeometry,
+      innerFlameMaterial
+    );
+    innerFlame.position.z = -1.20;
+    group.add(innerFlame);
+
+    const light = new THREE.PointLight(0xff4b12, 22, 11, 1.7);
+    light.position.z = -0.74;
     group.add(light);
 
-    return { group, flameGeometry, flame, light };
+    return {
+      group,
+      flameGeometry,
+      flame,
+      innerFlameGeometry,
+      innerFlameMaterial,
+      innerFlame,
+      fireballCoreGeometry,
+      fireballCoreMaterial,
+      fireballCore,
+      fireballHaloGeometry,
+      fireballHaloMaterial,
+      fireballHalo,
+      light
+    };
   }
 
   fireProjectile({ mountIndex, target, destination, fallback }) {
@@ -162,7 +224,7 @@ export class DefenceSystem {
       target,
       destination: destination.clone(),
       fallback: fallback.clone(),
-      speed: 22,
+      speed: 16.5,
       age: 0
     });
   }
@@ -219,9 +281,17 @@ export class DefenceSystem {
         Math.min(distance, projectile.speed * dt)
       );
 
-      const pulse = 0.82 + Math.sin(projectile.age * 23) * 0.12;
-      projectile.flame.scale.set(pulse, pulse, 1 + pulse * 0.28);
-      projectile.light.intensity = 7 + pulse * 2.2;
+      const pulse = 0.92 + Math.sin(projectile.age * 24) * 0.16;
+      projectile.flame.scale.set(pulse, pulse, 1.1 + pulse * 0.34);
+      projectile.innerFlame.scale.set(
+        0.86 + pulse * 0.18,
+        0.86 + pulse * 0.18,
+        1.05 + pulse * 0.22
+      );
+      projectile.fireballCore.scale.setScalar(0.88 + pulse * 0.20);
+      projectile.fireballHalo.scale.setScalar(0.92 + pulse * 0.34);
+      projectile.fireballHalo.material.opacity = 0.42 + pulse * 0.12;
+      projectile.light.intensity = 18 + pulse * 6;
     }
   }
 
@@ -229,11 +299,17 @@ export class DefenceSystem {
     const projectile = this.projectiles[index];
     this.scene.remove(projectile.group);
     projectile.flameGeometry.dispose();
+    projectile.innerFlameGeometry.dispose();
+    projectile.innerFlameMaterial.dispose();
+    projectile.fireballCoreGeometry.dispose();
+    projectile.fireballCoreMaterial.dispose();
+    projectile.fireballHaloGeometry.dispose();
+    projectile.fireballHaloMaterial.dispose();
     this.projectiles.splice(index, 1);
   }
 
   createImpact(position) {
-    const geometry = new THREE.RingGeometry(0.12, 0.24, 20);
+    const geometry = new THREE.RingGeometry(0.24, 0.48, 24);
     const material = new THREE.MeshBasicMaterial({
       color: 0xff6a1d,
       transparent: true,
@@ -258,10 +334,10 @@ export class DefenceSystem {
     for (let i = this.impacts.length - 1; i >= 0; i -= 1) {
       const impact = this.impacts[i];
       impact.age += dt;
-      const t = Math.min(impact.age / 0.42, 1);
-      impact.mesh.scale.setScalar(1 + t * 5.5);
+      const t = Math.min(impact.age / 0.55, 1);
+      impact.mesh.scale.setScalar(1 + t * 7.5);
       impact.material.opacity = (1 - t) * 0.85;
-      impact.light.intensity = (1 - t) * 9;
+      impact.light.intensity = (1 - t) * 16;
 
       if (t >= 1) {
         this.scene.remove(impact.mesh);
@@ -287,9 +363,7 @@ export class DefenceSystem {
   resetCooldown() {
     this.mountTimers = Array.from(
       { length: CONFIG.defence.turretMaxLevel },
-      (_, index) =>
-        CONFIG.defence.fireInterval +
-        index * CONFIG.defence.fireStagger
+      (_, index) => 1.2 + index * CONFIG.defence.fireStagger
     );
   }
 

@@ -44,7 +44,7 @@ export const CONFIG = Object.freeze({
     turretCosts: [60, 900, 1500],
     turretMaxLevel: 3,
     turretUnlockWave: 3,
-    fireInterval: 10,
+    fireInterval: 5,
     fireStagger: 1,
     bombCost: 50,
     bombMaxCharges: 3,
@@ -52,10 +52,10 @@ export const CONFIG = Object.freeze({
   },
 
   waves: [
-    { total: 5, fast: 0, maxActive: 25, spawnGap: 2.6 },
-    { total: 10, fast: 2, maxActive: 25, spawnGap: 2.1 },
-    { total: 15, fast: 4, maxActive: 25, spawnGap: 1.6 },
-    { total: 20, fast: 7, maxActive: 25, spawnGap: 1.2 },
-    { total: 25, fast: 10, maxActive: 25, spawnGap: 0.85 }
+    { total: 5, fast: 0, maxActive: 25, spawnGap: 3.2 },
+    { total: 10, fast: 2, maxActive: 25, spawnGap: 2.8 },
+    { total: 15, fast: 4, maxActive: 25, spawnGap: 2.35 },
+    { total: 20, fast: 7, maxActive: 25, spawnGap: 1.95 },
+    { total: 25, fast: 10, maxActive: 25, spawnGap: 1.6 }
   ]
 });
