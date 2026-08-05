@@ -148,7 +148,7 @@ export class UI {
   }
 
   dataFont(size, weight = 700) {
-    return `${weight} ${size}px "Arial Narrow","Roboto Condensed",system-ui,sans-serif`;
+    return `${Math.max(weight, 780)} ${size}px "Arial Narrow","Roboto Condensed","Segoe UI",Arial,sans-serif`;
   }
 
   angularPath(x, y, width, height, cut = 10) {
@@ -269,7 +269,7 @@ export class UI {
     ctx.stroke();
 
     ctx.fillStyle = C.muted;
-    ctx.font = this.dataFont(13, 700);
+    ctx.font = this.dataFont(15, 800);
     ctx.fillText(
       "THE GATES ARE OPEN. KEEP THE MANOR SAFE.",
       width / 2,
@@ -430,7 +430,7 @@ export class UI {
     ctx.shadowBlur = 0;
 
     ctx.fillStyle = C.muted;
-    ctx.font = this.dataFont(12, 750);
+    ctx.font = this.dataFont(14, 800);
     ctx.fillText(
       this.purchaseUsed
         ? "PURCHASE COMPLETE — CONTINUE WHEN READY"
@@ -447,7 +447,7 @@ export class UI {
 
     const rowX = x + 34;
     const rowWidth = panelWidth - 68;
-    const rowHeight = 104;
+    const rowHeight = 112;
     const gap = 18;
     const firstY = y + 116;
 
@@ -550,27 +550,27 @@ export class UI {
     ctx.fillText(title, x + 22, y + 34);
 
     ctx.fillStyle = disabled ? "#69696d" : C.text;
-    ctx.font = this.dataFont(12, 650);
+    ctx.font = this.dataFont(14, 800);
     ctx.fillText(description, x + 22, y + 58);
 
     ctx.fillStyle = disabled ? "#656569" : C.muted;
-    ctx.font = this.dataFont(10, 750);
+    ctx.font = this.dataFont(12, 850);
     ctx.fillText(status, x + 22, y + 81);
 
-    const buttonWidth = 132;
+    const buttonWidth = 146;
     const buttonX = x + width - buttonWidth - 18;
 
     ctx.textAlign = "center";
     ctx.fillStyle = disabled ? "#69696d" : C.orange;
-    ctx.font = this.dataFont(14, 850);
+    ctx.font = this.dataFont(16, 900);
     ctx.fillText(price, buttonX + buttonWidth / 2, y + 28);
 
     this.button(
       disabled && price === "LOCKED" ? "LOCKED" : "PURCHASE",
       buttonX,
-      y + 45,
+      y + 41,
       buttonWidth,
-      39,
+      43,
       onClick,
       disabled
     );

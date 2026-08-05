@@ -7,7 +7,7 @@ function makeMoonTexture() {
   canvas.height = 256;
   const ctx = canvas.getContext("2d");
 
-  const glow = ctx.createRadialGradient(128, 128, 30, 128, 128, 126);
+  const glow = ctx.createRadialGradient(128, 128, 28, 128, 128, 126);
   glow.addColorStop(0, "rgba(255,248,222,1)");
   glow.addColorStop(0.58, "rgba(225,229,219,1)");
   glow.addColorStop(0.78, "rgba(169,186,194,.9)");
@@ -20,10 +20,9 @@ function makeMoonTexture() {
     [81, 92, 19, 0.14],
     [151, 68, 13, 0.11],
     [164, 142, 27, 0.12],
-    [101, 164, 12, 0.1],
+    [101, 164, 12, 0.10],
     [130, 115, 8, 0.08]
   ];
-
   for (const [x, y, radius, alpha] of craters) {
     ctx.fillStyle = `rgba(70,82,88,${alpha})`;
     ctx.beginPath();
@@ -74,22 +73,23 @@ function makeCloudTexture() {
 function makeFogTexture() {
   const canvas = document.createElement("canvas");
   canvas.width = 512;
-  canvas.height = 160;
+  canvas.height = 192;
   const ctx = canvas.getContext("2d");
 
   const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
   gradient.addColorStop(0, "rgba(214,221,228,0)");
-  gradient.addColorStop(0.45, "rgba(196,204,215,.32)");
+  gradient.addColorStop(0.38, "rgba(212,219,228,.46)");
+  gradient.addColorStop(0.65, "rgba(198,206,216,.32)");
   gradient.addColorStop(1, "rgba(185,194,205,0)");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  for (let i = 0; i < 16; i += 1) {
+  for (let i = 0; i < 22; i += 1) {
     const x = Math.random() * canvas.width;
-    const y = 55 + Math.random() * 45;
-    const radius = 35 + Math.random() * 75;
+    const y = 60 + Math.random() * 60;
+    const radius = 38 + Math.random() * 82;
     const cloud = ctx.createRadialGradient(x, y, 0, x, y, radius);
-    cloud.addColorStop(0, "rgba(235,239,244,.20)");
+    cloud.addColorStop(0, "rgba(235,239,244,.24)");
     cloud.addColorStop(1, "rgba(235,239,244,0)");
     ctx.fillStyle = cloud;
     ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
@@ -98,6 +98,72 @@ function makeFogTexture() {
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   return texture;
+}
+
+function makeGroundTexture() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1024;
+  canvas.height = 512;
+  const ctx = canvas.getContext("2d");
+
+  const bg = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  bg.addColorStop(0, "#15161a");
+  bg.addColorStop(0.45, "#111217");
+  bg.addColorStop(1, "#0c0d11");
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  for (let i = 0; i < 1500; i += 1) {
+    const alpha = 0.018 + Math.random() * 0.05;
+    const radius = 1 + Math.random() * 3.5;
+    ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+    ctx.beginPath();
+    ctx.arc(Math.random() * canvas.width, Math.random() * canvas.height, radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  for (let i = 0; i < 280; i += 1) {
+    const x = Math.random() * canvas.width;
+    const y = Math.random() * canvas.height;
+    const w = 40 + Math.random() * 180;
+    const h = 18 + Math.random() * 60;
+    const grad = ctx.createRadialGradient(x, y, 0, x, y, w * 0.7);
+    grad.addColorStop(0, `rgba(70,62,54,${0.04 + Math.random() * 0.06})`);
+    grad.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = grad;
+    ctx.fillRect(x - w / 2, y - h / 2, w, h);
+  }
+
+  ctx.lineCap = "round";
+  for (let i = 0; i < 75; i += 1) {
+    const x = Math.random() * canvas.width;
+    const y = Math.random() * canvas.height;
+    const len = 24 + Math.random() * 90;
+    const angle = Math.random() * Math.PI * 2;
+    ctx.strokeStyle = `rgba(14,14,18,${0.25 + Math.random() * 0.26})`;
+    ctx.lineWidth = 1 + Math.random() * 1.5;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + Math.cos(angle) * len, y + Math.sin(angle) * len * 0.35);
+    ctx.stroke();
+  }
+
+  const leftGlow = ctx.createRadialGradient(0, canvas.height * 0.65, 0, 90, canvas.height * 0.65, 240);
+  leftGlow.addColorStop(0, "rgba(255,112,49,.24)");
+  leftGlow.addColorStop(1, "rgba(255,112,49,0)");
+  ctx.fillStyle = leftGlow;
+  ctx.fillRect(0, canvas.height * 0.2, 320, canvas.height * 0.8);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(4.8, 2.2);
+  return texture;
+}
+
+function pulseFogOpacity(material, elapsed, phase) {
+  material.opacity = 0.135 + Math.sin(elapsed * 0.24 + phase) * 0.028;
 }
 
 export class World {
@@ -130,10 +196,13 @@ export class World {
   }
 
   createMaterials() {
+    const groundMap = makeGroundTexture();
     this.materials = {
       earth: new THREE.MeshStandardMaterial({
         color: 0x15161a,
-        roughness: 1
+        roughness: 0.96,
+        metalness: 0.03,
+        map: groundMap
       }),
       forest: new THREE.MeshStandardMaterial({
         color: 0x0d0f13,
@@ -153,15 +222,15 @@ export class World {
       rift: new THREE.MeshBasicMaterial({
         color: 0xff3d0a,
         transparent: true,
-        opacity: 0.82,
+        opacity: 0.86,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
         side: THREE.DoubleSide
       }),
       riftHot: new THREE.MeshBasicMaterial({
-        color: 0xffa142,
+        color: 0xffb25c,
         transparent: true,
-        opacity: 0.92,
+        opacity: 0.96,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
         side: THREE.DoubleSide
@@ -174,14 +243,12 @@ export class World {
         side: THREE.DoubleSide
       })
     };
-
-    this.disposables.push(...Object.values(this.materials));
+    this.disposables.push(groundMap, ...Object.values(this.materials));
   }
 
   createSky() {
     const starCount = 190;
     const starPositions = new Float32Array(starCount * 3);
-
     for (let i = 0; i < starCount; i += 1) {
       starPositions[i * 3] = THREE.MathUtils.randFloat(-38, 38);
       starPositions[i * 3 + 1] = THREE.MathUtils.randFloat(10, 27);
@@ -189,11 +256,7 @@ export class World {
     }
 
     const starGeometry = new THREE.BufferGeometry();
-    starGeometry.setAttribute(
-      "position",
-      new THREE.BufferAttribute(starPositions, 3)
-    );
-
+    starGeometry.setAttribute("position", new THREE.BufferAttribute(starPositions, 3));
     const starMaterial = new THREE.PointsMaterial({
       color: 0xdde7f2,
       size: 0.11,
@@ -202,7 +265,6 @@ export class World {
       depthWrite: false,
       fog: false
     });
-
     this.stars = new THREE.Points(starGeometry, starMaterial);
     this.stars.renderOrder = -5;
     this.scene.add(this.stars);
@@ -216,7 +278,6 @@ export class World {
       depthWrite: false,
       fog: false
     });
-
     this.moon = new THREE.Sprite(moonMaterial);
     this.moon.position.set(-7.5, 17.6, -36);
     this.moon.scale.set(5.9, 5.9, 1);
@@ -241,20 +302,13 @@ export class World {
         depthWrite: false,
         fog: false
       });
-
       const sprite = new THREE.Sprite(material);
       sprite.position.set(x, y, z);
       sprite.scale.set(sx, sy, 1);
       this.scene.add(sprite);
-      this.skyClouds.push({
-        sprite,
-        speed,
-        baseY: y,
-        phase: index * 1.31
-      });
+      this.skyClouds.push({ sprite, speed, baseY: y, phase: index * 1.31 });
       this.disposables.push(material);
     });
-
     this.disposables.push(cloudTexture);
   }
 
@@ -282,8 +336,8 @@ export class World {
     this.hellGlow.position.set(15.5, 4, 0);
     this.scene.add(this.hellGlow);
 
-    this.riftLight = new THREE.PointLight(0xff3a08, 52, 18, 1.55);
-    this.riftLight.position.set(-22.7, 2.1, 3.0);
+    this.riftLight = new THREE.PointLight(0xff3a08, 82, 28, 1.55);
+    this.riftLight.position.set(-19.5, 2.2, 7.2);
     this.scene.add(this.riftLight);
   }
 
@@ -291,7 +345,6 @@ export class World {
     const geometry = new THREE.PlaneGeometry(80, 27, 64, 18);
     geometry.rotateX(-Math.PI / 2);
     const positions = geometry.attributes.position;
-
     for (let i = 0; i < positions.count; i += 1) {
       const x = positions.getX(i);
       const z = positions.getZ(i);
@@ -299,124 +352,89 @@ export class World {
         Math.sin(x * 0.16) * 0.05 +
         Math.cos(z * 0.5) * 0.035 +
         Math.sin((x + z) * 0.12) * 0.025;
-
       if (x > -14 && x < 12) y *= 0.25;
       positions.setY(i, y);
     }
-
     geometry.computeVertexNormals();
-
     const ground = new THREE.Mesh(geometry, this.materials.earth);
     ground.position.y = -0.05;
     ground.receiveShadow = true;
     this.scene.add(ground);
     this.disposables.push(geometry);
+
+    const ashPatchGeometry = new THREE.PlaneGeometry(72, 11);
+    ashPatchGeometry.rotateX(-Math.PI / 2);
+    const ashPatchMaterial = new THREE.MeshBasicMaterial({
+      color: 0x0b0b0d,
+      transparent: true,
+      opacity: 0.18,
+      depthWrite: false,
+      side: THREE.DoubleSide
+    });
+    const ashPatch = new THREE.Mesh(ashPatchGeometry, ashPatchMaterial);
+    ashPatch.position.set(-1.8, 0.03, 0);
+    this.scene.add(ashPatch);
+    this.disposables.push(ashPatchGeometry, ashPatchMaterial);
   }
 
   createHellRift() {
     this.riftGroup = new THREE.Group();
-    this.riftGroup.position.set(-23.0, 0.025, 2.9);
+    this.riftGroup.position.set(-19.6, 0.025, 7.2);
     this.scene.add(this.riftGroup);
 
     const breaches = [
-      [0, 0.9, 1.55, 0.58],
-      [-0.35, -2.2, 1.15, 0.45],
-      [0.25, 3.4, 1.05, 0.4]
+      [0, 0.8, 2.2, 0.84],
+      [-0.45, -2.1, 1.45, 0.55],
+      [0.28, 3.2, 1.35, 0.48]
     ];
 
     breaches.forEach(([x, z, scaleX, scaleZ], breachIndex) => {
-      const craterGeometry = new THREE.CircleGeometry(1.45, 48);
+      const craterGeometry = new THREE.CircleGeometry(1.85, 48);
       craterGeometry.rotateX(-Math.PI / 2);
       const crater = new THREE.Mesh(craterGeometry, this.materials.crater);
       crater.position.set(x, 0.004 + breachIndex * 0.001, z);
-      crater.scale.set(scaleX * 1.35, scaleZ * 1.35, 1);
+      crater.scale.set(scaleX * 1.55, scaleZ * 1.55, 1);
       this.riftGroup.add(crater);
       this.disposables.push(craterGeometry);
 
-      const coreGeometry = new THREE.CircleGeometry(1.15, 48);
+      const coreGeometry = new THREE.CircleGeometry(1.42, 48);
       coreGeometry.rotateX(-Math.PI / 2);
-      const core = new THREE.Mesh(
-        coreGeometry,
-        breachIndex === 0 ? this.materials.riftHot : this.materials.rift
-      );
-      core.position.set(x, 0.018 + breachIndex * 0.001, z);
+      const core = new THREE.Mesh(coreGeometry, breachIndex === 0 ? this.materials.riftHot : this.materials.rift);
+      core.position.set(x, 0.02 + breachIndex * 0.001, z);
       core.scale.set(scaleX, scaleZ, 1);
       this.riftGroup.add(core);
       this.disposables.push(coreGeometry);
     });
 
     const crackOrigins = [
-      new THREE.Vector3(0, 0.035, 0.9),
-      new THREE.Vector3(-0.35, 0.035, -2.2),
-      new THREE.Vector3(0.25, 0.035, 3.4)
+      new THREE.Vector3(0, 0.035, 0.8),
+      new THREE.Vector3(-0.45, 0.035, -2.1),
+      new THREE.Vector3(0.28, 0.035, 3.2)
     ];
 
     crackOrigins.forEach((origin, originIndex) => {
-      const branchCount = originIndex === 0 ? 10 : 6;
-
+      const branchCount = originIndex === 0 ? 14 : 8;
       for (let i = 0; i < branchCount; i += 1) {
-        const angle =
-          (i / branchCount) * Math.PI * 2 +
-          THREE.MathUtils.randFloatSpread(0.34);
-
-        const length =
-          THREE.MathUtils.randFloat(1.1, originIndex === 0 ? 4.2 : 2.7);
-
-        const direction = new THREE.Vector3(
-          Math.cos(angle),
-          0,
-          Math.sin(angle)
-        );
-
-        const mid = origin
-          .clone()
-          .addScaledVector(direction, length * 0.48)
-          .add(
-            new THREE.Vector3(
-              THREE.MathUtils.randFloatSpread(0.35),
-              0,
-              THREE.MathUtils.randFloatSpread(0.35)
-            )
-          );
-
-        const end = origin
-          .clone()
-          .addScaledVector(direction, length)
-          .add(
-            new THREE.Vector3(
-              THREE.MathUtils.randFloatSpread(0.45),
-              0,
-              THREE.MathUtils.randFloatSpread(0.45)
-            )
-          );
-
+        const angle = (i / branchCount) * Math.PI * 2 + THREE.MathUtils.randFloatSpread(0.34);
+        const length = THREE.MathUtils.randFloat(1.8, originIndex === 0 ? 5.8 : 3.7);
+        const direction = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+        const mid = origin.clone().addScaledVector(direction, length * 0.48).add(new THREE.Vector3(THREE.MathUtils.randFloatSpread(0.35), 0, THREE.MathUtils.randFloatSpread(0.35)));
+        const end = origin.clone().addScaledVector(direction, length).add(new THREE.Vector3(THREE.MathUtils.randFloatSpread(0.45), 0, THREE.MathUtils.randFloatSpread(0.45)));
         const curve = new THREE.CatmullRomCurve3([origin.clone(), mid, end]);
-        const geometry = new THREE.TubeGeometry(
-          curve,
-          8,
-          originIndex === 0 ? 0.045 : 0.033,
-          4,
-          false
-        );
-
-        const crack = new THREE.Mesh(
-          geometry,
-          i % 4 === 0 ? this.materials.riftHot : this.materials.rift
-        );
-
+        const geometry = new THREE.TubeGeometry(curve, 8, originIndex === 0 ? 0.06 : 0.045, 4, false);
+        const crack = new THREE.Mesh(geometry, i % 4 === 0 ? this.materials.riftHot : this.materials.rift);
         this.riftGroup.add(crack);
         this.disposables.push(geometry);
       }
     });
 
-    const emberCount = 62;
+    const emberCount = 74;
     const positions = new Float32Array(emberCount * 3);
     const base = new Float32Array(emberCount * 3);
-
     for (let i = 0; i < emberCount; i += 1) {
-      const x = THREE.MathUtils.randFloat(-2.4, 2.1);
-      const y = THREE.MathUtils.randFloat(0.05, 3.3);
-      const z = THREE.MathUtils.randFloat(-3.6, 4.6);
+      const x = THREE.MathUtils.randFloat(-3.5, 3.0);
+      const y = THREE.MathUtils.randFloat(0.05, 4.0);
+      const z = THREE.MathUtils.randFloat(-4.8, 5.4);
       positions[i * 3] = x;
       positions[i * 3 + 1] = y;
       positions[i * 3 + 2] = z;
@@ -426,20 +444,15 @@ export class World {
     }
 
     const emberGeometry = new THREE.BufferGeometry();
-    emberGeometry.setAttribute(
-      "position",
-      new THREE.BufferAttribute(positions, 3)
-    );
-
+    emberGeometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     const emberMaterial = new THREE.PointsMaterial({
       color: 0xff6a1e,
-      size: 0.12,
+      size: 0.16,
       transparent: true,
-      opacity: 0.92,
+      opacity: 0.96,
       depthWrite: false,
       blending: THREE.AdditiveBlending
     });
-
     this.riftEmbers = new THREE.Points(emberGeometry, emberMaterial);
     this.riftEmbers.position.y = 0.03;
     this.riftGroup.add(this.riftEmbers);
@@ -451,14 +464,9 @@ export class World {
     const trunkGeometry = new THREE.CylinderGeometry(0.12, 0.28, 8.5, 6);
     const branchGeometry = new THREE.CylinderGeometry(0.035, 0.075, 2.4, 5);
     this.disposables.push(trunkGeometry, branchGeometry);
-
     for (let i = 0; i < 34; i += 1) {
       const tree = new THREE.Group();
-      tree.position.set(
-        THREE.MathUtils.randFloat(-32, -19.2),
-        0,
-        THREE.MathUtils.randFloat(-12, 12)
-      );
+      tree.position.set(THREE.MathUtils.randFloat(-32, -19.2), 0, THREE.MathUtils.randFloat(-12, 12));
       tree.scale.setScalar(THREE.MathUtils.randFloat(0.78, 1.48));
       this.scene.add(tree);
 
@@ -472,9 +480,7 @@ export class World {
       for (let b = 0; b < count; b += 1) {
         const branch = new THREE.Mesh(branchGeometry, this.materials.forest);
         branch.position.y = THREE.MathUtils.randFloat(4, 7.4);
-        branch.rotation.z =
-          THREE.MathUtils.randFloat(0.75, 1.2) *
-          (Math.random() > 0.5 ? 1 : -1);
+        branch.rotation.z = THREE.MathUtils.randFloat(0.75, 1.2) * (Math.random() > 0.5 ? 1 : -1);
         branch.rotation.y = Math.random() * Math.PI;
         branch.castShadow = true;
         tree.add(branch);
@@ -491,51 +497,44 @@ export class World {
   createGroundFog() {
     const texture = makeFogTexture();
     const fogData = [
-      [-18, 5.2, 16, 4.0, 0.105],
-      [-8, 2.1, 15, 3.7, 0.080],
-      [3, 4.6, 18, 4.4, 0.092],
-      [13, 1.4, 14, 3.5, 0.070],
-      [22, 5.4, 16, 4.0, 0.065]
+      [-20, 5.8, 20, 5.4, 0.16],
+      [-11, 2.2, 18, 4.8, 0.11],
+      [-1, -1.5, 20, 5.4, 0.13],
+      [10, 2.8, 18, 4.9, 0.10],
+      [21, -0.8, 17, 4.6, 0.09],
+      [2, 5.8, 24, 5.6, 0.12],
+      [14, 5.8, 19, 5.0, 0.08]
     ];
 
     fogData.forEach(([x, z, sx, sz, speed], index) => {
       const geometry = new THREE.PlaneGeometry(sx, sz);
       geometry.rotateX(-Math.PI / 2);
-
       const material = new THREE.MeshBasicMaterial({
         map: texture,
-        color: index % 2 === 0 ? 0x9ba7b3 : 0xb0b7bd,
+        color: index % 2 === 0 ? 0xb9c2ca : 0xd2d8df,
         transparent: true,
-        opacity: 0.09 + index * 0.007,
+        opacity: 0.15 + index * 0.008,
         depthWrite: false,
         side: THREE.DoubleSide,
         fog: true
       });
-
       const fog = new THREE.Mesh(geometry, material);
-      fog.position.set(x, 0.13 + index * 0.008, z);
+      fog.position.set(x, 0.2 + index * 0.008, z);
       fog.renderOrder = 4;
       this.scene.add(fog);
-      this.groundFog.push({
-        mesh: fog,
-        speed,
-        phase: index * 1.7,
-        baseZ: z
-      });
-
+      this.groundFog.push({ mesh: fog, speed, phase: index * 1.7, baseZ: z });
       this.disposables.push(geometry, material);
     });
-
     this.disposables.push(texture);
   }
 
   loadManor() {
     const model = this.assets.createManorClone();
     AssetLibrary.prepareModel(model);
-    AssetLibrary.fitModelToHeight(model, 10.5, Math.PI);
+    AssetLibrary.fitModelToHeight(model, 13.8, Math.PI * 0.86);
 
     const holder = new THREE.Group();
-    holder.position.set(16.2, 0, 0);
+    holder.position.set(20.8, 0, -1.1);
     holder.add(model);
     this.scene.add(holder);
 
@@ -549,9 +548,9 @@ export class World {
   }
 
   createBraziers() {
-    for (const z of [-4.2, 4.2]) {
+    for (const z of [-4.6, 4.6]) {
       const group = new THREE.Group();
-      group.position.set(this.manorBarrierX - 1.1, 0, z);
+      group.position.set(this.manorBarrierX - 1.0, 0, z);
       this.scene.add(group);
 
       const standGeometry = new THREE.CylinderGeometry(0.18, 0.3, 1.2, 10);
@@ -570,26 +569,16 @@ export class World {
       const light = new THREE.PointLight(0xff5516, 10, 8, 2);
       light.position.y = 1.42;
       group.add(light);
-
-      this.flames.push({
-        flame,
-        light,
-        phase: Math.random() * Math.PI * 2
-      });
+      this.flames.push({ flame, light, phase: Math.random() * Math.PI * 2 });
     }
   }
 
   createTurretMounts() {
-    const y = Math.min(this.manorBounds.max.y * 0.62, 6.4);
-    const zPositions = [-2.8, 0, 2.8];
-
+    const y = Math.min(this.manorBounds.max.y * 0.56, 6.9);
+    const zPositions = [-2.8, -0.2, 2.5];
     for (let i = 0; i < 3; i += 1) {
       const group = new THREE.Group();
-      group.position.set(
-        this.manorBarrierX + 0.25,
-        y + i * 0.35,
-        zPositions[i]
-      );
+      group.position.set(this.manorBarrierX + 0.18, y + i * 0.3, zPositions[i]);
       group.visible = false;
       this.scene.add(group);
 
@@ -609,13 +598,7 @@ export class World {
       const light = new THREE.PointLight(0xff4f16, 6, 5, 2);
       light.position.copy(orb.position);
       group.add(light);
-
-      this.turretMounts.push({
-        group,
-        orb,
-        light,
-        phase: i * 1.2
-      });
+      this.turretMounts.push({ group, orb, light, phase: i * 1.2 });
     }
   }
 
@@ -627,11 +610,7 @@ export class World {
 
   getTurretOrigin(index) {
     const mount = this.turretMounts[index];
-
-    if (!mount) {
-      return new THREE.Vector3(this.manorBarrierX, 4.5, 0);
-    }
-
+    if (!mount) return new THREE.Vector3(this.manorBarrierX, 4.5, 0);
     const origin = new THREE.Vector3();
     mount.orb.getWorldPosition(origin);
     return origin;
@@ -649,25 +628,16 @@ export class World {
   findTreeCollision(position) {
     for (const tree of this.treeColliders) {
       if (position.y > tree.height) continue;
-
       const dx = position.x - tree.position.x;
       const dz = position.z - tree.position.z;
-
-      if (dx * dx + dz * dz <= tree.radius * tree.radius) {
-        return tree;
-      }
+      if (dx * dx + dz * dz <= tree.radius * tree.radius) return tree;
     }
-
     return null;
   }
 
   update(elapsed, dt = 0) {
     this.flames.forEach(({ flame, light, phase }) => {
-      const pulse =
-        0.9 +
-        Math.sin(elapsed * 8 + phase) * 0.12 +
-        Math.sin(elapsed * 15 + phase) * 0.04;
-
+      const pulse = 0.9 + Math.sin(elapsed * 8 + phase) * 0.12 + Math.sin(elapsed * 15 + phase) * 0.04;
       flame.scale.set(0.9 / pulse, 1.2 * pulse, 0.9 / pulse);
       light.intensity = 9 + pulse * 2.5;
     });
@@ -681,52 +651,36 @@ export class World {
     this.skyClouds.forEach(({ sprite, speed, baseY, phase }) => {
       sprite.position.x += speed * dt;
       sprite.position.y = baseY + Math.sin(elapsed * 0.12 + phase) * 0.16;
-
-      if (sprite.position.x > 34) {
-        sprite.position.x = -34;
-      }
+      if (sprite.position.x > 34) sprite.position.x = -34;
     });
 
     this.groundFog.forEach(({ mesh, speed, phase, baseZ }) => {
       mesh.position.x += speed * dt;
       mesh.position.z = baseZ + Math.sin(elapsed * 0.17 + phase) * 0.35;
-      materialOpacityPulse(mesh.material, elapsed, phase);
-
-      if (mesh.position.x > 28) {
-        mesh.position.x = -28;
-      }
+      pulseFogOpacity(mesh.material, elapsed, phase);
+      if (mesh.position.x > 29) mesh.position.x = -29;
     });
 
     if (this.riftEmbers && this.riftEmberBase) {
       const attribute = this.riftEmbers.geometry.attributes.position;
       const array = attribute.array;
       const count = attribute.count;
-
       for (let i = 0; i < count; i += 1) {
         const baseIndex = i * 3;
         const baseY = this.riftEmberBase[baseIndex + 1];
-        const rise = (elapsed * (0.35 + (i % 7) * 0.035) + baseY) % 3.6;
-        array[baseIndex] =
-          this.riftEmberBase[baseIndex] +
-          Math.sin(elapsed * 1.8 + i) * 0.08;
+        const rise = (elapsed * (0.45 + (i % 7) * 0.04) + baseY) % 4.2;
+        array[baseIndex] = this.riftEmberBase[baseIndex] + Math.sin(elapsed * 1.8 + i) * 0.08;
         array[baseIndex + 1] = rise;
-        array[baseIndex + 2] =
-          this.riftEmberBase[baseIndex + 2] +
-          Math.cos(elapsed * 1.3 + i * 0.7) * 0.08;
+        array[baseIndex + 2] = this.riftEmberBase[baseIndex + 2] + Math.cos(elapsed * 1.3 + i * 0.7) * 0.08;
       }
-
       attribute.needsUpdate = true;
     }
 
-    this.riftLight.intensity = 48 + Math.sin(elapsed * 4.2) * 6;
+    this.riftLight.intensity = 78 + Math.sin(elapsed * 4.2) * 10;
     this.hellGlow.intensity = 33 + Math.sin(elapsed * 2.1) * 2;
   }
 
   dispose() {
     this.disposables.forEach((item) => item.dispose?.());
   }
-}
-
-function materialOpacityPulse(material, elapsed, phase) {
-  material.opacity = 0.075 + Math.sin(elapsed * 0.21 + phase) * 0.018;
 }

@@ -75,6 +75,25 @@ export class Husk {
     });
 
     this.modelRoot.add(model);
+
+    const grabGeometry = new THREE.BoxGeometry(
+      this.fast ? 2.15 : 1.95,
+      this.fast ? 5.3 : 5.0,
+      this.fast ? 2.15 : 1.95
+    );
+    const grabMaterial = new THREE.MeshBasicMaterial({
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      depthTest: false,
+      color: 0xffffff
+    });
+    this.grabCollider = new THREE.Mesh(grabGeometry, grabMaterial);
+    this.grabCollider.position.set(0, this.fast ? 2.35 : 2.2, 0);
+    this.grabCollider.userData.enemy = this;
+    this.grabCollider.renderOrder = -1000;
+    this.modelRoot.add(this.grabCollider);
+
     if (this.fast) {
       const glow = new THREE.PointLight(0xff5a1d, 1.8, 3.6, 2);
       glow.position.set(0, 1.8, 0);
@@ -304,6 +323,10 @@ export class Husk {
   dispose() {
     this.removed = true;
     this.mixer?.stopAllAction();
+    if (this.grabCollider) {
+      this.grabCollider.geometry.dispose();
+      this.grabCollider.material.dispose();
+    }
     this.scene.remove(this.group);
   }
 }
