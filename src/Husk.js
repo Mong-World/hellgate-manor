@@ -63,7 +63,22 @@ export class Husk {
     );
 
     model.traverse((object) => {
-      if (object.isMesh) object.userData.enemy = this;
+      if (!object.isMesh) return;
+      object.userData.enemy = this;
+      if (this.type === "strong" && object.material) {
+        const tintMaterial = (material) => {
+          const clone = material.clone();
+          if (clone.color) clone.color.multiply(new THREE.Color(0.72, 0.42, 0.34));
+          if ("emissive" in clone) {
+            clone.emissive = new THREE.Color(0x351208);
+            clone.emissiveIntensity = 0.45;
+          }
+          return clone;
+        };
+        object.material = Array.isArray(object.material)
+          ? object.material.map(tintMaterial)
+          : tintMaterial(object.material);
+      }
     });
     this.modelRoot.add(model);
     this.model = model;
@@ -146,7 +161,7 @@ export class Husk {
       !this.dead &&
       !this.removed &&
       this.type !== "siege" &&
-      this.state === "walking"
+      (this.state === "walking" || this.state === "attacking")
     );
   }
 

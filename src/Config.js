@@ -4,7 +4,7 @@ function makeWave(wave) {
       counts: { husk: 10, strong: 0, runner: 0, brute: 0, siege: 0 },
       maxActive: 25,
       initialDelay: 7,
-      spawnGap: 4.6,
+      spawnGap: 3.5,
       burstChance: 0,
       burstMax: 1
     };
@@ -12,29 +12,51 @@ function makeWave(wave) {
 
   if (wave === 2) {
     return {
-      counts: { husk: 14, strong: 0, runner: 0, brute: 0, siege: 0 },
+      counts: { husk: 16, strong: 0, runner: 0, brute: 0, siege: 0 },
       maxActive: 25,
-      initialDelay: 4.5,
-      spawnGap: 4.0,
-      burstChance: 0,
-      burstMax: 1
+      initialDelay: 4.2,
+      spawnGap: 2.65,
+      burstChance: 0.18,
+      burstMax: 2
     };
   }
 
   if (wave === 3) {
     return {
-      counts: { husk: 18, strong: 0, runner: 0, brute: 0, siege: 0 },
+      counts: { husk: 20, strong: 0, runner: 0, brute: 0, siege: 0 },
       maxActive: 25,
-      initialDelay: 4,
-      spawnGap: 3.55,
-      burstChance: 0,
-      burstMax: 1
+      initialDelay: 3.5,
+      spawnGap: 2.05,
+      burstChance: 0.28,
+      burstMax: 2
     };
   }
 
-  const husk = Math.round(15 + wave * 1.12);
+  if (wave === 4) {
+    return {
+      counts: { husk: 22, strong: 0, runner: 4, brute: 0, siege: 0 },
+      maxActive: 25,
+      initialDelay: 3.0,
+      spawnGap: 1.65,
+      burstChance: 0.38,
+      burstMax: 2
+    };
+  }
+
+  if (wave === 5) {
+    return {
+      counts: { husk: 28, strong: 0, runner: 6, brute: 0, siege: 0 },
+      maxActive: 25,
+      initialDelay: 2.7,
+      spawnGap: 1.30,
+      burstChance: 0.50,
+      burstMax: 3
+    };
+  }
+
+  const husk = Math.round(20 + wave * 1.18);
   const runner = wave >= 4
-    ? Math.min(22, Math.max(2, Math.floor((wave - 2) * 0.46)))
+    ? Math.min(22, Math.max(3, Math.floor((wave - 1) * 0.48)))
     : 0;
   const strong = wave >= 8
     ? Math.min(19, Math.max(1, Math.floor((wave - 6) * 0.42)))
@@ -49,14 +71,13 @@ function makeWave(wave) {
   return {
     counts: { husk, strong, runner, brute, siege },
     maxActive: 25,
-    initialDelay: wave <= 5 ? 3.8 : 2.8,
-    spawnGap: Math.max(0.82, 3.45 - (wave - 4) * 0.058),
-    burstChance: Math.min(0.66, Math.max(0, (wave - 5) * 0.018)),
+    initialDelay: wave <= 8 ? 2.4 : 1.8,
+    spawnGap: Math.max(0.58, 1.25 - (wave - 6) * 0.014),
+    burstChance: Math.min(0.78, 0.50 + (wave - 6) * 0.007),
     burstMax:
-      wave < 8 ? 1 :
-      wave < 15 ? 2 :
-      wave < 25 ? 3 :
-      wave < 38 ? 4 : 5
+      wave < 10 ? 3 :
+      wave < 18 ? 4 :
+      wave < 30 ? 5 : 6
   };
 }
 
@@ -152,15 +173,15 @@ export const CONFIG = Object.freeze({
     },
     runner: {
       asset: "runner",
-      height: 3.25,
+      height: 1.62,
       rotationY: Math.PI / 2,
       speed: [7.8, 8.9],
       animationSpeed: [1.1, 1.55],
       reward: 10,
       attackDamage: 13,
       attackInterval: 1.15,
-      grabBox: [1.48, 3.7, 1.55],
-      grabY: 1.65,
+      grabBox: [1.05, 2.15, 1.12],
+      grabY: 0.92,
       throwScale: 1.05,
       durability: 1,
       convertible: true
@@ -199,8 +220,8 @@ export const CONFIG = Object.freeze({
   },
 
   enemy: {
-    spawnXMin: -29.2,
-    spawnXMax: -27.8,
+    spawnXMin: -24.8,
+    spawnXMax: -23.8,
     groundDeathScreenFraction: 0.5,
     hardSurfaceKillSpeed: 10.5,
     treeKillSpeed: 10.5,
@@ -215,12 +236,12 @@ export const CONFIG = Object.freeze({
   },
 
   pool: {
-    husk: 12,
-    strong: 8,
-    runner: 10,
-    brute: 7,
+    husk: 25,
+    strong: 19,
+    runner: 22,
+    brute: 10,
     siege: 5,
-    effects: 32
+    effects: 36
   },
 
   waves

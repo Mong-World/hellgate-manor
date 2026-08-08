@@ -245,18 +245,44 @@ export class EffectPool {
   }
 
   preWarm() {
-    const hidden = new THREE.Vector3(0, -40, 0);
-    const target = new THREE.Vector3(0, -39, 0);
-    this.souls[0].startEffect(hidden, target);
-    this.ashes[0].startEffect(hidden, true);
-    this.rings[0].startEffect(hidden, 8, 0xff7a34);
-    this.update(1 / 30);
-    this.souls[0].active = false;
-    this.souls[0].group.visible = false;
-    this.ashes[0].active = false;
-    this.ashes[0].points.visible = false;
-    this.rings[0].active = false;
-    this.rings[0].mesh.visible = false;
+    // Keep every pooled effect visible for the loading-screen render pass.
+    // This forces each geometry/material buffer onto the GPU before gameplay.
+    this.souls.forEach((effect, index) => {
+      const x = -16 + (index % 9) * 4;
+      const z = -4 + (index % 5) * 2;
+      effect.startEffect(new THREE.Vector3(x, 1.2, z), new THREE.Vector3(x + 1.5, 3.0, z));
+    });
+    this.ashes.forEach((effect, index) => {
+      const x = -15 + (index % 8) * 4;
+      const z = -3.5 + (index % 4) * 2.2;
+      effect.startEffect(new THREE.Vector3(x, 0.8, z), index % 2 === 0);
+    });
+    this.rings.forEach((effect, index) => {
+      const x = -14 + (index % 8) * 4;
+      const z = -3 + (index % 4) * 2;
+      effect.startEffect(new THREE.Vector3(x, 0.05, z), 8 + (index % 4), index % 2 ? 0xff7a34 : 0xff3b12);
+    });
+  }
+
+  finishPreWarm() {
+    this.souls.forEach((effect) => {
+      effect.active = false;
+      effect.finished = false;
+      effect.group.visible = false;
+      effect.onComplete = null;
+    });
+    this.ashes.forEach((effect) => {
+      effect.active = false;
+      effect.finished = false;
+      effect.points.visible = false;
+      effect.material.opacity = 0;
+    });
+    this.rings.forEach((effect) => {
+      effect.active = false;
+      effect.finished = false;
+      effect.mesh.visible = false;
+      effect.material.opacity = 0;
+    });
   }
 
   dispose() {

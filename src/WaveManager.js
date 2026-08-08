@@ -85,6 +85,10 @@ export class WaveManager {
     return TYPES.map((type) => this.pools[type][0]).filter(Boolean);
   }
 
+  getAllPooledEnemies() {
+    return Object.values(this.pools).flat();
+  }
+
   acquireEnemy(type, id, position) {
     const pool = this.pools[type];
     const enemy = pool.pop() ?? this.createEnemy({ id, type, position });

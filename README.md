@@ -154,3 +154,17 @@ The death/soul path no longer creates new soul/ash/impact geometry on the first 
 ## Portals build
 
 The GitHub Action builds `main`, copies `assets/`, `fonts/`, and `sounds/` into `dist/`, then force-publishes the result to `portals-build`.
+
+
+## v1.2 playtest corrections
+
+- Added a post-wave results screen before upgrades with Souls collected, demons destroyed, manor damage, manor condition and a visible GAME DATA SAVED confirmation.
+- Removed the total-wave count from the start screen and HUD.
+- Made Souls substantially more prominent in both the HUD and upgrade screen.
+- Increased early-wave density: Wave 5 now deliberately sustains several enemies at once and later waves use stronger burst spawning up to the 25-active cap.
+- Running Husk visual size reduced to roughly half its previous target height and its grab collider reduced to match.
+- Enemies attacking the manor remain grabbable; fallen/recovering enemies remain protected from grabs until walking again.
+- Soul Extraction moved onto the manor roof. Dropping a convertible demon over the roof now ignores battlefield depth (Z), making conversion reliable from any lane.
+- Hell Gate fissure moved into the visible left battlefield, enlarged, brightened and given animated flame tongues; spawn positions now emerge immediately behind it.
+- Startup warm-up now renders every pooled enemy clone and every pooled soul/ash/ring effect during the loading screen. Pool sizes cover the configured per-type maxima to avoid runtime GLB construction during normal play.
+- Body impact remains at 60% of its old volume with randomized pitch on each valid playback.

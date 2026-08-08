@@ -357,7 +357,7 @@ export class World {
     this.scene.add(this.hellGlow);
 
     this.riftLight = new THREE.PointLight(0xff3a08, 98, 32, 1.5);
-    this.riftLight.position.set(-24.4, 2.6, 8.8);
+    this.riftLight.position.set(-23.0, 2.8, 0.0);
     this.scene.add(this.riftLight);
   }
 
@@ -400,8 +400,65 @@ export class World {
 
   createHellRift() {
     this.riftGroup = new THREE.Group();
-    this.riftGroup.position.set(-24.6, 0.025, 8.8);
+    this.riftGroup.position.set(-23.0, 0.025, 0.0);
     this.scene.add(this.riftGroup);
+
+    // A large, continuous glowing fissure makes the Hell Gate readable from the game camera.
+    const fissurePoints = [
+      new THREE.Vector3(-0.25, 0.04, -6.0),
+      new THREE.Vector3(0.32, 0.05, -4.2),
+      new THREE.Vector3(-0.18, 0.04, -2.3),
+      new THREE.Vector3(0.42, 0.05, -0.4),
+      new THREE.Vector3(-0.28, 0.04, 1.5),
+      new THREE.Vector3(0.30, 0.05, 3.5),
+      new THREE.Vector3(-0.08, 0.04, 5.7)
+    ];
+    const fissureCurve = new THREE.CatmullRomCurve3(fissurePoints);
+    const fissureOuterGeometry = new THREE.TubeGeometry(fissureCurve, 42, 0.42, 8, false);
+    const fissureOuter = new THREE.Mesh(fissureOuterGeometry, this.materials.crater);
+    this.riftGroup.add(fissureOuter);
+    const fissureGeometry = new THREE.TubeGeometry(fissureCurve, 42, 0.19, 8, false);
+    const fissure = new THREE.Mesh(fissureGeometry, this.materials.riftHot);
+    fissure.position.y = 0.035;
+    this.riftGroup.add(fissure);
+    this.disposables.push(fissureOuterGeometry, fissureGeometry);
+
+    this.riftFlames = [];
+    [-5.0, -3.2, -1.4, 0.5, 2.5, 4.5].forEach((z, index) => {
+      const flameGroup = new THREE.Group();
+      flameGroup.position.set(index % 2 ? 0.20 : -0.16, 0.15, z);
+      this.riftGroup.add(flameGroup);
+
+      const outerGeometry = new THREE.ConeGeometry(0.34 + (index % 3) * 0.05, 1.55 + (index % 2) * 0.45, 9);
+      const outerMaterial = new THREE.MeshBasicMaterial({
+        color: 0xff4b0d,
+        transparent: true,
+        opacity: 0.72,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+      const outer = new THREE.Mesh(outerGeometry, outerMaterial);
+      outer.position.y = 0.72;
+      flameGroup.add(outer);
+
+      const innerGeometry = new THREE.ConeGeometry(0.18, 1.05, 8);
+      const innerMaterial = new THREE.MeshBasicMaterial({
+        color: 0xffc05c,
+        transparent: true,
+        opacity: 0.88,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+      const inner = new THREE.Mesh(innerGeometry, innerMaterial);
+      inner.position.y = 0.62;
+      flameGroup.add(inner);
+
+      const light = new THREE.PointLight(0xff4710, 10, 6, 2);
+      light.position.y = 0.8;
+      flameGroup.add(light);
+      this.riftFlames.push({ group: flameGroup, outer, inner, light, phase: index * 0.83 });
+      this.disposables.push(outerGeometry, outerMaterial, innerGeometry, innerMaterial);
+    });
 
     const breaches = [
       [0, 0.8, 2.2, 0.84],
@@ -509,7 +566,13 @@ export class World {
     this.disposables.push(trunkGeometry, branchGeometry);
     for (let i = 0; i < 34; i += 1) {
       const tree = new THREE.Group();
-      tree.position.set(THREE.MathUtils.randFloat(-32, -19.2), 0, THREE.MathUtils.randFloat(-12, 12));
+      let treeX;
+      let treeZ;
+      do {
+        treeX = THREE.MathUtils.randFloat(-32, -19.2);
+        treeZ = THREE.MathUtils.randFloat(-12, 12);
+      } while (treeX > -26.0 && treeX < -20.2 && Math.abs(treeZ) < 6.4);
+      tree.position.set(treeX, 0, treeZ);
       tree.scale.setScalar(THREE.MathUtils.randFloat(0.78, 1.48));
       this.scene.add(tree);
 
@@ -822,18 +885,19 @@ export class World {
   createUpgradeVisuals() {
     // Soul extraction: one glowing fire/rune area, with room for two simultaneous conversions.
     const extraction = new THREE.Group();
-    extraction.position.set(this.manorBarrierX - 3.4, 0.06, -3.55);
+    const extractionY = Math.min(this.manorBounds.max.y * 0.68, 8.4);
+    extraction.position.set(this.manorBarrierX + 2.15, extractionY, -0.35);
     extraction.visible = false;
     this.scene.add(extraction);
     this.extractionGroup = extraction;
     this.extractionCentre.copy(extraction.position);
 
-    const discGeometry = new THREE.CircleGeometry(2.2, 48);
+    const discGeometry = new THREE.CircleGeometry(1.65, 48);
     discGeometry.rotateX(-Math.PI / 2);
     const discMaterial = new THREE.MeshBasicMaterial({
       color: 0xff4a10,
       transparent: true,
-      opacity: 0.22,
+      opacity: 0.32,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
       side: THREE.DoubleSide
@@ -841,7 +905,7 @@ export class World {
     const disc = new THREE.Mesh(discGeometry, discMaterial);
     extraction.add(disc);
 
-    const ringGeometry = new THREE.TorusGeometry(1.75, 0.07, 8, 48);
+    const ringGeometry = new THREE.TorusGeometry(1.45, 0.08, 8, 48);
     ringGeometry.rotateX(Math.PI / 2);
     const ringMaterial = new THREE.MeshBasicMaterial({
       color: 0xffb35d,
@@ -854,7 +918,7 @@ export class World {
     ring.position.y = 0.04;
     extraction.add(ring);
 
-    const innerRingGeometry = new THREE.TorusGeometry(1.15, 0.035, 7, 40);
+    const innerRingGeometry = new THREE.TorusGeometry(0.92, 0.04, 7, 40);
     innerRingGeometry.rotateX(Math.PI / 2);
     const innerRingMaterial = ringMaterial.clone();
     innerRingMaterial.color.setHex(0xff6324);
@@ -874,7 +938,7 @@ export class World {
         depthWrite: false
       });
       const flame = new THREE.Mesh(geometry, material);
-      flame.position.set(Math.cos(angle) * 1.72, 0.26, Math.sin(angle) * 1.72);
+      flame.position.set(Math.cos(angle) * 1.38, 0.30, Math.sin(angle) * 1.38);
       extraction.add(flame);
       extractionFlames.push({ flame, phase: i * 0.8 });
       this.disposables.push(geometry, material);
@@ -1028,13 +1092,18 @@ export class World {
 
   isInsideExtractionZone(position) {
     if (!this.extractionGroup?.visible) return false;
+    // Conversion is intentionally depth-independent: if the player releases a
+    // convertible demon over the manor roof area, it snaps into the extractor
+    // regardless of how close/far along the battlefield Z axis it was dragged.
     const dx = position.x - this.extractionCentre.x;
-    const dz = position.z - this.extractionCentre.z;
-    return dx * dx + dz * dz <= 2.35 * 2.35;
+    const dy = position.y - this.extractionCentre.y;
+    return dx >= -3.4 && dx <= 3.2 && dy >= -3.0 && dy <= 4.8;
   }
 
   getExtractionPosition(slotIndex = 0) {
-    return this.extractionCentre.clone().add(new THREE.Vector3(0, 0, slotIndex === 0 ? -0.45 : 0.45));
+    return this.extractionCentre.clone().add(
+      new THREE.Vector3(slotIndex === 0 ? -0.34 : 0.34, 0.25, slotIndex === 0 ? -0.30 : 0.30)
+    );
   }
 
   pulseOccultEffect() {
@@ -1172,7 +1241,15 @@ export class World {
     }
     this.occultPulseTimer = Math.max(0, this.occultPulseTimer - dt);
 
-    this.riftLight.intensity = 78 + Math.sin(elapsed * 4.2) * 10;
+    this.riftFlames?.forEach(({ group, outer, inner, light, phase }) => {
+      const pulse = 0.92 + Math.sin(elapsed * 7.5 + phase) * 0.16 + Math.sin(elapsed * 13 + phase) * 0.05;
+      group.position.x += Math.sin(elapsed * 1.6 + phase) * dt * 0.015;
+      outer.scale.set(0.9 / pulse, 1.15 * pulse, 0.9 / pulse);
+      inner.scale.set(0.94 / pulse, 1.08 * pulse, 0.94 / pulse);
+      light.intensity = 8.5 + pulse * 4.5;
+    });
+
+    this.riftLight.intensity = 92 + Math.sin(elapsed * 4.2) * 14;
     this.hellGlow.intensity = 33 + Math.sin(elapsed * 2.1) * 2;
   }
 

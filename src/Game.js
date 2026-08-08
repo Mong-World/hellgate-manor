@@ -60,6 +60,8 @@ export class Game {
       onPurchase: (type) => this.purchase(type),
       onAssign: (system, delta) => this.assignBoundSoul(system, delta),
       onDeniedPurchase: () => this.playDeniedPurchase(),
+      onResultsContinue: () => this.openIntermission(),
+      onSave: () => this.manualSave(),
       onContinue: () => this.continueAfterIntermission(),
       onRetry: () => this.retryWave(),
       onRestart: () => this.beginNewGame()
@@ -182,54 +184,63 @@ export class Game {
   }
 
   async preWarmEverything() {
-    const samples = this.waveManager.getWarmupSamples();
-    const positions = [-10, -5, 0, 5, 10];
-    samples.forEach((enemy, index) => {
-      enemy.resetForSpawn(-(index + 1), new THREE.Vector3(positions[index] ?? 0, 0, 0));
-      enemy.preWarmAllActions();
-    });
-
+    const allEnemies = this.waveManager.getAllPooledEnemies();
     this.effectPool.preWarm();
     this.defence.preWarm();
     this.world.setUpgradeState({ extraction: true, demolition: true, undercroft: true, occult: true, fortifyLevel: 10 });
     this.world.setTurretLevel(3);
 
-    // Render the actual first-use materials/effects while the loading screen is covering the game.
-    for (let frame = 0; frame < 6; frame += 1) {
+    // Warm every pooled enemy clone in small visible batches. This is slower at
+    // startup by design, but avoids first-spawn GLB/skinning/animation hitches.
+    const batchSize = 8;
+    let warmed = 0;
+    for (let start = 0; start < allEnemies.length; start += batchSize) {
+      const batch = allEnemies.slice(start, start + batchSize);
+      batch.forEach((enemy, index) => {
+        const col = index % 4;
+        const row = Math.floor(index / 4);
+        enemy.resetForSpawn(-(start + index + 1), new THREE.Vector3(-12 + col * 7, 0, -3 + row * 5.5));
+        enemy.preWarmAllActions();
+      });
+
+      for (let frame = 0; frame < 2; frame += 1) {
+        const dt = 1 / 30;
+        batch.forEach((enemy) => enemy.update(dt, frame * dt, false, this.world.manorBarrierX));
+        this.effectPool.update(dt);
+        this.defence.updateProjectiles(dt);
+        this.defence.updateImpacts(dt);
+        this.world.update((start + frame) * dt, dt);
+        this.renderer.render(this.scene, this.camera);
+        await this.waitForFrame();
+      }
+
+      batch.forEach((enemy) => enemy.deactivateForPool());
+      warmed += batch.length;
+      this.setLoadingProgress(78 + (warmed / Math.max(allEnemies.length, 1)) * 13);
+    }
+
+    this.setLoadingProgress(92);
+    // Render the complete pooled effect set before hiding it. Unlike the older
+    // warm-up this actually sends every soul/ash/ring material to the GPU.
+    for (let frame = 0; frame < 5; frame += 1) {
       const dt = 1 / 30;
-      samples.forEach((enemy) => enemy.update(dt, frame * dt, false, this.world.manorBarrierX));
       this.effectPool.update(dt);
       this.defence.updateProjectiles(dt);
       this.defence.updateImpacts(dt);
       this.world.update(frame * dt, dt);
       this.renderer.render(this.scene, this.camera);
-      this.setLoadingProgress(80 + frame * 2.3);
       await this.waitForFrame();
     }
 
-    this.setLoadingProgress(94);
+    this.setLoadingProgress(96);
     if (typeof this.renderer.compileAsync === "function") {
       await this.renderer.compileAsync(this.scene, this.camera);
     } else {
       this.renderer.compile(this.scene, this.camera);
     }
 
-    // Exercise a complete pooled death/soul path once so the first real kill does no setup work.
-    const warmStart = new THREE.Vector3(-2, 1.2, 0);
-    const warmTarget = new THREE.Vector3(2, 3, 0);
-    this.effectPool.ash(warmStart, true);
-    this.effectPool.ring(new THREE.Vector3(-2, 0.05, 0), 11, 0xff7a34);
-    this.effectPool.soul(warmStart, warmTarget);
-    for (let frame = 0; frame < 8; frame += 1) {
-      this.effectPool.update(1 / 30);
-      this.renderer.render(this.scene, this.camera);
-      await this.waitForFrame();
-    }
-
-    samples.forEach((enemy) => enemy.deactivateForPool());
-    this.waveManager.pooledEnemies = new Set(
-      Object.values(this.waveManager.pools).flat()
-    );
+    this.effectPool.finishPreWarm();
+    this.waveManager.pooledEnemies = new Set(Object.values(this.waveManager.pools).flat());
     this.defence.projectiles.slice().forEach((projectile) => this.defence.releaseArrow(projectile));
     this.defence.impacts.slice().forEach((impact) => {
       impact.active = false;
@@ -319,8 +330,10 @@ export class Game {
       state.waveIndex = THREE.MathUtils.clamp(resumeWaveIndex, 0, CONFIG.waves.length - 1);
       localStorage.setItem(SAVE_KEY, JSON.stringify(state));
       this.ui.setHasSave(true);
+      return true;
     } catch (error) {
       console.warn("Save could not be written.", error);
+      return false;
     }
   }
 
@@ -364,7 +377,7 @@ export class Game {
       const started = this.waveManager.startExtraction(
         enemy,
         CONFIG.extraction.duration,
-        slot === 0 ? -0.22 : 0.22
+        0
       );
       if (started) {
         this.audio.play("ash", { volume: 0.28, pitchMin: 0.75, pitchMax: 0.9 });
@@ -377,7 +390,7 @@ export class Game {
   }
 
   handleEnemyExtracted(enemy) {
-    const start = this.world.extractionCentre.clone().add(new THREE.Vector3(0, 2.8, 0));
+    const start = enemy?.position?.clone?.() ?? this.world.extractionCentre.clone().add(new THREE.Vector3(0, 2.8, 0));
     const target = new THREE.Vector3(this.world.manorBarrierX + 1.3, 4.3, 0);
     this.effectPool.ash(start, true);
     this.effectPool.soul(start, target, () => {
@@ -454,7 +467,12 @@ export class Game {
     this.grabSystem.setEnabled(false);
     this.audio.setMusicLevel(0.22, 0.45);
 
-    // Bound-soul systems do their between-wave work before the shop opens.
+    const snapshot = this.waveStartSnapshot ?? this.snapshotState();
+    const waveSouls = Math.max(0, this.souls - (snapshot.souls ?? 0));
+    const waveDeaths = Math.max(0, this.demonDeaths - (snapshot.demonDeaths ?? 0));
+    const waveDamage = Math.max(0, (snapshot.manorHealth ?? this.manorHealth) - this.manorHealth);
+
+    // Bound-soul systems do their between-wave work before the save/shop opens.
     if (this.buildings.undercroft && this.assignments.undercroft > 0) {
       const repair = this.assignments.undercroft * 8;
       this.manorHealth = Math.min(this.manorMaxHealth, this.manorHealth + repair);
@@ -475,8 +493,28 @@ export class Game {
       return;
     }
 
-    this.saveGame(this.waveIndex + 1);
+    const saved = this.saveGame(this.waveIndex + 1);
+    this.ui.setWaveResults({
+      souls: waveSouls,
+      deaths: waveDeaths,
+      damage: waveDamage,
+      health: this.manorHealth,
+      maxHealth: this.manorMaxHealth,
+      saved
+    });
+    this.ui.setMode("results");
+  }
+
+  openIntermission() {
+    if (this.ui.mode !== "results") return;
     this.ui.setMode("intermission");
+    this.syncUI();
+  }
+
+  manualSave() {
+    if (this.ui.mode !== "intermission") return;
+    const saved = this.saveGame(this.waveIndex + 1);
+    this.ui.showSaveNotice(saved);
   }
 
   getPurchaseDefinition(type) {
@@ -687,7 +725,6 @@ export class Game {
   syncUI() {
     this.ui.setHUD({
       wave: Math.min(this.waveIndex + 1, CONFIG.waves.length),
-      waveTotal: CONFIG.waves.length,
       souls: this.souls,
       health: this.manorHealth,
       maxHealth: this.manorMaxHealth,
