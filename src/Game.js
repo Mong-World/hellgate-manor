@@ -117,7 +117,9 @@ export class Game {
     await this.audio.loadAll((progress) => this.setLoadingProgress(8 + progress * 18));
 
     this.setLoadingProgress(28);
-    await this.assets.loadAll();
+    await this.assets.loadAll((progress) => {
+      this.setLoadingProgress(28 + progress * 15);
+    });
 
     this.setLoadingProgress(43);
     this.world = new World(this.scene, this.assets);

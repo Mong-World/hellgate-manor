@@ -190,3 +190,19 @@ The GitHub Action builds `main`, copies `assets/`, `fonts/`, and `sounds/` into 
 - Reworked Soul Extraction into a broad glowing roof target with two reusable vertical light-beam conversion slots. Captured demons disappear immediately and no longer hold a wave open.
 - Renamed Demolition Crypt to Hell Bomb Forge. Every 5 assigned Bound Souls produces one Hell Bomb after each wave, up to the 3-bomb cap.
 - Siege Demon now first appears at Wave 25, is roughly twice as large, and is materially darkened.
+
+
+## v1.4.1 loader hotfix
+- GLBs now load sequentially rather than all at once.
+- Each GLB is retried up to three times.
+- Responses are checked before parsing.
+- Missing optional enemy GLBs fall back safely instead of preventing startup.
+- Required Husk/Manor failures now display the exact asset error on the loading screen.
+
+
+## v1.4.2 strict asset loading
+
+- Removed all enemy-model fallbacks.
+- Every configured GLB is treated as required.
+- GLBs still load sequentially with retries for Portals reliability.
+- If any GLB fails, startup stops and the loading screen explicitly displays the failed asset filename.

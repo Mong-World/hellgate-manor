@@ -10,13 +10,66 @@ export class AssetLibrary {
     this.materialVariants = new Map();
   }
 
-  async loadAll() {
-    const entries = Object.entries(CONFIG.assets);
-    const loaded = await Promise.all(entries.map(async ([key, url]) => {
-      const gltf = await this.loader.loadAsync(url);
-      return [key, gltf];
-    }));
-    loaded.forEach(([key, gltf]) => this.assets.set(key, gltf));
+  async loadAll(onProgress = null) {
+    // Load the two core assets first, then the additional enemy models.
+    // Loading several multi-megabyte GLBs simultaneously inside Portals can
+    // occasionally fail even when every file exists, so this deliberately
+    // uses a controlled sequential loader with retries.
+    const orderedKeys = ["husk", "manor", "runner", "brute", "siege"];
+    let completed = 0;
+
+    for (const key of orderedKeys) {
+      const url = CONFIG.assets[key];
+      if (!url) continue;
+
+      try {
+        const gltf = await this.loadAssetWithRetry(key, url, 3);
+        this.assets.set(key, gltf);
+      } catch (error) {
+        const filename = url.split("/").pop() ?? url;
+        const assetError = new Error(
+          `CORE ASSET FAILED: ${filename} — ${error?.message ?? "Unknown loading error"}`
+        );
+        assetError.assetKey = key;
+        assetError.assetUrl = url;
+        assetError.assetFilename = filename;
+        throw assetError;
+      }
+
+      completed += 1;
+      onProgress?.(completed / orderedKeys.length, key);
+    }
+  }
+
+  async loadAssetWithRetry(key, url, attempts = 3) {
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      try {
+        const response = await fetch(url, { cache: attempt === 1 ? "default" : "reload" });
+        if (!response.ok) {
+          throw new Error(`${response.status} ${response.statusText}`);
+        }
+
+        const buffer = await response.arrayBuffer();
+        if (buffer.byteLength < 100) {
+          throw new Error(`File response was only ${buffer.byteLength} bytes`);
+        }
+
+        const absoluteUrl = new URL(url, window.location.href);
+        const slash = absoluteUrl.href.lastIndexOf("/");
+        const resourcePath = slash >= 0 ? absoluteUrl.href.slice(0, slash + 1) : "./";
+        return await this.loader.parseAsync(buffer, resourcePath);
+      } catch (error) {
+        lastError = error;
+        console.warn(`GLB load attempt ${attempt}/${attempts} failed for ${key}: ${url}`, error);
+        if (attempt < attempts) {
+          await new Promise((resolve) => window.setTimeout(resolve, 300 * attempt));
+        }
+      }
+    }
+
+    throw lastError ?? new Error(`Unknown GLB loading error for ${key}`);
   }
 
   getAsset(key) {
