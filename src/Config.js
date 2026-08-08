@@ -252,12 +252,31 @@ export const CONFIG = Object.freeze({
   },
 
   pool: {
-    husk: 25,
+    husk: 30,
     strong: 19,
     runner: 22,
     brute: 12,
     siege: 6,
-    effects: 40
+    effects: 44
+  },
+
+  newGamePlus: {
+    enemySpeedMultiplier: 1.14,
+    enemyAttackMultiplier: 1.20,
+    enemyAttackIntervalMultiplier: 0.94,
+    soulRewardMultiplier: 1.20,
+    waveCountMultiplier: 1.25,
+    maxActive: 30,
+    runnerWave: 5,
+    strongWave: 10,
+    bruteWave: 18,
+    siegeWave: 28
+  },
+
+  ranking: {
+    bindingMaxTarget: 150,
+    defenceDamageThresholds: [2500, 5000, 8500, 13000],
+    newGamePlusDefenceScale: 1.25
   },
 
   helpers: { round10 },

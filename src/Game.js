@@ -10,6 +10,7 @@ import { AudioManager } from "./AudioManager.js";
 import { EffectPool } from "./EffectPool.js";
 
 const SAVE_KEY = "hellgate-manor-save-v3";
+const META_KEY = "hellgate-manor-meta-v1";
 
 export class Game {
   constructor(container) {
@@ -28,6 +29,10 @@ export class Game {
     this.developerPanelOpen = false;
     this.developerPanelPreviousMode = "start";
     this.developerPanelPreviousPaused = false;
+    this.meta = this.readMeta();
+    this.endingActive = false;
+    this.endingTimer = 0;
+    this.endingDawnMusicStarted = false;
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x050609);
@@ -64,6 +69,7 @@ export class Game {
     this.ui = new UI(document.getElementById("ui-canvas"), {
       onUIClick: () => this.playUIClick(),
       onNewGame: () => this.beginNewGame(),
+      onNewGamePlus: () => this.beginNewGamePlus(),
       onContinueSave: () => this.continueSavedGame(),
       onBomb: () => this.useBomb(),
       onPause: () => this.togglePause(),
@@ -82,11 +88,13 @@ export class Game {
       onDevAddBound: (amount) => this.addDeveloperBoundSouls(amount),
       onDevUnlock: (system) => this.unlockDeveloperSystem(system),
       onDevDawn: () => this.testDeveloperDawn(),
+      onDevToggleNGPlus: () => this.toggleDeveloperNewGamePlus(),
       onDevClose: () => this.closeDeveloperPanel()
     });
 
     this.ui.setDeveloperMode(this.developerMode, this.developerWave, this.developerShop);
-    this.resetState();
+    this.ui.setMeta(this.meta);
+    this.resetState({ newGamePlus: false });
     this.onResize = this.onResize.bind(this);
     this.onKeyDown = this.onKeyDown.bind(this);
     this.animate = this.animate.bind(this);
@@ -94,7 +102,8 @@ export class Game {
     window.addEventListener("keydown", this.onKeyDown);
   }
 
-  resetState() {
+  resetState({ newGamePlus = false } = {}) {
+    this.newGamePlus = !!newGamePlus;
     this.waveIndex = 0;
     this.souls = 0;
     this.manorHealth = CONFIG.manor.startHealth;
@@ -119,6 +128,10 @@ export class Game {
     };
     this.waveStartSnapshot = null;
     this.continuesUsed = 0;
+    this.totalManorDamageTaken = 0;
+    this.endingActive = false;
+    this.endingTimer = 0;
+    this.endingDawnMusicStarted = false;
     this.paused = false;
   }
 
@@ -141,6 +154,7 @@ export class Game {
     this.setLoadingProgress(43);
     this.world = new World(this.scene, this.assets);
     await this.world.load();
+    this.world.setNewGamePlusMode?.(false);
 
     this.setLoadingProgress(50);
     this.effectPool = new EffectPool(this.scene, CONFIG.pool.effects);
@@ -186,6 +200,7 @@ export class Game {
 
     this.applyUpgradeState();
     this.syncUI();
+    this.ui.setMeta(this.meta);
     this.ui.setHasSave(this.developerMode ? false : this.hasSave());
     this.ui.setMode("start");
     this.running = true;
@@ -214,6 +229,8 @@ export class Game {
     this.defence.preWarm();
     this.world.setUpgradeState({ extraction: true, extractionLevel: 3, demolition: true, undercroft: true, occult: true, fortifyLevel: 10 });
     this.world.setTurretLevel(3);
+    this.world.setNewGamePlusMode?.(true);
+    this.world.createDawnBirds?.();
     this.world.triggerOccultStrike?.(new THREE.Vector3(-3, 0, 0));
 
     // Warm every pooled enemy clone in small visible batches. This is slower at
@@ -274,6 +291,7 @@ export class Game {
     });
     this.defence.impacts = [];
     this.world.setTurretLevel(0);
+    this.world.setNewGamePlusMode?.(false);
     this.applyUpgradeState();
     this.renderer.render(this.scene, this.camera);
     this.setLoadingProgress(98);
@@ -292,17 +310,27 @@ export class Game {
   }
 
   async beginNewGame() {
+    return this.beginFreshGame(false);
+  }
+
+  async beginNewGamePlus() {
+    if (!this.meta.ngPlusUnlocked && !this.developerMode) return;
+    return this.beginFreshGame(true);
+  }
+
+  async beginFreshGame(newGamePlus = false) {
     if (this.startingGame) return;
     this.startingGame = true;
     await this.audio.unlock();
+    this.resetState({ newGamePlus });
+    this.world.setNewGamePlusMode?.(this.newGamePlus);
     this.world.resetNight?.();
-    this.resetState();
     if (!this.developerMode) this.clearSave();
 
     if (this.developerMode) {
       this.waveIndex = this.developerWave - 1;
       this.souls = 50000;
-      this.boundSouls = 120;
+      this.boundSouls = 160;
       this.manorMaxHealth = 5000;
       this.manorHealth = 5000;
       if (this.developerShop) {
@@ -325,13 +353,14 @@ export class Game {
     if (this.startingGame) return;
     this.startingGame = true;
     await this.audio.unlock();
-    this.world.resetNight?.();
     const save = this.readSave();
     if (!save) {
       this.startingGame = false;
       return this.beginNewGame();
     }
     this.restoreState(save);
+    this.world.setNewGamePlusMode?.(this.newGamePlus);
+    this.world.resetNight?.();
     this.applyUpgradeState();
     this.startCurrentWave();
     this.startingGame = false;
@@ -349,6 +378,8 @@ export class Game {
       fortifyLevel: this.fortifyLevel,
       extractionLevel: this.extractionLevel,
       continuesUsed: this.continuesUsed,
+      totalManorDamageTaken: this.totalManorDamageTaken,
+      newGamePlus: this.newGamePlus,
       buildings: { ...this.buildings },
       assignments: { ...this.assignments }
     };
@@ -375,9 +406,52 @@ export class Game {
       CONFIG.extraction.maxLevel
     );
     this.continuesUsed = THREE.MathUtils.clamp(Number(data.continuesUsed) || 0, 0, 3);
+    this.totalManorDamageTaken = Math.max(0, Number(data.totalManorDamageTaken) || 0);
+    this.newGamePlus = !!data.newGamePlus;
     this.buildings = { ...this.buildings, ...(data.buildings ?? {}) };
     this.assignments = { ...this.assignments, ...(data.assignments ?? {}) };
     this.normaliseAssignments();
+  }
+
+  readMeta() {
+    try {
+      const raw = localStorage.getItem(META_KEY);
+      const parsed = raw ? JSON.parse(raw) : {};
+      return {
+        ngPlusUnlocked: !!parsed.ngPlusUnlocked,
+        bestRank: parsed.bestRank ?? null,
+        bestStars: parsed.bestStars ?? null
+      };
+    } catch {
+      return { ngPlusUnlocked: false, bestRank: null, bestStars: null };
+    }
+  }
+
+  saveMeta() {
+    try {
+      localStorage.setItem(META_KEY, JSON.stringify(this.meta));
+    } catch {
+      // Persistent meta is optional in restricted embeds.
+    }
+    this.ui?.setMeta(this.meta);
+  }
+
+  rankValue(rank) {
+    return ({ D: 1, C: 2, B: 3, A: 4, S: 5 })[rank] ?? 0;
+  }
+
+  recordCompletion(result) {
+    if (this.developerMode) return;
+    this.meta.ngPlusUnlocked = true;
+    if (!this.meta.bestRank || this.rankValue(result.finalRank) > this.rankValue(this.meta.bestRank)) {
+      this.meta.bestRank = result.finalRank;
+      this.meta.bestStars = {
+        survival: result.survival.stars,
+        defence: result.defence.stars,
+        binding: result.binding.stars
+      };
+    }
+    this.saveMeta();
   }
 
   hasSave() {
@@ -433,6 +507,7 @@ export class Game {
       : 0;
 
     this.waveStartSnapshot = this.snapshotState();
+    this.waveManager.setNewGamePlus?.(this.newGamePlus);
     this.waveManager.startWave(this.waveIndex);
     this.defence.resetCooldown();
     this.audio.setMusicLevel(0.34, 0.3);
@@ -441,7 +516,9 @@ export class Game {
     this.ui.setMode("playing");
     this.ui.showBanner(
       `WAVE ${this.waveIndex + 1}`,
-      this.waveIndex === 0 ? "THE FIRST DEMONS ARE COMING" : "DEFEND THE MANOR",
+      this.newGamePlus
+        ? "NEW GAME+ — HELL HAS RETURNED"
+        : (this.waveIndex === 0 ? "THE FIRST DEMONS ARE COMING" : "DEFEND THE MANOR"),
       2.6
     );
     this.saveGame(this.waveIndex);
@@ -479,7 +556,8 @@ export class Game {
 
   handleEnemyDeath({ enemy, position, impactStrength = 9, reason }) {
     if (!enemy) return;
-    this.souls += enemy.soulValue;
+    const rewardMultiplier = this.newGamePlus ? CONFIG.newGamePlus.soulRewardMultiplier : 1;
+    this.souls += Math.max(1, Math.round(enemy.soulValue * rewardMultiplier));
     this.demonDeaths += 1;
 
     const effectScale = enemy.type === "siege" ? 2.15 : enemy.type === "brute" ? 1.45 : 1;
@@ -531,7 +609,9 @@ export class Game {
 
   handleManorAttack(enemy) {
     if (!this.gameplayActive || this.manorHealth <= 0 || !enemy || enemy.dead) return;
+    const damageTaken = Math.min(this.manorHealth, enemy.attackDamage);
     this.manorHealth = Math.max(0, this.manorHealth - enemy.attackDamage);
+    this.totalManorDamageTaken += damageTaken;
     this.world.triggerManorDamageDust?.(enemy.position, enemy.type);
     this.audio.play("attack", {
       volume: enemy.type === "siege" ? 0.78 : enemy.type === "brute" ? 0.7 : 0.58,
@@ -564,13 +644,7 @@ export class Game {
 
     this.syncUI();
     if (this.waveIndex >= CONFIG.waves.length - 1) {
-      this.clearSave();
-      this.audio.stopLoop("soul-binding", 0.4);
-      this.audio.stopMusic(1.4);
-      this.audio.playMusic("newDawn", 1.5, false);
-      this.defence.clearForDawn?.();
-      this.world.startDawn?.();
-      this.ui.setMode("complete");
+      this.beginVictorySequence();
       return;
     }
 
@@ -584,6 +658,67 @@ export class Game {
       saved
     });
     this.ui.setMode("results");
+  }
+
+  calculateEndingResult() {
+    const survivalStars = this.continuesUsed === 0 ? 5 : this.continuesUsed === 1 ? 4 : this.continuesUsed === 2 ? 3 : 2;
+
+    const defenceScale = this.newGamePlus ? CONFIG.ranking.newGamePlusDefenceScale : 1;
+    const [five, four, three, two] = CONFIG.ranking.defenceDamageThresholds.map((value) => value * defenceScale);
+    const defenceStars = this.totalManorDamageTaken <= five ? 5
+      : this.totalManorDamageTaken <= four ? 4
+        : this.totalManorDamageTaken <= three ? 3
+          : this.totalManorDamageTaken <= two ? 2 : 1;
+
+    const bindingTarget = CONFIG.ranking.bindingMaxTarget;
+    const bindingRatio = this.boundSouls / Math.max(1, bindingTarget);
+    const bindingStars = bindingRatio >= 1 ? 5
+      : bindingRatio >= 0.80 ? 4
+        : bindingRatio >= 0.60 ? 3
+          : bindingRatio >= 0.40 ? 2 : 1;
+
+    const average = (survivalStars + defenceStars + bindingStars) / 3;
+    const finalRank = average >= 4.67 ? "S"
+      : average >= 4.0 ? "A"
+        : average >= 3.0 ? "B"
+          : average >= 2.0 ? "C" : "D";
+
+    return {
+      newGamePlus: this.newGamePlus,
+      finalRank,
+      average,
+      demonDeaths: this.demonDeaths,
+      boundSouls: this.boundSouls,
+      survival: {
+        stars: survivalStars,
+        detail: `${this.continuesUsed} CONTINUE${this.continuesUsed === 1 ? "" : "S"} USED`
+      },
+      defence: {
+        stars: defenceStars,
+        detail: `${Math.round(this.totalManorDamageTaken)} TOTAL MANOR DAMAGE`
+      },
+      binding: {
+        stars: bindingStars,
+        detail: `${this.boundSouls} / ${bindingTarget} BOUND SOULS`
+      }
+    };
+  }
+
+  beginVictorySequence() {
+    const result = this.calculateEndingResult();
+    this.recordCompletion(result);
+    this.clearSave();
+    this.gameplayActive = false;
+    this.paused = false;
+    this.endingActive = true;
+    this.endingTimer = 0;
+    this.endingDawnMusicStarted = false;
+    this.grabSystem?.setEnabled(false);
+    this.audio.stopLoop("soul-binding", 0.35);
+    this.audio.stopMusic(1.0);
+    this.defence.clearForDawn?.();
+    this.world.startVictorySequence?.();
+    this.ui.startEndingSequence(result);
   }
 
   openIntermission() {
@@ -985,12 +1120,19 @@ export class Game {
 
   testDeveloperDawn() {
     this.prepareDeveloperTransition();
-    this.audio.stopLoop("soul-binding", 0.2);
-    this.audio.stopMusic(0.5);
-    this.audio.playMusic("newDawn", 0.7, false);
-    this.defence?.clearForDawn?.();
-    this.world?.startDawn?.();
-    this.ui.setMode("complete");
+    this.demonDeaths = Math.max(this.demonDeaths, 700);
+    this.boundSouls = Math.max(this.boundSouls, CONFIG.ranking.bindingMaxTarget);
+    this.totalManorDamageTaken = Math.max(this.totalManorDamageTaken, 4200);
+    this.beginVictorySequence();
+  }
+
+  toggleDeveloperNewGamePlus() {
+    this.developerMode = true;
+    this.newGamePlus = !this.newGamePlus;
+    this.waveManager?.setNewGamePlus?.(this.newGamePlus);
+    this.world?.setNewGamePlusMode?.(this.newGamePlus);
+    this.ui.setDeveloperPanel(true, this.developerWave);
+    this.syncUI();
   }
 
   togglePause() {
@@ -1026,6 +1168,8 @@ export class Game {
         majorFortify: this.getMajorFortifyCost(),
         extractionUpgrade: this.getPurchaseDefinition("extractionUpgrade")
       },
+      newGamePlus: this.newGamePlus,
+      totalManorDamageTaken: this.totalManorDamageTaken,
       unlockWaves: Object.fromEntries(
         Object.entries(CONFIG.buildings)
           .filter(([, value]) => value.unlockWave)
@@ -1055,6 +1199,14 @@ export class Game {
     const dt = Math.min(this.clock.getDelta(), 1 / 30);
     const elapsed = this.clock.elapsedTime;
     this.ui.update(dt);
+
+    if (this.endingActive) {
+      this.endingTimer += dt;
+      if (!this.endingDawnMusicStarted && this.endingTimer >= 4.15) {
+        this.endingDawnMusicStarted = true;
+        this.audio.playMusic("newDawn", 1.4, false);
+      }
+    }
 
     const simulationActive = this.gameplayActive && !this.paused;
     if (this.waveManager) {

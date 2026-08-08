@@ -252,3 +252,16 @@ The GitHub Action builds `main`, copies `assets/`, `fonts/`, and `sounds/` into 
 - Added a desktop-only developer panel opened with Ctrl+Shift+D. Test mode leaves the normal save untouched and disables saves for the rest of that browser session.
 - Developer controls include wave selection, direct wave start, upgrade-screen testing, resource grants, system unlocks and dawn testing.
 - Added a campaign-wide maximum of three Retry Wave continues. After three retries have been used, the next Game Over only offers New Game.
+
+## v1.6.0 ending / ranking / New Game+ pass
+
+- Enlarged the battlefield ground far beyond the camera so the sky can no longer appear beneath the terrain during dawn.
+- Increased normal Hell Gate ember density and extended its orange lighting farther along the demon path.
+- Added a staged final victory sequence: Hell Gate collapse, manor defence shutdown, a short quiet beat, dawn music, 15-second sunrise, thinning fog and distant bird silhouettes.
+- Final text now appears in sequence: THE NIGHT IS OVER → YOU DEFEATED ALL THE DEMONS → HELLGATE MANOR STILL STANDS.
+- Added three five-star completion categories: Survival (continues used), Defence (campaign-wide manor damage taken), and Binding (progress toward 150 Bound Souls, enough to fully staff all Bound Soul systems).
+- Added final S/A/B/C/D rank and persistent Best Rank on the title screen.
+- Completing the campaign permanently unlocks NEW GAME+.
+- NEW GAME+ resets the run but acts as hard mode: about 25% more enemies, earlier enemy-type introductions, up to 30 active demons, faster movement, stronger/faster manor attacks and a small Soul reward increase.
+- NEW GAME+ has a much stronger Hell Gate, dark red sky glow, and a large field of animated floating embers across the scene.
+- Developer panel can toggle NEW GAME+ visuals/difficulty and TEST ENDING now runs the complete ending/ranking sequence without touching the normal save.

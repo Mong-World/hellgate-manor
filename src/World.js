@@ -257,6 +257,14 @@ export class World {
     this.dawnProgress = 0;
     this.dawnSun = null;
     this.dawnLight = null;
+    this.dawnBirds = [];
+    this.newGamePlus = false;
+    this.ngPlusEmbers = null;
+    this.ngPlusEmberBase = null;
+    this.ngPlusSkyGlow = null;
+    this.victoryClosing = false;
+    this.victoryTimer = 0;
+    this.victoryDawnStarted = false;
 
     this.createMaterials();
     this.createSky();
@@ -386,6 +394,53 @@ export class World {
       this.disposables.push(material);
     });
     this.disposables.push(cloudTexture);
+
+    // New Game+ atmosphere is created up front so switching into hard mode
+    // never causes a first-use shader hitch. It stays hidden in normal mode.
+    const ngGlowTexture = makeFogTexture();
+    const ngGlowMaterial = new THREE.SpriteMaterial({
+      map: ngGlowTexture,
+      color: 0xff2415,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      fog: false
+    });
+    this.ngPlusSkyGlow = new THREE.Sprite(ngGlowMaterial);
+    this.ngPlusSkyGlow.position.set(-18, 11.5, -34);
+    this.ngPlusSkyGlow.scale.set(38, 22, 1);
+    this.ngPlusSkyGlow.visible = false;
+    this.scene.add(this.ngPlusSkyGlow);
+
+    const ngEmberCount = 280;
+    const ngPositions = new Float32Array(ngEmberCount * 3);
+    const ngBase = new Float32Array(ngEmberCount * 3);
+    for (let i = 0; i < ngEmberCount; i += 1) {
+      const idx = i * 3;
+      const x = THREE.MathUtils.randFloat(-34, 26);
+      const y = THREE.MathUtils.randFloat(0.6, 21);
+      const z = THREE.MathUtils.randFloat(-26, 8);
+      ngPositions[idx] = ngBase[idx] = x;
+      ngPositions[idx + 1] = ngBase[idx + 1] = y;
+      ngPositions[idx + 2] = ngBase[idx + 2] = z;
+    }
+    const ngEmberGeometry = new THREE.BufferGeometry();
+    ngEmberGeometry.setAttribute("position", new THREE.BufferAttribute(ngPositions, 3));
+    const ngEmberMaterial = new THREE.PointsMaterial({
+      color: 0xff5428,
+      size: 0.13,
+      transparent: true,
+      opacity: 0.88,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      fog: false
+    });
+    this.ngPlusEmbers = new THREE.Points(ngEmberGeometry, ngEmberMaterial);
+    this.ngPlusEmbers.visible = false;
+    this.scene.add(this.ngPlusEmbers);
+    this.ngPlusEmberBase = ngBase;
+    this.disposables.push(ngGlowTexture, ngGlowMaterial, ngEmberGeometry, ngEmberMaterial);
   }
 
   createLights() {
@@ -422,10 +477,18 @@ export class World {
     this.riftLight = new THREE.PointLight(0xff3a08, 98, 32, 1.5);
     this.riftLight.position.set(-23.0, 2.8, 0.0);
     this.scene.add(this.riftLight);
+
+    // Extends the Hell Gate glow several metres along the path, so demons are
+    // rim-lit as they emerge and walk away from the crack.
+    this.riftWalkLight = new THREE.PointLight(0xff5a18, 38, 19, 1.75);
+    this.riftWalkLight.position.set(-18.4, 2.3, 0.0);
+    this.scene.add(this.riftWalkLight);
   }
 
   createGround() {
-    const geometry = new THREE.PlaneGeometry(80, 27, 64, 18);
+    // Oversized towards the camera so the background sky can never show below
+    // the terrain during the much brighter dawn scene.
+    const geometry = new THREE.PlaneGeometry(104, 80, 72, 40);
     geometry.rotateX(-Math.PI / 2);
     const positions = geometry.attributes.position;
     for (let i = 0; i < positions.count; i += 1) {
@@ -440,7 +503,7 @@ export class World {
     }
     geometry.computeVertexNormals();
     const ground = new THREE.Mesh(geometry, this.materials.earth);
-    ground.position.y = -0.05;
+    ground.position.set(0, -0.05, 8);
     ground.receiveShadow = true;
     this.scene.add(ground);
     this.disposables.push(geometry);
@@ -581,7 +644,8 @@ export class World {
     const glowTexture = makeFogTexture();
     [
       [-0.3, 2.6, 0.7, 5.2, 7.0, 0.28],
-      [0.8, 1.9, 2.3, 4.0, 5.4, 0.18]
+      [0.8, 1.9, 2.3, 4.0, 5.4, 0.18],
+      [4.3, 1.8, 0.0, 7.4, 5.6, 0.13]
     ].forEach(([x, y, z, sx, sy, opacity], index) => {
       const material = new THREE.SpriteMaterial({
         map: glowTexture,
@@ -600,13 +664,13 @@ export class World {
     });
     this.disposables.push(glowTexture);
 
-    const emberCount = 74;
+    const emberCount = 170;
     const positions = new Float32Array(emberCount * 3);
     const base = new Float32Array(emberCount * 3);
     for (let i = 0; i < emberCount; i += 1) {
-      const x = THREE.MathUtils.randFloat(-3.5, 3.0);
-      const y = THREE.MathUtils.randFloat(0.05, 4.0);
-      const z = THREE.MathUtils.randFloat(-4.8, 5.4);
+      const x = THREE.MathUtils.randFloat(-3.4, 8.0);
+      const y = THREE.MathUtils.randFloat(0.05, 5.8);
+      const z = THREE.MathUtils.randFloat(-5.8, 5.8);
       positions[i * 3] = x;
       positions[i * 3 + 1] = y;
       positions[i * 3 + 2] = z;
@@ -619,7 +683,7 @@ export class World {
     emberGeometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     const emberMaterial = new THREE.PointsMaterial({
       color: 0xff6a1e,
-      size: 0.16,
+      size: 0.145,
       transparent: true,
       opacity: 0.96,
       depthWrite: false,
@@ -1399,25 +1463,105 @@ export class World {
     mount.pivot.rotation.x = THREE.MathUtils.clamp(pitch, -0.25, 0.28);
   }
 
+  setNewGamePlusMode(enabled) {
+    this.newGamePlus = !!enabled;
+    if (this.ngPlusEmbers) this.ngPlusEmbers.visible = this.newGamePlus && !this.dawnActive;
+    if (this.ngPlusSkyGlow) {
+      this.ngPlusSkyGlow.visible = this.newGamePlus && !this.dawnActive;
+      this.ngPlusSkyGlow.material.opacity = this.newGamePlus ? 0.42 : 0;
+    }
+    if (this.riftGroup && !this.dawnActive && !this.victoryClosing) {
+      const scale = this.newGamePlus ? 1.34 : 1;
+      this.riftGroup.scale.set(scale, 1, scale);
+    }
+    this.resetNight();
+  }
+
+  startVictorySequence() {
+    if (this.victoryClosing || this.dawnActive) return;
+    this.victoryClosing = true;
+    this.victoryTimer = 0;
+    this.victoryDawnStarted = false;
+  }
+
+  createDawnBirds() {
+    if (this.dawnBirds.length > 0) {
+      this.dawnBirds.forEach((bird) => { bird.sprite.visible = true; bird.progress = -bird.delay; });
+      return;
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = 96;
+    canvas.height = 48;
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, 96, 48);
+    ctx.strokeStyle = "rgba(25,23,22,.88)";
+    ctx.lineWidth = 5;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(8, 28); ctx.quadraticCurveTo(24, 12, 45, 26);
+    ctx.moveTo(45, 26); ctx.quadraticCurveTo(66, 10, 88, 27);
+    ctx.stroke();
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    for (let i = 0; i < 5; i += 1) {
+      const material = new THREE.SpriteMaterial({ map: texture, transparent: true, opacity: 0, depthWrite: false, fog: false });
+      const sprite = new THREE.Sprite(material);
+      sprite.scale.set(1.15 + i * 0.12, 0.56 + i * 0.05, 1);
+      sprite.position.set(-28 - i * 2, 13 + (i % 3) * 1.1, -29 + i * 0.5);
+      this.scene.add(sprite);
+      this.dawnBirds.push({ sprite, delay: 1.6 + i * 0.85, progress: -(1.6 + i * 0.85), baseY: sprite.position.y });
+      this.disposables.push(material);
+    }
+    this.disposables.push(texture);
+  }
+
   resetNight() {
+    this.victoryClosing = false;
+    this.victoryTimer = 0;
+    this.victoryDawnStarted = false;
     this.dawnActive = false;
     this.dawnProgress = 0;
-    this.scene.background.set(0x050609);
-    if (this.scene.fog?.color) this.scene.fog.color.set(0x08090d);
-    if (this.riftGroup) this.riftGroup.visible = true;
+    this.scene.background.set(this.newGamePlus ? 0x120407 : 0x050609);
+    if (this.scene.fog?.color) {
+      this.scene.fog.color.set(this.newGamePlus ? 0x170609 : 0x08090d);
+      this.scene.fog.density = this.newGamePlus ? 0.020 : 0.018;
+    }
+    if (this.riftGroup) {
+      this.riftGroup.visible = true;
+      const scale = this.newGamePlus ? 1.34 : 1;
+      this.riftGroup.scale.set(scale, 1, scale);
+    }
+    this.materials.rift.opacity = 0.86;
+    this.materials.riftHot.opacity = 0.96;
+    if (this.riftEmbers?.material) this.riftEmbers.material.opacity = 0.96;
+    this.riftFlames?.forEach(({ outer, inner, light }) => {
+      outer.material.opacity = 0.72;
+      inner.material.opacity = 0.88;
+      outer.visible = true;
+      inner.visible = true;
+      light.intensity = 10;
+    });
+    if (this.ngPlusEmbers) this.ngPlusEmbers.visible = this.newGamePlus;
+    if (this.ngPlusSkyGlow) {
+      this.ngPlusSkyGlow.visible = this.newGamePlus;
+      this.ngPlusSkyGlow.material.opacity = this.newGamePlus ? 0.42 : 0;
+    }
     if (this.moon?.material) this.moon.material.opacity = 0.78;
     if (this.stars?.material) this.stars.material.opacity = 0.86;
     if (this.moonLight) this.moonLight.intensity = 3.25;
     if (this.rimLight) this.rimLight.intensity = 1.2;
     if (this.huskFillLight) this.huskFillLight.intensity = 0.75;
-    if (this.riftLight) this.riftLight.intensity = 92;
-    if (this.hellGlow) this.hellGlow.intensity = 33;
+    if (this.riftLight) this.riftLight.intensity = this.newGamePlus ? 155 : 92;
+    if (this.riftWalkLight) this.riftWalkLight.intensity = this.newGamePlus ? 74 : 38;
+    if (this.hellGlow) this.hellGlow.intensity = this.newGamePlus ? 48 : 33;
 
     this.flames.forEach(({ flames, light, sparks }) => {
       flames?.forEach(({ flame }) => { flame.visible = true; });
       if (sparks) sparks.visible = true;
       if (light) light.intensity = 12;
     });
+
+    this.dawnBirds.forEach((bird) => { bird.sprite.visible = false; bird.sprite.material.opacity = 0; });
 
     if (this.dawnSun) {
       this.scene.remove(this.dawnSun);
@@ -1450,9 +1594,12 @@ export class World {
       strike.group.visible = false;
     });
 
-    // Hell closes immediately when the final siege is won.
+    // By the time dawn starts, the Hell Gate collapse sequence has completed.
     if (this.riftGroup) this.riftGroup.visible = false;
     if (this.riftLight) this.riftLight.intensity = 0;
+    if (this.riftWalkLight) this.riftWalkLight.intensity = 0;
+    if (this.ngPlusEmbers) this.ngPlusEmbers.visible = false;
+    if (this.ngPlusSkyGlow) this.ngPlusSkyGlow.visible = false;
 
     // Extinguish the two manor braziers while leaving their metal stands.
     this.flames.forEach(({ flames, light, sparks }) => {
@@ -1486,6 +1633,8 @@ export class World {
     this.dawnSun.scale.set(7.4, 7.4, 1);
     this.scene.add(this.dawnSun);
 
+    this.createDawnBirds();
+
     this.dawnLight = new THREE.DirectionalLight(0xffd09a, 0);
     this.dawnLight.position.set(-14, 16, 12);
     this.scene.add(this.dawnLight);
@@ -1512,14 +1661,52 @@ export class World {
   }
 
   update(elapsed, dt = 0) {
+    if (this.victoryClosing && !this.dawnActive) {
+      this.victoryTimer += dt;
+      const closeT = THREE.MathUtils.clamp(this.victoryTimer / 4.2, 0, 1);
+      const remaining = 1 - closeT;
+      if (this.riftGroup) {
+        const baseScale = this.newGamePlus ? 1.34 : 1;
+        this.riftGroup.scale.set(
+          baseScale * THREE.MathUtils.lerp(1, 0.55, closeT),
+          THREE.MathUtils.lerp(1, 0.72, closeT),
+          baseScale * THREE.MathUtils.lerp(1, 0.12, closeT)
+        );
+      }
+      this.materials.rift.opacity = 0.86 * remaining;
+      this.materials.riftHot.opacity = 0.96 * remaining;
+      if (this.riftEmbers?.material) this.riftEmbers.material.opacity = 0.96 * remaining;
+      if (this.riftLight) this.riftLight.intensity = (this.newGamePlus ? 155 : 92) * remaining;
+      if (this.riftWalkLight) this.riftWalkLight.intensity = (this.newGamePlus ? 74 : 38) * remaining;
+      this.riftFlames?.forEach(({ outer, inner, light }) => {
+        outer.material.opacity = 0.72 * remaining;
+        inner.material.opacity = 0.88 * remaining;
+        light.intensity = 10 * remaining;
+      });
+      if (this.victoryTimer >= 2.4) {
+        this.turretMounts.forEach((mount) => { mount.group.visible = false; });
+        Object.values(this.upgradeGroups).forEach((upgrade) => { if (upgrade?.group) upgrade.group.visible = false; });
+        this.fortifyGroups.forEach((group) => { group.visible = false; });
+      }
+      if (closeT >= 1 && !this.victoryDawnStarted) {
+        this.victoryDawnStarted = true;
+        this.victoryClosing = false;
+        this.startDawn();
+      }
+    }
+
     if (this.dawnActive) {
-      this.dawnProgress = Math.min(1, this.dawnProgress + dt / 8);
+      this.dawnProgress = Math.min(1, this.dawnProgress + dt / 15);
       const t = this.dawnProgress;
       const eased = t * t * (3 - 2 * t);
-      const night = new THREE.Color(0x050609);
+      const night = new THREE.Color(this.newGamePlus ? 0x120407 : 0x050609);
       const morning = new THREE.Color(0x8ea7b4);
       this.scene.background.copy(night).lerp(morning, eased);
-      if (this.scene.fog?.color) this.scene.fog.color.copy(new THREE.Color(0x08090d).lerp(new THREE.Color(0xa5a7a0), eased));
+      if (this.scene.fog?.color) {
+        const nightFog = new THREE.Color(this.newGamePlus ? 0x170609 : 0x08090d);
+        this.scene.fog.color.copy(nightFog.lerp(new THREE.Color(0xa5a7a0), eased));
+        this.scene.fog.density = THREE.MathUtils.lerp(this.newGamePlus ? 0.020 : 0.018, 0.0075, eased);
+      }
       if (this.dawnSun) {
         this.dawnSun.position.y = THREE.MathUtils.lerp(1.0, 14.5, eased);
         this.dawnSun.material.opacity = Math.min(1, eased * 1.35);
@@ -1569,7 +1756,8 @@ export class World {
       mesh.position.x += speed * dt;
       mesh.position.z = baseZ + Math.sin(elapsed * 0.17 + phase) * 0.38;
       mesh.position.y = baseY + Math.sin(elapsed * 0.33 + phase) * 0.08;
-      pulseFogOpacity(mesh.material, elapsed, phase, baseOpacity);
+      const dawnFade = this.dawnActive ? (1 - this.dawnProgress * 0.74) : 1;
+      pulseFogOpacity(mesh.material, elapsed, phase, baseOpacity * dawnFade);
       if (mesh.position.x > 30) mesh.position.x = -30;
     });
 
@@ -1580,12 +1768,38 @@ export class World {
       for (let i = 0; i < count; i += 1) {
         const baseIndex = i * 3;
         const baseY = this.riftEmberBase[baseIndex + 1];
-        const rise = (elapsed * (0.45 + (i % 7) * 0.04) + baseY) % 4.2;
+        const rise = (elapsed * (0.45 + (i % 7) * 0.04) + baseY) % 6.0;
         array[baseIndex] = this.riftEmberBase[baseIndex] + Math.sin(elapsed * 1.8 + i) * 0.08;
         array[baseIndex + 1] = rise;
         array[baseIndex + 2] = this.riftEmberBase[baseIndex + 2] + Math.cos(elapsed * 1.3 + i * 0.7) * 0.08;
       }
       attribute.needsUpdate = true;
+    }
+
+    if (this.ngPlusEmbers?.visible && this.ngPlusEmberBase) {
+      const attr = this.ngPlusEmbers.geometry.attributes.position;
+      const arr = attr.array;
+      for (let i = 0; i < attr.count; i += 1) {
+        const idx = i * 3;
+        const baseY = this.ngPlusEmberBase[idx + 1];
+        arr[idx] = this.ngPlusEmberBase[idx] + Math.sin(elapsed * 0.55 + i * 0.37) * 0.34;
+        arr[idx + 1] = 0.6 + ((baseY - 0.6 + elapsed * (0.34 + (i % 9) * 0.025)) % 21.0);
+        arr[idx + 2] = this.ngPlusEmberBase[idx + 2] + Math.cos(elapsed * 0.42 + i) * 0.24;
+      }
+      attr.needsUpdate = true;
+      if (this.ngPlusSkyGlow) this.ngPlusSkyGlow.material.opacity = 0.38 + Math.sin(elapsed * 0.55) * 0.06;
+    }
+
+    if (this.dawnActive && this.dawnBirds.length > 0) {
+      this.dawnBirds.forEach((bird, index) => {
+        bird.progress += dt * (0.085 + index * 0.006);
+        const t = bird.progress;
+        if (t < 0) return;
+        bird.sprite.visible = t <= 1.15;
+        bird.sprite.material.opacity = Math.min(0.78, Math.max(0, t * 2.6)) * Math.max(0, 1 - Math.max(0, t - 0.92) * 5);
+        bird.sprite.position.x = THREE.MathUtils.lerp(-28, 31, Math.min(1, t));
+        bird.sprite.position.y = bird.baseY + Math.sin(elapsed * 2.1 + index) * 0.24;
+      });
     }
 
     if (this.upgradeGroups.extraction?.group.visible) {
@@ -1679,7 +1893,7 @@ export class World {
     }
     this.occultPulseTimer = Math.max(0, this.occultPulseTimer - dt);
 
-    if (!this.dawnActive) this.riftFlames?.forEach(({ group, outer, inner, light, phase }) => {
+    if (!this.dawnActive && !this.victoryClosing) this.riftFlames?.forEach(({ group, outer, inner, light, phase }) => {
       const pulse = 0.92 + Math.sin(elapsed * 7.5 + phase) * 0.16 + Math.sin(elapsed * 13 + phase) * 0.05;
       group.position.x += Math.sin(elapsed * 1.6 + phase) * dt * 0.015;
       outer.scale.set(0.9 / pulse, 1.15 * pulse, 0.9 / pulse);
@@ -1687,12 +1901,16 @@ export class World {
       light.intensity = 8.5 + pulse * 4.5;
     });
 
-    if (!this.dawnActive) {
-      this.riftLight.intensity = 92 + Math.sin(elapsed * 4.2) * 14;
-      this.hellGlow.intensity = 33 + Math.sin(elapsed * 2.1) * 2;
-    } else {
+    if (!this.dawnActive && !this.victoryClosing) {
+      const riftBase = this.newGamePlus ? 155 : 92;
+      const walkBase = this.newGamePlus ? 74 : 38;
+      this.riftLight.intensity = riftBase + Math.sin(elapsed * 4.2) * (this.newGamePlus ? 24 : 14);
+      if (this.riftWalkLight) this.riftWalkLight.intensity = walkBase + Math.sin(elapsed * 2.7 + 0.6) * (this.newGamePlus ? 10 : 5);
+      this.hellGlow.intensity = (this.newGamePlus ? 48 : 33) + Math.sin(elapsed * 2.1) * 2;
+    } else if (this.dawnActive) {
       this.riftLight.intensity = 0;
-      this.hellGlow.intensity = Math.max(0, 33 * (1 - this.dawnProgress));
+      if (this.riftWalkLight) this.riftWalkLight.intensity = 0;
+      this.hellGlow.intensity = Math.max(0, (this.newGamePlus ? 48 : 33) * (1 - this.dawnProgress));
     }
   }
 

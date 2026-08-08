@@ -57,6 +57,11 @@ export class UI {
     this.developerPanelOpen = false;
     this.canRetry = true;
     this.continuesRemaining = 3;
+    this.ngPlusUnlocked = false;
+    this.bestRank = null;
+    this.newGamePlus = false;
+    this.endingData = null;
+    this.endingElapsed = 0;
 
     this.onPointerDown = this.onPointerDown.bind(this);
     this.resize = this.resize.bind(this);
@@ -85,6 +90,17 @@ export class UI {
 
   setHasSave(hasSave) {
     this.hasSave = hasSave;
+  }
+
+  setMeta(meta = {}) {
+    this.ngPlusUnlocked = !!meta.ngPlusUnlocked;
+    this.bestRank = meta.bestRank ?? null;
+  }
+
+  startEndingSequence(data) {
+    this.endingData = data;
+    this.endingElapsed = 0;
+    this.mode = "ending";
   }
 
   setDeveloperMode(enabled, wave = 1, shop = false) {
@@ -169,6 +185,7 @@ export class UI {
   }
 
   update(dt) {
+    if (this.mode === "ending") this.endingElapsed += dt;
     this.bannerTimer = Math.max(0, this.bannerTimer - dt);
     this.healthFlash = Math.max(0, this.healthFlash - dt);
     this.soulPulse = Math.max(0, this.soulPulse - dt);
@@ -210,6 +227,8 @@ export class UI {
     } else if (this.mode === "gameOver") {
       this.drawHUD(width, height);
       this.drawGameOver(width, height);
+    } else if (this.mode === "ending") {
+      this.drawEnding(width, height);
     } else if (this.mode === "complete") {
       this.drawComplete(width, height);
     }
@@ -276,9 +295,9 @@ export class UI {
 
   drawStart(width, height) {
     const mobile = width < 700 || height < 620;
+    const buttonCount = 1 + (this.hasSave && !this.developerMode ? 1 : 0) + (this.ngPlusUnlocked && !this.developerMode ? 1 : 0);
     const panelWidth = Math.min(560, width - 32);
-    const normalPanelHeight = this.hasSave ? (mobile ? 280 : 300) : (mobile ? 235 : 255);
-    const panelHeight = normalPanelHeight + (this.developerMode ? (mobile ? 48 : 52) : 0);
+    const panelHeight = (mobile ? 214 : 232) + buttonCount * (mobile ? 58 : 60) + (this.bestRank && !this.developerMode ? 24 : 0) + (this.developerMode ? 48 : 0);
     const x = (width - panelWidth) / 2;
     const y = (height - panelHeight) / 2;
     this.panel(x, y, panelWidth, panelHeight, C.panel, 14);
@@ -295,11 +314,28 @@ export class UI {
     ctx.font = this.dataFont(mobile ? 11 : 14, 800);
     ctx.fillText("DEFEND THE MANOR.", width / 2, y + (mobile ? 85 : 103));
 
-    const buttonHeight = mobile ? 52 : 50;
-    const firstY = y + (mobile ? 110 : 132);
-    this.button("NEW GAME", width / 2 - 105, firstY, 210, buttonHeight, () => this.callbacks.onNewGame?.());
+    if (this.bestRank && !this.developerMode) {
+      ctx.fillStyle = C.orangeLight;
+      ctx.font = this.dataFont(mobile ? 10 : 12, 900);
+      ctx.fillText(`BEST RANK  ${this.bestRank}`, width / 2, y + (mobile ? 108 : 126));
+    }
+
+    const buttonHeight = mobile ? 50 : 50;
+    let buttonY = y + (this.bestRank && !this.developerMode ? (mobile ? 126 : 148) : (mobile ? 110 : 132));
+    this.button("NEW GAME", width / 2 - 105, buttonY, 210, buttonHeight, () => this.callbacks.onNewGame?.());
+    buttonY += buttonHeight + 10;
+
     if (this.hasSave && !this.developerMode) {
-      this.button("CONTINUE", width / 2 - 105, firstY + buttonHeight + 12, 210, buttonHeight, () => this.callbacks.onContinueSave?.());
+      this.button("CONTINUE", width / 2 - 105, buttonY, 210, buttonHeight, () => this.callbacks.onContinueSave?.());
+      buttonY += buttonHeight + 10;
+    }
+
+    if (this.ngPlusUnlocked && !this.developerMode) {
+      this.button("NEW GAME+", width / 2 - 105, buttonY, 210, buttonHeight, () => this.callbacks.onNewGamePlus?.(), false, null, C.red);
+      buttonY += buttonHeight + 10;
+      ctx.fillStyle = "rgba(239,81,78,.86)";
+      ctx.font = this.dataFont(mobile ? 9 : 10, 900);
+      ctx.fillText("HARD MODE", width / 2, buttonY + 3);
     }
 
     if (this.developerMode) {
@@ -328,6 +364,11 @@ export class UI {
     ctx.fillStyle = C.orangeLight;
     ctx.font = this.font(compact ? 19 : 23);
     ctx.fillText(`WAVE ${this.wave}`, leftX + 11, y + 25);
+    if (this.newGamePlus) {
+      ctx.fillStyle = C.red;
+      ctx.font = this.dataFont(compact ? 8 : 9, 900);
+      ctx.fillText("NEW GAME+", leftX + leftWidth - (compact ? 62 : 74), y + 18);
+    }
     ctx.fillStyle = C.text;
     ctx.font = this.dataFont(compact ? 10 : 11, 840);
     ctx.fillText(`DEMON DEATHS ${this.deaths}`, leftX + 11, y + 48);
@@ -985,11 +1026,12 @@ export class UI {
     const row1 = waveY + 62;
     this.button("START WAVE", x + 38, row1, 190, 46, () => this.callbacks.onDevStartWave?.(), false, null, C.purple);
     this.button("OPEN UPGRADES", width / 2 - 95, row1, 190, 46, () => this.callbacks.onDevOpenShop?.(), false, null, C.purple);
-    this.button("TEST DAWN", x + panelWidth - 228, row1, 190, 46, () => this.callbacks.onDevDawn?.(), false, null, C.purple);
+    this.button("TEST ENDING", x + panelWidth - 228, row1, 190, 46, () => this.callbacks.onDevDawn?.(), false, null, C.purple);
 
     const row2 = row1 + 64;
-    this.button("+1000 SOULS", x + 100, row2, 210, 44, () => this.callbacks.onDevAddSouls?.(1000));
-    this.button("+10 BOUND SOULS", x + panelWidth - 310, row2, 210, 44, () => this.callbacks.onDevAddBound?.(10));
+    this.button("+1000 SOULS", x + 38, row2, 190, 44, () => this.callbacks.onDevAddSouls?.(1000));
+    this.button(this.newGamePlus ? "NG+ ON" : "NG+ OFF", width / 2 - 88, row2, 176, 44, () => this.callbacks.onDevToggleNGPlus?.(), false, null, this.newGamePlus ? C.red : C.purple);
+    this.button("+10 BOUND SOULS", x + panelWidth - 228, row2, 190, 44, () => this.callbacks.onDevAddBound?.(10));
 
     ctx.fillStyle = C.orangeLight;
     ctx.font = this.dataFont(12, 900);
@@ -1015,6 +1057,134 @@ export class UI {
     ctx.fillText(`CURRENT: ${this.souls} SOULS • ${this.boundSouls} BOUND SOULS`, width / 2, row2 + 162);
 
     this.button("CLOSE", width / 2 - 95, y + panelHeight - 62, 190, 44, () => this.callbacks.onDevClose?.());
+  }
+
+  drawStars(stars, x, y, size = 24) {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.textAlign = "left";
+    ctx.font = `900 ${size}px "Segoe UI Symbol","Arial Unicode MS",Arial,sans-serif`;
+    for (let i = 0; i < 5; i += 1) {
+      ctx.fillStyle = i < stars ? "#ffd08a" : "rgba(255,255,255,.18)";
+      ctx.fillText(i < stars ? "★" : "☆", x + i * size * 1.05, y);
+    }
+    ctx.restore();
+  }
+
+  fadeInAt(time, start, duration = 0.8) {
+    return Math.max(0, Math.min(1, (time - start) / duration));
+  }
+
+  drawEnding(width, height) {
+    const data = this.endingData;
+    if (!data) return;
+    const ctx = this.ctx;
+    const t = this.endingElapsed;
+
+    // Keep the manor and sunrise visible. The text arrives in stages instead
+    // of immediately covering the final environmental payoff.
+    const firstA = this.fadeInAt(t, 5.0, 1.1);
+    const secondA = this.fadeInAt(t, 7.8, 1.0);
+    const thirdA = this.fadeInAt(t, 10.5, 1.0);
+
+    ctx.textAlign = "center";
+    if (firstA > 0) {
+      ctx.save();
+      ctx.globalAlpha = firstA;
+      ctx.fillStyle = "#fff0d3";
+      ctx.font = this.font(Math.min(58, width * 0.06));
+      ctx.shadowColor = "rgba(255,170,90,.45)";
+      ctx.shadowBlur = 12;
+      ctx.fillText("THE NIGHT IS OVER", width / 2, height * 0.23);
+      ctx.restore();
+    }
+    if (secondA > 0) {
+      ctx.save();
+      ctx.globalAlpha = secondA;
+      ctx.fillStyle = C.text;
+      ctx.font = this.dataFont(Math.min(18, width * 0.018), 900);
+      ctx.fillText("YOU DEFEATED ALL THE DEMONS", width / 2, height * 0.23 + 42);
+      ctx.restore();
+    }
+    if (thirdA > 0) {
+      ctx.save();
+      ctx.globalAlpha = thirdA;
+      ctx.fillStyle = C.orangeLight;
+      ctx.font = this.dataFont(Math.min(16, width * 0.016), 900);
+      ctx.fillText("HELLGATE MANOR STILL STANDS", width / 2, height * 0.23 + 72);
+      ctx.restore();
+    }
+
+    const panelA = this.fadeInAt(t, 13.2, 0.9);
+    if (panelA <= 0) return;
+    const mobile = width < 760 || height < 650;
+    const panelWidth = Math.min(mobile ? width - 24 : 650, width - 24);
+    const panelHeight = mobile ? 430 : 450;
+    const x = (width - panelWidth) / 2;
+    const y = Math.min(height - panelHeight - 18, height * 0.39);
+    ctx.save();
+    ctx.globalAlpha = panelA;
+    this.panel(x, y, panelWidth, panelHeight, "rgba(7,8,11,.83)", 14);
+    ctx.restore();
+
+    ctx.textAlign = "center";
+    ctx.fillStyle = data.newGamePlus ? C.red : C.orangeLight;
+    ctx.font = this.font(mobile ? 28 : 34);
+    ctx.fillText(data.newGamePlus ? "NEW GAME+ COMPLETE" : "FINAL REPORT", width / 2, y + 44);
+
+    const rows = [
+      ["SURVIVAL", data.survival, 14.1],
+      ["DEFENCE", data.defence, 16.5],
+      ["BINDING", data.binding, 18.9]
+    ];
+    const rowX = x + 28;
+    const rowW = panelWidth - 56;
+    const rowH = mobile ? 67 : 70;
+    rows.forEach(([label, rating, reveal], index) => {
+      const alpha = this.fadeInAt(t, reveal, 0.65);
+      if (alpha <= 0) return;
+      const ry = y + 64 + index * (rowH + 7);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      this.panel(rowX, ry, rowW, rowH, "rgba(13,13,17,.90)", 7);
+      ctx.textAlign = "left";
+      ctx.fillStyle = C.text;
+      ctx.font = this.font(mobile ? 20 : 23);
+      ctx.fillText(label, rowX + 14, ry + 28);
+      ctx.fillStyle = C.muted;
+      ctx.font = this.dataFont(mobile ? 8 : 10, 820);
+      ctx.fillText(rating.detail, rowX + 14, ry + 49);
+      this.drawStars(rating.stars, rowX + rowW - (mobile ? 128 : 150), ry + 43, mobile ? 20 : 23);
+      ctx.restore();
+    });
+
+    const rankA = this.fadeInAt(t, 21.6, 0.9);
+    if (rankA > 0) {
+      ctx.save();
+      ctx.globalAlpha = rankA;
+      ctx.textAlign = "center";
+      ctx.fillStyle = C.muted;
+      ctx.font = this.dataFont(11, 900);
+      ctx.fillText("FINAL RANK", width / 2, y + panelHeight - 104);
+      ctx.fillStyle = data.finalRank === "S" ? "#ffe5a8" : data.finalRank === "A" ? C.orangeLight : C.text;
+      ctx.font = this.font(mobile ? 54 : 66);
+      ctx.shadowColor = data.newGamePlus ? "rgba(239,81,78,.8)" : "rgba(255,112,49,.75)";
+      ctx.shadowBlur = 18;
+      ctx.fillText(data.finalRank, width / 2, y + panelHeight - 48);
+      ctx.restore();
+    }
+
+    if (t >= 24.5) {
+      const buttonY = y + panelHeight + 10;
+      const availableBelow = height - buttonY;
+      if (availableBelow >= 54) {
+        this.button("NEW GAME", width / 2 - 222, buttonY, 205, 46, () => this.callbacks.onRestart?.());
+        this.button("NEW GAME+", width / 2 + 17, buttonY, 205, 46, () => this.callbacks.onNewGamePlus?.(), false, null, C.red);
+      } else {
+        this.button("NEW GAME", width / 2 - 210, y + panelHeight - 46, 190, 40, () => this.callbacks.onRestart?.());
+        this.button("NEW GAME+", width / 2 + 20, y + panelHeight - 46, 190, 40, () => this.callbacks.onNewGamePlus?.(), false, null, C.red);
+      }
+    }
   }
 
   drawComplete(width, height) {

@@ -347,7 +347,8 @@ export class DefenceSystem {
   clearForDawn() {
     this.hellfireSouls = 0;
     this.occultSouls = 0;
-    this.world.setTurretLevel(0);
+    // Keep the physical crossbows visible for the first seconds of the ending;
+    // World powers the manor upgrades down as the Hell Gate collapses.
     this.projectiles.slice().forEach((projectile) => this.releaseArrow(projectile));
     this.impacts.slice().forEach((impact) => {
       impact.active = false;

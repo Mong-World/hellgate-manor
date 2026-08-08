@@ -38,6 +38,50 @@ export class WaveManager {
     this.pools = Object.fromEntries(TYPES.map((type) => [type, []]));
     this.pooledEnemies = new Set();
     this.activeExtractions = new Set();
+    this.newGamePlus = false;
+  }
+
+  setNewGamePlus(enabled) {
+    this.newGamePlus = !!enabled;
+  }
+
+  getWaveConfig(index) {
+    const base = CONFIG.waves[index];
+    if (!this.newGamePlus) return base;
+
+    const wave = index + 1;
+    const settings = CONFIG.newGamePlus;
+    const total = Math.max(12, Math.ceil(base.total * settings.waveCountMultiplier));
+    let runner = 0;
+    let strong = 0;
+    let brute = 0;
+    let siege = 0;
+
+    if (wave >= settings.runnerWave) {
+      runner = Math.max(3, Math.round(total * Math.min(0.30, 0.08 + (wave - settings.runnerWave) * 0.0065)));
+    }
+    if (wave >= settings.strongWave) {
+      strong = Math.max(3, Math.round(total * Math.min(0.26, 0.07 + (wave - settings.strongWave) * 0.0060)));
+    }
+    if (wave >= settings.bruteWave) {
+      brute = Math.max(2, Math.round(total * Math.min(0.14, 0.04 + (wave - settings.bruteWave) * 0.0032)));
+    }
+    if (wave >= settings.siegeWave) {
+      siege = Math.max(1, Math.round(total * Math.min(0.045, 0.010 + (wave - settings.siegeWave) * 0.0015)));
+    }
+
+    const husk = Math.max(8, total - runner - strong - brute - siege);
+    return {
+      ...base,
+      counts: { husk, strong, runner, brute, siege },
+      total,
+      maxActive: settings.maxActive,
+      initialDelay: Math.max(1.0, base.initialDelay * 0.72),
+      spawnGap: Math.max(0.46, base.spawnGap * 0.84),
+      burstChance: Math.min(0.94, base.burstChance + 0.10),
+      burstMax: Math.min(9, base.burstMax + 1),
+      huskPaceVariation: true
+    };
   }
 
   async preparePools(onProgress = null) {
@@ -127,7 +171,7 @@ export class WaveManager {
   startWave(index) {
     this.clearActiveOnly();
     this.waveIndex = index;
-    this.config = CONFIG.waves[index];
+    this.config = this.getWaveConfig(index);
     this.queue = this.makeQueue(this.config.counts);
     this.spawned = 0;
     this.resolved = 0;
@@ -195,6 +239,14 @@ export class WaveManager {
       const multiplier = roll < 0.24 ? 0.78 : roll > 0.72 ? 1.18 : 1.0;
       enemy.walkSpeed *= multiplier;
       enemy.walkAnimationSpeed *= THREE.MathUtils.lerp(0.88, 1.12, (multiplier - 0.78) / 0.40);
+      if (enemy.actions.walk) enemy.actions.walk.timeScale = enemy.walkAnimationSpeed;
+    }
+
+    if (this.newGamePlus) {
+      enemy.walkSpeed *= CONFIG.newGamePlus.enemySpeedMultiplier;
+      enemy.attackDamage = Math.ceil(enemy.attackDamage * CONFIG.newGamePlus.enemyAttackMultiplier);
+      enemy.attackInterval *= CONFIG.newGamePlus.enemyAttackIntervalMultiplier;
+      enemy.walkAnimationSpeed *= 1.08;
       if (enemy.actions.walk) enemy.actions.walk.timeScale = enemy.walkAnimationSpeed;
     }
 
