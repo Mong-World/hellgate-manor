@@ -588,86 +588,86 @@ export class UI {
 
   drawMobileHUD(width, height) {
     const ctx = this.ctx;
-    const margin = 6;
-    const hudH = 44;
+    const margin = 5;
+    const hudH = 36;
     const y = height - margin - hudH;
-    const leftW = Math.min(122, width * 0.19);
-    const rightW = Math.min(132, width * 0.20);
-    const healthW = Math.min(250, Math.max(175, width * 0.31));
+    const leftW = Math.min(98, width * 0.155);
+    const rightW = Math.min(106, width * 0.165);
+    const healthW = Math.min(205, Math.max(150, width * 0.265));
     const leftX = margin;
     const rightX = width - margin - rightW;
     const healthX = (width - healthW) / 2;
 
-    this.panel(leftX, y, leftW, hudH, "rgba(7,8,11,.90)", 7);
+    this.panel(leftX, y, leftW, hudH, "rgba(7,8,11,.90)", 6);
     ctx.textAlign = "left";
     ctx.fillStyle = C.orangeLight;
-    ctx.font = this.font(16);
-    ctx.fillText(`WAVE ${this.wave}`, leftX + 8, y + 18);
+    ctx.font = this.font(13);
+    ctx.fillText(`WAVE ${this.wave}`, leftX + 7, y + 15);
     ctx.fillStyle = C.text;
-    ctx.font = this.dataFont(8, 850);
-    ctx.fillText(`DEATHS ${this.deaths}`, leftX + 8, y + 34);
+    ctx.font = this.dataFont(7, 850);
+    ctx.fillText(`DEATHS ${this.deaths}`, leftX + 7, y + 29);
     if (this.newGamePlus) {
       ctx.textAlign = "right";
       ctx.fillStyle = C.red;
-      ctx.font = this.dataFont(7, 900);
-      ctx.fillText("HELL", leftX + leftW - 8, y + 16);
+      ctx.font = this.dataFont(6, 900);
+      ctx.fillText("HELL", leftX + leftW - 6, y + 13);
     }
 
-    this.panel(healthX, y, healthW, hudH, "rgba(7,8,11,.90)", 7);
+    this.panel(healthX, y, healthW, hudH, "rgba(7,8,11,.90)", 6);
     ctx.textAlign = "center";
     ctx.fillStyle = C.text;
-    ctx.font = this.font(14);
-    ctx.fillText("MANOR", width / 2, y + 16);
-    const barX = healthX + 9;
-    const barY = y + 25;
-    const barW = healthW - 18;
+    ctx.font = this.font(12);
+    ctx.fillText("MANOR", width / 2, y + 14);
+    const barX = healthX + 8;
+    const barY = y + 22;
+    const barW = healthW - 16;
     const ratio = Math.max(0, Math.min(1, this.health / this.maxHealth));
     ctx.fillStyle = "rgba(255,255,255,.07)";
-    ctx.fillRect(barX, barY, barW, 10);
+    ctx.fillRect(barX, barY, barW, 8);
     ctx.fillStyle = this.healthFlash > 0 || ratio <= 0.35 ? C.red : C.orange;
-    ctx.fillRect(barX, barY, barW * ratio, 10);
+    ctx.fillRect(barX, barY, barW * ratio, 8);
     ctx.strokeStyle = "rgba(255,255,255,.18)";
-    ctx.strokeRect(barX, barY, barW, 10);
+    ctx.strokeRect(barX, barY, barW, 8);
     ctx.fillStyle = C.text;
-    ctx.font = this.dataFont(7, 900);
-    ctx.fillText(`${Math.ceil(this.health)} / ${this.maxHealth}`, width / 2, barY + 9);
+    ctx.font = this.dataFont(6, 900);
+    ctx.fillText(`${Math.ceil(this.health)} / ${this.maxHealth}`, width / 2, barY + 7);
 
-    const pulse = this.soulPulse > 0 ? 1 + this.soulPulse * 0.08 : 1;
+    const pulse = this.soulPulse > 0 ? 1 + this.soulPulse * 0.065 : 1;
     ctx.save();
     ctx.translate(rightX + rightW / 2, y + hudH / 2);
     ctx.scale(pulse, pulse);
     ctx.translate(-(rightX + rightW / 2), -(y + hudH / 2));
-    this.panel(rightX, y, rightW, hudH, "rgba(7,8,11,.90)", 7);
+    this.panel(rightX, y, rightW, hudH, "rgba(7,8,11,.90)", 6);
     ctx.textAlign = "left";
     ctx.fillStyle = C.orangeLight;
-    ctx.font = this.dataFont(8, 900);
-    ctx.fillText("SOULS", rightX + 9, y + 14);
+    ctx.font = this.dataFont(7, 900);
+    ctx.fillText("SOULS", rightX + 8, y + 12);
     ctx.fillStyle = C.orange;
     ctx.beginPath();
-    ctx.arc(rightX + 13, y + 29, 5, 0, Math.PI * 2);
+    ctx.arc(rightX + 11, y + 25, 4, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = C.text;
-    ctx.font = this.dataFont(19, 900);
-    ctx.fillText(String(this.souls), rightX + 24, y + 35);
+    ctx.font = this.dataFont(16, 900);
+    ctx.fillText(String(this.souls), rightX + 20, y + 30);
     ctx.restore();
 
-    let upperY = y - 31;
+    let upperY = y - 26;
     if (this.boundSouls > 0) {
-      const boundH = 27;
-      this.panel(rightX, upperY, rightW, boundH, "rgba(7,8,11,.88)", 6);
+      const boundH = 22;
+      this.panel(rightX, upperY, rightW, boundH, "rgba(7,8,11,.88)", 5);
       ctx.textAlign = "left";
       ctx.fillStyle = C.orangeLight;
-      ctx.font = this.dataFont(7, 900);
-      ctx.fillText("BOUND", rightX + 8, upperY + 11);
+      ctx.font = this.dataFont(6, 900);
+      ctx.fillText("BOUND", rightX + 7, upperY + 9);
       ctx.textAlign = "right";
       ctx.fillStyle = "#ffe2bb";
-      ctx.font = this.dataFont(14, 900);
-      ctx.fillText(String(this.boundSouls), rightX + rightW - 8, upperY + 19);
-      upperY -= 31;
+      ctx.font = this.dataFont(11, 900);
+      ctx.fillText(String(this.boundSouls), rightX + rightW - 7, upperY + 16);
+      upperY -= 26;
     }
 
     if (this.bombs > 0) {
-      this.button(`BOMB ×${this.bombs}`, rightX + rightW - 96, upperY, 96, 30, () => this.callbacks.onBomb?.());
+      this.button(`BOMB ×${this.bombs}`, rightX + rightW - 78, upperY, 78, 25, () => this.callbacks.onBomb?.());
     }
 
     this.drawSoulFlights(width, height);
@@ -675,11 +675,11 @@ export class UI {
 
   getSoulCounterPosition(width, height) {
     if (this.isMobileLandscape()) {
-      const margin = 6;
-      const hudH = 44;
-      const rightW = Math.min(132, width * 0.20);
+      const margin = 5;
+      const hudH = 36;
+      const rightW = Math.min(106, width * 0.165);
       const rightX = width - margin - rightW;
-      return { x: rightX + 16, y: height - margin - hudH + 29 };
+      return { x: rightX + 13, y: height - margin - hudH + 25 };
     }
     const compact = width < 820;
     const margin = compact ? 12 : 20;

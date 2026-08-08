@@ -22,6 +22,7 @@ export class Game {
     this.startingGame = false;
     this.cameraShake = 0;
     this.cameraBase = new THREE.Vector3(...CONFIG.camera.position);
+    this.cameraTarget = new THREE.Vector3(...CONFIG.camera.target);
     const params = new URLSearchParams(window.location.search);
     this.developerMode = params.get("dev") === "1";
     this.developerWave = THREE.MathUtils.clamp(Math.floor(Number(params.get("wave")) || 1), 1, CONFIG.waves.length);
@@ -46,8 +47,7 @@ export class Game {
       0.1,
       180
     );
-    this.camera.position.copy(this.cameraBase);
-    this.camera.lookAt(...CONFIG.camera.target);
+    this.applyResponsiveCamera(true);
 
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -1215,6 +1215,31 @@ export class Game {
     });
   }
 
+  isMobileLandscapeView() {
+    return !!this.mobileOptimized && window.innerWidth > window.innerHeight && window.innerHeight <= 700;
+  }
+
+  applyResponsiveCamera(immediate = false) {
+    if (!this.camera) return;
+
+    if (this.isMobileLandscapeView()) {
+      // Wide phone screens expose much more horizontal world at the desktop
+      // vertical FOV. Bring the mobile camera closer so the battlefield fills
+      // the screen instead of reading like a smaller copy of desktop.
+      this.camera.fov = 38.5;
+      this.cameraBase.set(0.2, 8.75, 24.4);
+      this.cameraTarget.set(2.25, 3.0, 0);
+    } else {
+      this.camera.fov = CONFIG.camera.fov;
+      this.cameraBase.set(...CONFIG.camera.position);
+      this.cameraTarget.set(...CONFIG.camera.target);
+    }
+
+    this.camera.updateProjectionMatrix();
+    if (immediate) this.camera.position.copy(this.cameraBase);
+    this.camera.lookAt(this.cameraTarget);
+  }
+
   updateCamera(dt) {
     this.cameraShake = Math.max(0, this.cameraShake - dt * 1.9);
     if (this.cameraShake > 0) {
@@ -1227,7 +1252,7 @@ export class Game {
     } else {
       this.camera.position.lerp(this.cameraBase, 0.18);
     }
-    this.camera.lookAt(...CONFIG.camera.target);
+    this.camera.lookAt(this.cameraTarget);
   }
 
   animate() {
@@ -1282,7 +1307,7 @@ export class Game {
 
   onResize() {
     this.camera.aspect = window.innerWidth / window.innerHeight;
-    this.camera.updateProjectionMatrix();
+    this.applyResponsiveCamera(true);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.mobileOptimized ? 1.35 : 2));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
   }
