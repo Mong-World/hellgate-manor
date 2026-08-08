@@ -921,19 +921,94 @@ export class UI {
     ctx.font = this.font(mobile ? 31 : 40);
     ctx.fillText(this.tutorial.title, width / 2, y + 55);
 
-    // Simple visual shorthand: demon -> glowing portal.
-    const iconY = y + 108;
-    ctx.strokeStyle = C.text;
-    ctx.lineWidth = 3;
+    // Visual shorthand: a close-up husk face -> glowing portal. This is drawn
+    // directly on the UI canvas from the in-game creature reference, so it does
+    // not introduce another runtime image asset.
+    const iconY = y + 110;
+    const demonX = width / 2 - 102;
+    ctx.save();
+    ctx.translate(demonX, iconY + 12);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    const headGlow = ctx.createRadialGradient(0, -10, 2, 0, -10, 54);
+    headGlow.addColorStop(0, "rgba(255,121,43,.22)");
+    headGlow.addColorStop(1, "rgba(255,80,20,0)");
+    ctx.fillStyle = headGlow;
     ctx.beginPath();
-    ctx.arc(width / 2 - 100, iconY, 12, 0, Math.PI * 2);
-    ctx.moveTo(width / 2 - 100, iconY + 12);
-    ctx.lineTo(width / 2 - 100, iconY + 48);
-    ctx.moveTo(width / 2 - 100, iconY + 22);
-    ctx.lineTo(width / 2 - 122, iconY + 37);
-    ctx.moveTo(width / 2 - 100, iconY + 22);
-    ctx.lineTo(width / 2 - 78, iconY + 37);
+    ctx.arc(0, -10, 54, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "#17191c";
+    ctx.strokeStyle = "#b5aba4";
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.ellipse(0, -13, 32, 42, 0, 0, Math.PI * 2);
+    ctx.fill();
     ctx.stroke();
+
+    // Heavy ridged brow / eye sockets.
+    ctx.strokeStyle = "#827a74";
+    ctx.lineWidth = 3;
+    for (let i = -4; i <= 4; i += 1) {
+      const bx = i * 5.3;
+      ctx.beginPath();
+      ctx.moveTo(bx - 2, -30 + Math.abs(i) * 0.9);
+      ctx.lineTo(bx + 1, -21 + Math.abs(i) * 0.5);
+      ctx.stroke();
+    }
+    ctx.fillStyle = "#030405";
+    ctx.beginPath();
+    ctx.ellipse(-12, -18, 8, 5, -0.12, 0, Math.PI * 2);
+    ctx.ellipse(12, -18, 8, 5, 0.12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#ff9b50";
+    ctx.beginPath();
+    ctx.arc(-11, -18, 1.7, 0, Math.PI * 2);
+    ctx.arc(11, -18, 1.7, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Small skeletal nose.
+    ctx.fillStyle = "#050506";
+    ctx.beginPath();
+    ctx.ellipse(-3.6, -6, 2.5, 5, 0.18, 0, Math.PI * 2);
+    ctx.ellipse(3.6, -6, 2.5, 5, -0.18, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Wide tooth-filled grin.
+    ctx.fillStyle = "#050506";
+    ctx.strokeStyle = "#6e5148";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-24, 4);
+    ctx.quadraticCurveTo(0, 24, 25, 3);
+    ctx.quadraticCurveTo(0, 31, -24, 4);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#c7b7a3";
+    for (let i = 0; i < 9; i += 1) {
+      const tx = -20 + i * 5;
+      const top = 8 + Math.abs(i - 4) * 0.9;
+      ctx.beginPath();
+      ctx.moveTo(tx, top);
+      ctx.lineTo(tx + 2.2, top + 9);
+      ctx.lineTo(tx + 4.2, top + 1);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Neck and shoulders, fading into the panel.
+    ctx.fillStyle = "rgba(23,25,28,.95)";
+    ctx.beginPath();
+    ctx.moveTo(-14, 26);
+    ctx.lineTo(-18, 51);
+    ctx.lineTo(-48, 67);
+    ctx.lineTo(48, 67);
+    ctx.lineTo(18, 51);
+    ctx.lineTo(14, 26);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
 
     ctx.fillStyle = C.orange;
     ctx.font = this.dataFont(28, 900);
@@ -1116,7 +1191,7 @@ export class UI {
     if (panelA <= 0) return;
     const mobile = width < 760 || height < 650;
     const panelWidth = Math.min(mobile ? width - 24 : 650, width - 24);
-    const panelHeight = mobile ? 430 : 450;
+    const panelHeight = mobile ? 452 : 492;
     const x = (width - panelWidth) / 2;
     const y = Math.min(height - panelHeight - 18, height * 0.39);
     ctx.save();
@@ -1162,24 +1237,23 @@ export class UI {
       ctx.textAlign = "center";
       ctx.fillStyle = C.muted;
       ctx.font = this.dataFont(11, 900);
-      ctx.fillText("FINAL RANK", width / 2, y + panelHeight - 104);
+      ctx.fillText("FINAL RANK", width / 2, y + panelHeight - 132);
       ctx.fillStyle = data.finalRank === "S" ? "#ffe5a8" : data.finalRank === "A" ? C.orangeLight : C.text;
       ctx.font = this.font(mobile ? 54 : 66);
       ctx.shadowColor = data.newGamePlus ? "rgba(239,81,78,.8)" : "rgba(255,112,49,.75)";
       ctx.shadowBlur = 18;
-      ctx.fillText(data.finalRank, width / 2, y + panelHeight - 48);
+      ctx.fillText(data.finalRank, width / 2, y + panelHeight - 78);
       ctx.restore();
     }
 
     if (t >= 24.5) {
-      const buttonY = y + panelHeight + 10;
-      const availableBelow = height - buttonY;
-      if (availableBelow >= 54) {
+      const buttonY = y + panelHeight - (mobile ? 54 : 60);
+      if (mobile) {
+        this.button("NEW GAME", width / 2 - 208, buttonY, 185, 42, () => this.callbacks.onRestart?.());
+        this.button("NEW GAME+ (HELL MODE)", width / 2 - 13, buttonY, 220, 42, () => this.callbacks.onNewGamePlus?.(), false, null, C.red);
+      } else {
         this.button("NEW GAME", width / 2 - 252, buttonY, 205, 46, () => this.callbacks.onRestart?.());
         this.button("NEW GAME+ (HELL MODE)", width / 2 - 27, buttonY, 280, 46, () => this.callbacks.onNewGamePlus?.(), false, null, C.red);
-      } else {
-        this.button("NEW GAME", width / 2 - 240, y + panelHeight - 46, 190, 40, () => this.callbacks.onRestart?.());
-        this.button("NEW GAME+ (HELL MODE)", width / 2 - 30, y + panelHeight - 46, 270, 40, () => this.callbacks.onNewGamePlus?.(), false, null, C.red);
       }
     }
   }

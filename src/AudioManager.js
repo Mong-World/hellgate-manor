@@ -102,6 +102,37 @@ export class AudioManager {
     return minimum + Math.random() * (maximum - minimum);
   }
 
+  prime(key, { music = false } = {}) {
+    if (!this.context || this.context.state !== "running") return false;
+    const buffer = this.buffers.get(key);
+    if (!buffer) return false;
+
+    // Create and briefly run the same WebAudio node path used during gameplay,
+    // but do not touch cooldown/instance bookkeeping. This avoids the first
+    // audible use of a sound being the browser's first source/gain allocation.
+    const source = this.context.createBufferSource();
+    const gain = this.context.createGain();
+    source.buffer = buffer;
+    gain.gain.value = 0.000001;
+    source.connect(gain);
+    gain.connect(music ? this.musicGain : this.sfxGain);
+    const now = this.context.currentTime;
+    const duration = Math.max(0.008, Math.min(0.025, buffer.duration || 0.02));
+    source.start(now, 0, duration);
+    source.addEventListener("ended", () => {
+      try { source.disconnect(); } catch {}
+      try { gain.disconnect(); } catch {}
+    }, { once: true });
+    return true;
+  }
+
+  primeAllPlaybackPaths() {
+    const musicKeys = new Set(["background1", "background2", "newDawn"]);
+    for (const key of this.buffers.keys()) {
+      this.prime(key, { music: musicKeys.has(key) });
+    }
+  }
+
   play(key, {
     volume = 1,
     rate = null,

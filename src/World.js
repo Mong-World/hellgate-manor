@@ -273,6 +273,7 @@ export class World {
     this.createHellRift();
     this.createForest();
     this.createGroundFog();
+    this.prepareDawnAssets();
   }
 
   async load() {
@@ -1484,6 +1485,95 @@ export class World {
     this.victoryDawnStarted = false;
   }
 
+  prepareDawnAssets() {
+    if (!this.dawnSun) {
+      const sunCanvas = document.createElement("canvas");
+      sunCanvas.width = 192;
+      sunCanvas.height = 192;
+      const ctx = sunCanvas.getContext("2d");
+      const gradient = ctx.createRadialGradient(96, 96, 18, 96, 96, 92);
+      gradient.addColorStop(0, "rgba(255,246,196,1)");
+      gradient.addColorStop(0.48, "rgba(255,196,119,.96)");
+      gradient.addColorStop(0.72, "rgba(255,145,87,.42)");
+      gradient.addColorStop(1, "rgba(255,124,72,0)");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, 192, 192);
+      const sunTexture = new THREE.CanvasTexture(sunCanvas);
+      sunTexture.colorSpace = THREE.SRGBColorSpace;
+      const sunMaterial = new THREE.SpriteMaterial({
+        map: sunTexture,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        fog: false
+      });
+      this.dawnSun = new THREE.Sprite(sunMaterial);
+      this.dawnSun.position.set(-8.5, 1.0, -35);
+      this.dawnSun.scale.set(7.4, 7.4, 1);
+      this.dawnSun.visible = false;
+      this.scene.add(this.dawnSun);
+      this.disposables.push(sunTexture, sunMaterial);
+    }
+
+    if (!this.dawnLight) {
+      this.dawnLight = new THREE.DirectionalLight(0xffd09a, 0);
+      this.dawnLight.position.set(-14, 16, 12);
+      this.dawnLight.visible = false;
+      this.scene.add(this.dawnLight);
+    }
+
+    this.createDawnBirds();
+    this.dawnBirds.forEach((bird) => {
+      bird.sprite.visible = false;
+      bird.sprite.material.opacity = 0;
+    });
+  }
+
+  setDawnPrewarmVisible(visible) {
+    this.prepareDawnAssets();
+    if (this.dawnSun) {
+      this.dawnSun.visible = visible;
+      this.dawnSun.material.opacity = visible ? 0.85 : 0;
+      this.dawnSun.position.set(-8.5, 8.0, -35);
+    }
+    if (this.dawnLight) {
+      this.dawnLight.visible = visible;
+      this.dawnLight.intensity = visible ? 2.2 : 0;
+    }
+    this.dawnBirds.forEach((bird, index) => {
+      bird.sprite.visible = visible;
+      bird.sprite.material.opacity = visible ? 0.62 : 0;
+      bird.sprite.position.set(-19 + index * 4.5, 12.5 + (index % 2), -29 + index * 0.5);
+    });
+  }
+
+  resetTransientEffects() {
+    this.extractionBeams.forEach((slot) => {
+      slot.active = false;
+      slot.timer = 0;
+      slot.group.visible = false;
+      slot.beam.material.opacity = 0;
+      slot.inner.material.opacity = 0;
+      slot.particles.material.opacity = 0;
+      slot.light.intensity = 0;
+    });
+    this.occultStrikes.forEach((strike) => {
+      strike.active = false;
+      strike.timer = 0;
+      strike.group.visible = false;
+      strike.light.intensity = 0;
+      strike.flames.forEach((flame) => { flame.material.opacity = 0; });
+    });
+    this.manorDustBursts?.forEach((burst) => {
+      burst.active = false;
+      burst.timer = 0;
+      burst.group.visible = false;
+      burst.puffs.forEach(({ material }) => { material.opacity = 0; });
+    });
+    this.setDawnPrewarmVisible(false);
+    this.extractionCompletions = 0;
+  }
+
   createDawnBirds() {
     if (this.dawnBirds.length > 0) {
       this.dawnBirds.forEach((bird) => { bird.sprite.visible = true; bird.progress = -bird.delay; });
@@ -1563,13 +1653,15 @@ export class World {
 
     this.dawnBirds.forEach((bird) => { bird.sprite.visible = false; bird.sprite.material.opacity = 0; });
 
+    this.prepareDawnAssets();
     if (this.dawnSun) {
-      this.scene.remove(this.dawnSun);
-      this.dawnSun = null;
+      this.dawnSun.visible = false;
+      this.dawnSun.material.opacity = 0;
+      this.dawnSun.position.set(-8.5, 1.0, -35);
     }
     if (this.dawnLight) {
-      this.scene.remove(this.dawnLight);
-      this.dawnLight = null;
+      this.dawnLight.visible = false;
+      this.dawnLight.intensity = 0;
     }
   }
 
@@ -1608,37 +1700,15 @@ export class World {
       if (light) light.intensity = 0;
     });
 
-    const sunCanvas = document.createElement("canvas");
-    sunCanvas.width = 192;
-    sunCanvas.height = 192;
-    const ctx = sunCanvas.getContext("2d");
-    const gradient = ctx.createRadialGradient(96, 96, 18, 96, 96, 92);
-    gradient.addColorStop(0, "rgba(255,246,196,1)");
-    gradient.addColorStop(0.48, "rgba(255,196,119,.96)");
-    gradient.addColorStop(0.72, "rgba(255,145,87,.42)");
-    gradient.addColorStop(1, "rgba(255,124,72,0)");
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, 192, 192);
-    const sunTexture = new THREE.CanvasTexture(sunCanvas);
-    sunTexture.colorSpace = THREE.SRGBColorSpace;
-    const sunMaterial = new THREE.SpriteMaterial({
-      map: sunTexture,
-      transparent: true,
-      opacity: 0,
-      depthWrite: false,
-      fog: false
-    });
-    this.dawnSun = new THREE.Sprite(sunMaterial);
+    // Dawn visuals are created during the initial loading screen so the ending
+    // transition only changes visibility/intensity instead of allocating new GPU assets.
+    this.prepareDawnAssets();
+    this.dawnSun.visible = true;
+    this.dawnSun.material.opacity = 0;
     this.dawnSun.position.set(-8.5, 1.0, -35);
-    this.dawnSun.scale.set(7.4, 7.4, 1);
-    this.scene.add(this.dawnSun);
-
+    this.dawnLight.visible = true;
+    this.dawnLight.intensity = 0;
     this.createDawnBirds();
-
-    this.dawnLight = new THREE.DirectionalLight(0xffd09a, 0);
-    this.dawnLight.position.set(-14, 16, 12);
-    this.scene.add(this.dawnLight);
-    this.disposables.push(sunTexture, sunMaterial);
   }
 
   isInsideManorCollision(position) {

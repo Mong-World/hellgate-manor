@@ -33,6 +33,7 @@ export class Game {
     this.endingActive = false;
     this.endingTimer = 0;
     this.endingDawnMusicStarted = false;
+    this.runtimePrimed = false;
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x050609);
@@ -230,8 +231,20 @@ export class Game {
     this.world.setUpgradeState({ extraction: true, extractionLevel: 3, demolition: true, undercroft: true, occult: true, fortifyLevel: 10 });
     this.world.setTurretLevel(3);
     this.world.setNewGamePlusMode?.(true);
-    this.world.createDawnBirds?.();
-    this.world.triggerOccultStrike?.(new THREE.Vector3(-3, 0, 0));
+    this.world.prepareDawnAssets?.();
+    this.world.setDawnPrewarmVisible?.(true);
+
+    // Force every transient system visible before play: all extraction slots,
+    // several occult strikes and both light/heavy manor-damage dust variants.
+    for (let i = 0; i < CONFIG.extraction.maxConcurrent; i += 1) {
+      this.world.startExtractionBeam?.(CONFIG.extraction.maxConcurrent);
+    }
+    this.world.triggerOccultStrike?.(new THREE.Vector3(-8, 0, -2));
+    this.world.triggerOccultStrike?.(new THREE.Vector3(-2, 0, 1));
+    this.world.triggerOccultStrike?.(new THREE.Vector3(5, 0, 3));
+    this.world.triggerManorDamageDust?.(new THREE.Vector3(this.world.manorBarrierX, 0, -3), "husk");
+    this.world.triggerManorDamageDust?.(new THREE.Vector3(this.world.manorBarrierX, 0, 0), "brute");
+    this.world.triggerManorDamageDust?.(new THREE.Vector3(this.world.manorBarrierX, 0, 3), "siege");
 
     // Warm every pooled enemy clone in small visible batches. This is slower at
     // startup by design, but avoids first-spawn GLB/skinning/animation hitches.
@@ -265,7 +278,7 @@ export class Game {
     this.setLoadingProgress(92);
     // Render the complete pooled effect set before hiding it. Unlike the older
     // warm-up this actually sends every soul/ash/ring material to the GPU.
-    for (let frame = 0; frame < 5; frame += 1) {
+    for (let frame = 0; frame < 12; frame += 1) {
       const dt = 1 / 30;
       this.effectPool.update(dt);
       this.defence.updateProjectiles(dt);
@@ -291,6 +304,7 @@ export class Game {
     });
     this.defence.impacts = [];
     this.world.setTurretLevel(0);
+    this.world.resetTransientEffects?.();
     this.world.setNewGamePlusMode?.(false);
     this.applyUpgradeState();
     this.renderer.render(this.scene, this.camera);
@@ -309,6 +323,16 @@ export class Game {
     });
   }
 
+  async primeRuntimeAfterUnlock() {
+    if (this.runtimePrimed) return;
+    this.runtimePrimed = true;
+    await this.audio.unlock();
+    this.audio.primeAllPlaybackPaths?.();
+    // Give WebAudio one frame to finish creating the silent source/gain paths
+    // before the first wave transition begins.
+    await this.waitForFrame();
+  }
+
   async beginNewGame() {
     return this.beginFreshGame(false);
   }
@@ -322,6 +346,7 @@ export class Game {
     if (this.startingGame) return;
     this.startingGame = true;
     await this.audio.unlock();
+    await this.primeRuntimeAfterUnlock();
     this.resetState({ newGamePlus });
     this.world.setNewGamePlusMode?.(this.newGamePlus);
     this.world.resetNight?.();
@@ -353,6 +378,7 @@ export class Game {
     if (this.startingGame) return;
     this.startingGame = true;
     await this.audio.unlock();
+    await this.primeRuntimeAfterUnlock();
     const save = this.readSave();
     if (!save) {
       this.startingGame = false;
