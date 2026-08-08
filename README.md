@@ -242,3 +242,15 @@ The GitHub Action builds `main`, copies `assets/`, `fonts/`, and `sounds/` into 
 - Plays once when a Husk is accepted into Soul Binding.
 - Plays again when that binding cycle completes.
 - `assets/soulmusic.mp3` loops only while at least one binding beam is active and fades out when the final active binding finishes.
+
+
+## v1.5.2 progression / extraction polish
+
+- Soul Extraction and Hellfire Battery now become available together.
+- Hell Bomb Forge availability moved later; Undercroft and Occult availability also moved.
+- Locked systems no longer reveal the wave on which they become available.
+- Extraction slot upgrades cost 3000 and 6000 Souls.
+- Removed explanatory text about fortification costs increasing.
+- Replaced the roof rings / idle extraction cylinder with one bright pulsing portal hovering above/in front of the manor.
+- Purchasing Soul Extraction for the first time opens a short visual instruction card explaining how to drop a demon into the portal.
+- Added developer test mode. Use `?dev=1&wave=25` to start directly at a chosen wave with test resources. Add `&shop=1` to open the between-wave shop immediately at that progression point. Developer mode does not overwrite or delete the normal save.

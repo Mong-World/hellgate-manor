@@ -178,6 +178,38 @@ function pulseFogOpacity(material, elapsed, phase, baseOpacity = 0.16) {
   material.opacity = Math.max(0.05, baseOpacity + Math.sin(elapsed * 0.24 + phase) * 0.028);
 }
 
+function makeExtractionPortalTexture() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, 256, 256);
+
+  const glow = ctx.createRadialGradient(128, 128, 4, 128, 128, 124);
+  glow.addColorStop(0, "rgba(255,255,245,1)");
+  glow.addColorStop(0.18, "rgba(255,224,162,.98)");
+  glow.addColorStop(0.48, "rgba(255,137,57,.78)");
+  glow.addColorStop(0.74, "rgba(255,77,20,.34)");
+  glow.addColorStop(1, "rgba(255,77,20,0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, 256, 256);
+
+  ctx.globalCompositeOperation = "screen";
+  for (let i = 0; i < 7; i += 1) {
+    ctx.strokeStyle = `rgba(255,238,188,${0.16 + i * 0.035})`;
+    ctx.lineWidth = 2 + (i % 3);
+    ctx.beginPath();
+    const radius = 32 + i * 10;
+    const start = i * 0.62;
+    ctx.arc(128, 128, radius, start, start + Math.PI * (0.7 + (i % 2) * 0.35));
+    ctx.stroke();
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
 export class World {
   constructor(scene, assets) {
     this.scene = scene;
@@ -917,54 +949,40 @@ export class World {
     this.extractionGroup = extraction;
     this.extractionCentre.copy(extraction.position);
 
-    const roofGlowGeometry = new THREE.CircleGeometry(4.35, 64);
-    roofGlowGeometry.rotateX(-Math.PI / 2);
-    const roofGlowMaterial = new THREE.MeshBasicMaterial({
-      color: 0xffb96e,
+    const portalTexture = makeExtractionPortalTexture();
+    const portalMaterial = new THREE.SpriteMaterial({
+      map: portalTexture,
+      color: 0xffc27e,
       transparent: true,
-      opacity: 0.34,
+      opacity: 0.94,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
-      side: THREE.DoubleSide
+      depthTest: true,
+      fog: false
     });
-    const roofGlow = new THREE.Mesh(roofGlowGeometry, roofGlowMaterial);
-    roofGlow.scale.set(1.55, 1, 1.08);
-    roofGlow.position.y = 0.08;
-    extraction.add(roofGlow);
+    const portal = new THREE.Sprite(portalMaterial);
+    portal.position.set(0, 0.72, 1.8);
+    portal.scale.set(5.8, 5.8, 1);
+    extraction.add(portal);
 
-    const roofHaloGeometry = new THREE.RingGeometry(2.5, 4.25, 64);
-    roofHaloGeometry.rotateX(-Math.PI / 2);
-    const roofHaloMaterial = new THREE.MeshBasicMaterial({
-      color: 0xff6b27,
+    const portalHaloMaterial = new THREE.SpriteMaterial({
+      map: portalTexture,
+      color: 0xff6b24,
       transparent: true,
-      opacity: 0.30,
+      opacity: 0.38,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
-      side: THREE.DoubleSide
+      depthTest: true,
+      fog: false
     });
-    const roofHalo = new THREE.Mesh(roofHaloGeometry, roofHaloMaterial);
-    roofHalo.scale.set(1.5, 1, 1.06);
-    roofHalo.position.y = 0.11;
-    extraction.add(roofHalo);
+    const portalHalo = new THREE.Sprite(portalHaloMaterial);
+    portalHalo.position.copy(portal.position);
+    portalHalo.scale.set(7.4, 7.4, 1);
+    extraction.add(portalHalo);
 
-    const extractionLight = new THREE.PointLight(0xffb36a, 58, 22, 1.65);
-    extractionLight.position.y = 1.7;
+    const extractionLight = new THREE.PointLight(0xffa14f, 64, 24, 1.6);
+    extractionLight.position.set(0, 1.1, 1.2);
     extraction.add(extractionLight);
-
-    // A permanent soft beacon makes the whole roof read as the drop target
-    // even before a binding is active.
-    const idleBeamGeometry = new THREE.CylinderGeometry(1.1, 3.8, 6.8, 32, 1, true);
-    const idleBeamMaterial = new THREE.MeshBasicMaterial({
-      color: 0xffc985,
-      transparent: true,
-      opacity: 0.055,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      side: THREE.DoubleSide
-    });
-    const idleBeam = new THREE.Mesh(idleBeamGeometry, idleBeamMaterial);
-    idleBeam.position.y = 3.5;
-    extraction.add(idleBeam);
 
     this.extractionBeams = [];
     for (let slot = 0; slot < CONFIG.extraction.maxConcurrent; slot += 1) {
@@ -1045,9 +1063,11 @@ export class World {
 
     this.upgradeGroups.extraction = {
       group: extraction,
-      roofGlow,
-      roofHalo,
-      idleBeam,
+      portal,
+      portalHalo,
+      portalMaterial,
+      portalHaloMaterial,
+      portalTexture,
       light: extractionLight
     };
 
@@ -1186,8 +1206,7 @@ export class World {
     this.fortifyGroups = [fortifyStage1, fortifyStage2, fortifyStage3];
 
     this.disposables.push(
-      roofGlowGeometry, roofGlowMaterial, roofHaloGeometry, roofHaloMaterial,
-      idleBeamGeometry, idleBeamMaterial,
+      portalTexture, portalMaterial, portalHaloMaterial,
       braceGeometry, braceMaterial, occultOrbGeometry, occultOrbMaterial,
       occultRingGeometry, occultRingMaterial, occultRingB.material,
       stakeGeometry, beamGeometry, wardGeometry, wardMaterial
@@ -1492,13 +1511,12 @@ export class World {
     if (this.upgradeGroups.extraction?.group.visible) {
       const extraction = this.upgradeGroups.extraction;
       const pulse = 1 + Math.sin(elapsed * 2.8) * 0.08;
-      extraction.roofGlow.material.opacity = 0.30 + Math.sin(elapsed * 2.1) * 0.06;
-      extraction.roofHalo.material.opacity = 0.24 + Math.sin(elapsed * 2.6 + 1.1) * 0.07;
-      extraction.roofHalo.rotation.z += dt * 0.07;
-      extraction.idleBeam.material.opacity = 0.045 + Math.sin(elapsed * 2.0) * 0.012;
-      extraction.idleBeam.scale.x = 1 + Math.sin(elapsed * 1.5) * 0.04;
-      extraction.idleBeam.scale.z = 1 + Math.cos(elapsed * 1.7) * 0.04;
-      extraction.light.intensity = 48 + pulse * 12;
+      extraction.portal.material.opacity = 0.82 + Math.sin(elapsed * 2.4) * 0.10;
+      extraction.portalHalo.material.opacity = 0.30 + Math.sin(elapsed * 1.9 + 1.1) * 0.08;
+      const portalScale = 1 + Math.sin(elapsed * 2.0) * 0.035;
+      extraction.portal.scale.set(5.8 * portalScale, 5.8 * portalScale, 1);
+      extraction.portalHalo.scale.set(7.4 / portalScale, 7.4 / portalScale, 1);
+      extraction.light.intensity = 52 + pulse * 14;
     }
 
     this.extractionBeams.forEach((slot, slotIndex) => {

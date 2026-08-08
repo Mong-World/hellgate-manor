@@ -21,6 +21,10 @@ export class Game {
     this.startingGame = false;
     this.cameraShake = 0;
     this.cameraBase = new THREE.Vector3(...CONFIG.camera.position);
+    const params = new URLSearchParams(window.location.search);
+    this.developerMode = params.get("dev") === "1";
+    this.developerWave = THREE.MathUtils.clamp(Math.floor(Number(params.get("wave")) || 1), 1, CONFIG.waves.length);
+    this.developerShop = params.get("shop") === "1";
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x050609);
@@ -70,6 +74,7 @@ export class Game {
       onRestart: () => this.beginNewGame()
     });
 
+    this.ui.setDeveloperMode(this.developerMode, this.developerWave, this.developerShop);
     this.resetState();
     this.onResize = this.onResize.bind(this);
     this.onKeyDown = this.onKeyDown.bind(this);
@@ -169,7 +174,7 @@ export class Game {
 
     this.applyUpgradeState();
     this.syncUI();
-    this.ui.setHasSave(this.hasSave());
+    this.ui.setHasSave(this.developerMode ? false : this.hasSave());
     this.ui.setMode("start");
     this.running = true;
     requestAnimationFrame(this.animate);
@@ -280,7 +285,25 @@ export class Game {
     await this.audio.unlock();
     this.world.resetNight?.();
     this.resetState();
-    this.clearSave();
+    if (!this.developerMode) this.clearSave();
+
+    if (this.developerMode) {
+      this.waveIndex = this.developerWave - 1;
+      this.souls = 50000;
+      this.boundSouls = 120;
+      this.manorMaxHealth = 5000;
+      this.manorHealth = 5000;
+      if (this.developerShop) {
+        this.gameplayActive = false;
+        this.grabSystem.setEnabled(false);
+        this.applyUpgradeState();
+        this.syncUI();
+        this.ui.setMode("intermission");
+        this.startingGame = false;
+        return;
+      }
+    }
+
     this.applyUpgradeState();
     this.startCurrentWave();
     this.startingGame = false;
@@ -357,6 +380,7 @@ export class Game {
   }
 
   saveGame(resumeWaveIndex = this.waveIndex) {
+    if (this.developerMode) return true;
     try {
       const state = this.snapshotState();
       state.waveIndex = THREE.MathUtils.clamp(resumeWaveIndex, 0, CONFIG.waves.length - 1);
@@ -370,6 +394,7 @@ export class Game {
   }
 
   clearSave() {
+    if (this.developerMode) return;
     try {
       localStorage.removeItem(SAVE_KEY);
     } catch {
@@ -637,6 +662,7 @@ export class Game {
     } else if (type === "extraction") {
       this.buildings.extraction = true;
       this.extractionLevel = 1;
+      this.ui.showExtractionTutorial();
     } else if (type === "extractionUpgrade") {
       this.extractionLevel = Math.min(CONFIG.extraction.maxLevel, this.extractionLevel + 1);
     } else if (type in this.buildings) {
@@ -710,7 +736,8 @@ export class Game {
 
   continueAfterIntermission() {
     if (this.ui.mode !== "intermission") return;
-    this.waveIndex += 1;
+    if (!(this.developerMode && this.developerShop)) this.waveIndex += 1;
+    this.developerShop = false;
     this.startCurrentWave();
   }
 

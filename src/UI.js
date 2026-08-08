@@ -50,6 +50,10 @@ export class UI {
     this.saveNoticeTimer = 0;
     this.saveNoticeSuccess = true;
     this.waveResults = { souls: 0, deaths: 0, damage: 0, health: this.health, maxHealth: this.maxHealth, saved: false };
+    this.tutorial = null;
+    this.developerMode = false;
+    this.developerWave = 1;
+    this.developerShop = false;
 
     this.onPointerDown = this.onPointerDown.bind(this);
     this.resize = this.resize.bind(this);
@@ -78,6 +82,23 @@ export class UI {
 
   setHasSave(hasSave) {
     this.hasSave = hasSave;
+  }
+
+  setDeveloperMode(enabled, wave = 1, shop = false) {
+    this.developerMode = !!enabled;
+    this.developerWave = Math.max(1, Math.floor(Number(wave) || 1));
+    this.developerShop = !!shop;
+  }
+
+  showExtractionTutorial() {
+    this.tutorial = {
+      title: "SOUL EXTRACTION",
+      lines: [
+        "GRAB A DEMON AND DROP IT INTO THE GLOWING PORTAL",
+        "ABOVE THE MANOR TO CREATE A BOUND SOUL.",
+        "WAIT FOR A BINDING SLOT TO BECOME FREE BEFORE DROPPING ANOTHER."
+      ]
+    };
   }
 
   setWaveResults(results) {
@@ -178,6 +199,7 @@ export class UI {
     if (this.mode === "intermission") {
       this.drawHUD(width, height);
       this.drawIntermission(width, height);
+      if (this.tutorial) this.drawTutorial(width, height);
       return;
     }
     if (this.mode === "gameOver") {
@@ -248,7 +270,8 @@ export class UI {
   drawStart(width, height) {
     const mobile = width < 700 || height < 620;
     const panelWidth = Math.min(560, width - 32);
-    const panelHeight = this.hasSave ? (mobile ? 280 : 300) : (mobile ? 235 : 255);
+    const normalPanelHeight = this.hasSave ? (mobile ? 280 : 300) : (mobile ? 235 : 255);
+    const panelHeight = normalPanelHeight + (this.developerMode ? (mobile ? 48 : 52) : 0);
     const x = (width - panelWidth) / 2;
     const y = (height - panelHeight) / 2;
     this.panel(x, y, panelWidth, panelHeight, C.panel, 14);
@@ -268,8 +291,15 @@ export class UI {
     const buttonHeight = mobile ? 52 : 50;
     const firstY = y + (mobile ? 110 : 132);
     this.button("NEW GAME", width / 2 - 105, firstY, 210, buttonHeight, () => this.callbacks.onNewGame?.());
-    if (this.hasSave) {
+    if (this.hasSave && !this.developerMode) {
       this.button("CONTINUE", width / 2 - 105, firstY + buttonHeight + 12, 210, buttonHeight, () => this.callbacks.onContinueSave?.());
+    }
+
+    if (this.developerMode) {
+      ctx.fillStyle = C.purple;
+      ctx.font = this.dataFont(mobile ? 10 : 12, 900);
+      const modeText = this.developerShop ? "SHOP TEST" : "WAVE TEST";
+      ctx.fillText(`DEVELOPER TEST — ${modeText} ${this.developerWave}`, width / 2, y + panelHeight - 22);
     }
   }
 
@@ -642,8 +672,8 @@ export class UI {
       ["PATCH DAMAGE", "+50 HEALTH", CONFIG.manor.repairs.minor.cost, "repairMinor", this.health >= this.maxHealth],
       ["MAJOR REPAIR", "+250 HEALTH", CONFIG.manor.repairs.major.cost, "repairMajor", this.health >= this.maxHealth],
       ["RESTORE MANOR", "+1000 HEALTH", CONFIG.manor.repairs.full.cost, "repairFull", this.health >= this.maxHealth],
-      ["FORTIFY", "+100 MAX HEALTH — COST RISES EACH TIME", this.purchaseCosts.fortify ?? CONFIG.manor.fortify.baseCost, "fortify", fortifyMax, false, fortifyMax ? "MAX" : null],
-      ["MAJOR FORTIFY", "+1000 MAX HEALTH — COST RISES SHARPLY", this.purchaseCosts.majorFortify ?? CONFIG.manor.majorFortify.baseCost, "majorFortify", majorMax, false, majorMax ? "MAX" : null]
+      ["FORTIFY", "+100 MAX HEALTH", this.purchaseCosts.fortify ?? CONFIG.manor.fortify.baseCost, "fortify", fortifyMax, false, fortifyMax ? "MAX" : null],
+      ["MAJOR FORTIFY", "+1000 MAX HEALTH", this.purchaseCosts.majorFortify ?? CONFIG.manor.majorFortify.baseCost, "majorFortify", majorMax, false, majorMax ? "MAX" : null]
     ];
     this.drawShopRows(items, x, y, width, height, mobile);
   }
@@ -655,7 +685,7 @@ export class UI {
     if (!this.buildings.extraction || this.extractionLevel <= 0) {
       extractionItem = [
         "SOUL EXTRACTION",
-        extractionUnlock ? `UNLOCKS WAVE ${b.extraction.unlockWave}` : "1 BINDING SLOT — DROP A DEMON OVER THE GLOWING ROOF",
+        "1 BINDING SLOT — DROP A DEMON INTO THE GLOWING PORTAL",
         b.extraction.cost,
         "extraction",
         false,
@@ -689,8 +719,7 @@ export class UI {
       const extractionLocked = !this.buildings.extraction;
       const locked = waveLocked || extractionLocked;
       let text = description;
-      if (waveLocked) text = `UNLOCKS WAVE ${def.unlockWave}`;
-      else if (extractionLocked) text = "REQUIRES SOUL EXTRACTION";
+      if (!waveLocked && extractionLocked) text = "REQUIRES SOUL EXTRACTION";
       return [title, text, def.cost, key, this.buildings[key], locked];
     };
 
@@ -824,6 +853,63 @@ export class UI {
       const by = rowY + (rowH - buttonSize) / 2;
       this.button("−", minusX, by, buttonSize, buttonSize, () => this.callbacks.onAssign?.(key, -1), assigned <= 0, () => this.callbacks.onDeniedPurchase?.(), accent);
       this.button(maxed ? "MAX" : "+", plusX, by, buttonSize, buttonSize, () => this.callbacks.onAssign?.(key, 1), maxed || this.unassignedSouls <= 0, () => this.callbacks.onDeniedPurchase?.(), accent);
+    });
+  }
+
+  drawTutorial(width, height) {
+    if (!this.tutorial) return;
+    // Block the shop underneath while this first-use help card is open.
+    this.buttons = [];
+    const ctx = this.ctx;
+    ctx.fillStyle = "rgba(0,0,0,.72)";
+    ctx.fillRect(0, 0, width, height);
+
+    const mobile = width < 700 || height < 620;
+    const panelWidth = Math.min(mobile ? width - 28 : 590, width - 28);
+    const panelHeight = mobile ? 280 : 300;
+    const x = (width - panelWidth) / 2;
+    const y = (height - panelHeight) / 2;
+    this.panel(x, y, panelWidth, panelHeight, C.panel, 14);
+
+    ctx.textAlign = "center";
+    ctx.fillStyle = C.orangeLight;
+    ctx.font = this.font(mobile ? 31 : 40);
+    ctx.fillText(this.tutorial.title, width / 2, y + 55);
+
+    // Simple visual shorthand: demon -> glowing portal.
+    const iconY = y + 108;
+    ctx.strokeStyle = C.text;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(width / 2 - 100, iconY, 12, 0, Math.PI * 2);
+    ctx.moveTo(width / 2 - 100, iconY + 12);
+    ctx.lineTo(width / 2 - 100, iconY + 48);
+    ctx.moveTo(width / 2 - 100, iconY + 22);
+    ctx.lineTo(width / 2 - 122, iconY + 37);
+    ctx.moveTo(width / 2 - 100, iconY + 22);
+    ctx.lineTo(width / 2 - 78, iconY + 37);
+    ctx.stroke();
+
+    ctx.fillStyle = C.orange;
+    ctx.font = this.dataFont(28, 900);
+    ctx.fillText("→", width / 2, iconY + 27);
+    const portal = ctx.createRadialGradient(width / 2 + 100, iconY + 22, 2, width / 2 + 100, iconY + 22, 34);
+    portal.addColorStop(0, "rgba(255,255,235,1)");
+    portal.addColorStop(0.35, "rgba(255,184,96,.95)");
+    portal.addColorStop(1, "rgba(255,93,24,0)");
+    ctx.fillStyle = portal;
+    ctx.beginPath();
+    ctx.arc(width / 2 + 100, iconY + 22, 36, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = C.text;
+    ctx.font = this.dataFont(mobile ? 10 : 12, 850);
+    this.tutorial.lines.forEach((line, index) => {
+      ctx.fillText(line, width / 2, y + 178 + index * 20);
+    });
+
+    this.button("GOT IT", width / 2 - 95, y + panelHeight - 58, 190, 42, () => {
+      this.tutorial = null;
     });
   }
 
