@@ -299,7 +299,7 @@ The GitHub Action builds `main`, copies `assets/`, `fonts/`, and `sounds/` into 
 - Desktop camera and desktop UI remain unchanged.
 
 
-## v1.8.0 final branding / ending-audio pass
+## v1.8.1 final branding / ending-audio pass
 
 - Added `assets/moofstudiogame.png` branding to the loading screen, title screen and pause menu.
 - Loading now leads with the Moof Studios branding and shows HELLGATE MANOR as the smaller game title beneath it.
@@ -307,3 +307,16 @@ The GitHub Action builds `main`, copies `assets/`, `fonts/`, and `sounds/` into 
 - The developer panel remains fully available but the old `Ctrl + Shift + D` shortcut and public `?dev=1` activation have been removed.
 - Developer access now requires a private multi-key shortcut plus password verification. Only a SHA-256 hash is stored in the client source, not the password text itself.
 - Mobile responsive framing/UI and all v1.7.3 gameplay behaviour are otherwise unchanged.
+
+## v1.8.1 branding hierarchy
+
+- HELLGATE MANOR is now the dominant title on loading, start, and pause screens.
+- `assets/moofstudiogame.png` is presented as a compact production credit directly underneath the title.
+- Separate mobile/short-landscape sizes keep the credit subordinate without changing the gameplay HUD/camera work from v1.7.3.
+
+## v1.8.2 manor repair visibility / developer shortcut
+
+- The upgrade screen now shows current **MANOR HP / MAX HP** alongside Souls, so repair purchases can be judged before spending Souls.
+- Manor HP is visible on desktop and in the compact landscape-mobile upgrade header.
+- The HP value changes colour as the manor becomes damaged, while the existing repair buttons still disable at full health.
+- Protected developer access is now opened with `Ctrl + Shift + J`; password verification remains required and the password itself is still not stored as plaintext in the source.

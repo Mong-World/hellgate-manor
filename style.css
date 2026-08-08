@@ -80,21 +80,26 @@ canvas {
   );
 }
 
-.loading-studio-logo {
-  display: block;
-  width: min(360px, 82vw);
-  height: 112px;
-  margin: -4px auto 0;
-  object-fit: cover;
-  object-position: center 50%;
+.loading-title {
+  margin: 0;
+  color: #f4ebe3;
+  font: 48px/1 "Lansbury", Georgia, serif;
+  letter-spacing: .015em;
+  text-shadow: 0 0 13px rgba(255, 78, 22, 0.52);
 }
 
-.loading-title {
-  margin: 4px 0 14px;
-  color: #f4ebe3;
-  font: 26px/1 "Lansbury", Georgia, serif;
-  letter-spacing: .02em;
-  text-shadow: 0 0 11px rgba(255, 78, 22, 0.48);
+/*
+  Production credit: deliberately much smaller than the game title.
+  The PNG is square with transparent space, so object-fit: cover crops to the
+  real artwork rather than allowing the transparent padding to make it huge.
+*/
+.loading-studio-logo {
+  display: block;
+  width: 160px;
+  height: 50px;
+  margin: 10px auto 0;
+  object-fit: cover;
+  object-position: center 50%;
 }
 
 .loading-track {
@@ -125,8 +130,19 @@ canvas {
 
 @media (max-width: 700px) {
   .loading-panel { padding: 20px 22px 20px; }
-  .loading-studio-logo { width: min(300px, 78vw); height: 94px; }
-  .loading-title { font-size: 22px; }
+  .loading-title { font-size: 38px; }
+  .loading-studio-logo { width: 132px; height: 42px; margin-top: 8px; }
+}
+
+/* Portals/mobile landscape is typically wide but only ~390px tall. */
+@media (max-height: 520px) and (orientation: landscape) {
+  .loading-panel {
+    width: min(470px, calc(100vw - 34px));
+    padding: 18px 24px 17px;
+  }
+  .loading-title { font-size: 34px; }
+  .loading-studio-logo { width: 118px; height: 37px; margin-top: 7px; }
+  .loading-track { margin: 14px 0 8px; }
 }
 
 

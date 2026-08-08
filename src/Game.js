@@ -1058,7 +1058,7 @@ export class Game {
   }
 
   onKeyDown(event) {
-    if (event.ctrlKey && event.shiftKey && event.altKey && event.key.toLowerCase() === "d") {
+    if (event.ctrlKey && event.shiftKey && !event.altKey && event.key.toLowerCase() === "j") {
       event.preventDefault();
       if (event.repeat || this.developerAccessPending) return;
       if (this.developerPanelOpen) this.closeDeveloperPanel();

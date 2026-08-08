@@ -451,7 +451,7 @@ export class UI {
     const mobile = mobileLandscape || width < 700 || height < 620;
     const buttonCount = 1 + (this.hasSave && !this.developerMode ? 1 : 0) + (this.ngPlusUnlocked && !this.developerMode ? 1 : 0);
     const panelWidth = Math.min(mobileLandscape ? 500 : 560, width - (mobileLandscape ? 18 : 32));
-    const brandExtra = mobileLandscape ? 32 : (mobile ? 46 : 54);
+    const brandExtra = mobileLandscape ? 23 : (mobile ? 31 : 36);
     const panelHeight = mobileLandscape
       ? 120 + brandExtra + buttonCount * 46 + (this.bestRank && !this.developerMode ? 18 : 0) + (this.developerMode ? 30 : 0)
       : (mobile ? 214 : 232) + brandExtra + buttonCount * (mobile ? 58 : 60) + (this.bestRank && !this.developerMode ? 24 : 0) + (this.developerMode ? 48 : 0);
@@ -469,17 +469,19 @@ export class UI {
     ctx.fillText("HELLGATE MANOR", width / 2, titleY);
     ctx.shadowBlur = 0;
 
-    const logoCenterY = titleY + (mobileLandscape ? 24 : (mobile ? 31 : 38));
+    // Keep the studio credit subordinate to the game title, like a production
+    // credit rather than a second logo lock-up.
+    const logoCenterY = titleY + (mobileLandscape ? 19 : (mobile ? 25 : 29));
     this.drawStudioLogo(
       width / 2,
       logoCenterY,
-      mobileLandscape ? 150 : (mobile ? 185 : 218),
-      mobileLandscape ? 42 : (mobile ? 50 : 58)
+      mobileLandscape ? 92 : (mobile ? 112 : 132),
+      mobileLandscape ? 25 : (mobile ? 31 : 36)
     );
 
     ctx.fillStyle = C.muted;
     ctx.font = this.dataFont(mobileLandscape ? 9 : (mobile ? 11 : 14), 800);
-    const taglineY = logoCenterY + (mobileLandscape ? 31 : (mobile ? 39 : 45));
+    const taglineY = logoCenterY + (mobileLandscape ? 21 : (mobile ? 27 : 31));
     ctx.fillText("DEFEND THE MANOR.", width / 2, taglineY);
 
     if (this.bestRank && !this.developerMode) {
@@ -792,17 +794,17 @@ export class UI {
     ctx.shadowBlur = 0;
     this.drawStudioLogo(
       width / 2,
-      y + (mobileLandscape ? 62 : 82),
-      mobileLandscape ? 145 : 185,
-      mobileLandscape ? 38 : 48
+      y + (mobileLandscape ? 54 : 70),
+      mobileLandscape ? 86 : 112,
+      mobileLandscape ? 24 : 31
     );
 
     ctx.fillStyle = C.orangeLight;
     ctx.font = this.font(mobileLandscape ? 25 : 32);
-    ctx.fillText("PAUSED", width / 2, y + (mobileLandscape ? 106 : 132));
+    ctx.fillText("PAUSED", width / 2, y + (mobileLandscape ? 91 : 113));
     ctx.fillStyle = C.muted;
     ctx.font = this.dataFont(mobileLandscape ? 8 : 11, 800);
-    ctx.fillText(mobileLandscape ? "TAP RESUME TO RETURN" : "ESC OR RESUME TO RETURN", width / 2, y + (mobileLandscape ? 124 : 155));
+    ctx.fillText(mobileLandscape ? "TAP RESUME TO RETURN" : "ESC OR RESUME TO RETURN", width / 2, y + (mobileLandscape ? 110 : 137));
 
     const buttonHeight = mobileLandscape ? 40 : 50;
     this.button(
@@ -1010,14 +1012,26 @@ export class UI {
       ctx.textAlign = "center";
     }
 
-    ctx.fillStyle = C.muted;
-    ctx.font = this.dataFont(mobile ? 10 : 12, 820);
+    const statOffset = mobile ? 76 : 104;
+    const statLabelY = y + (mobile ? 64 : 77);
+    const statValueY = y + (mobile ? 88 : 104);
+    const healthRatio = Math.max(0, Math.min(1, this.maxHealth > 0 ? this.health / this.maxHealth : 0));
+    const healthColor = healthRatio <= 0.25 ? C.red : (healthRatio <= 0.55 ? C.amber : C.text);
+
+    ctx.textAlign = "center";
     ctx.fillStyle = C.orangeLight;
     ctx.font = this.dataFont(mobile ? 11 : 12, 900);
-    ctx.fillText("SOULS", width / 2, y + (mobile ? 64 : 77));
+    ctx.fillText("SOULS", width / 2 - statOffset, statLabelY);
     ctx.fillStyle = C.orange;
     ctx.font = this.dataFont(mobile ? 24 : 29, 900);
-    ctx.fillText(String(this.souls), width / 2, y + (mobile ? 88 : 104));
+    ctx.fillText(String(this.souls), width / 2 - statOffset, statValueY);
+
+    ctx.fillStyle = C.orangeLight;
+    ctx.font = this.dataFont(mobile ? 11 : 12, 900);
+    ctx.fillText("MANOR HP", width / 2 + statOffset, statLabelY);
+    ctx.fillStyle = healthColor;
+    ctx.font = this.dataFont(mobile ? 20 : 24, 900);
+    ctx.fillText(`${Math.ceil(this.health)} / ${Math.ceil(this.maxHealth)}`, width / 2 + statOffset, statValueY);
 
     const tabs = ["MANOR", "SYSTEMS", "BOUND SOULS"];
     const tabY = y + (mobile ? 101 : 118);
@@ -1077,6 +1091,15 @@ export class UI {
     ctx.fillStyle = C.orange;
     ctx.font = this.dataFont(20, 900);
     ctx.fillText(String(this.souls), x + 64, y + 51);
+
+    const mobileHealthRatio = Math.max(0, Math.min(1, this.maxHealth > 0 ? this.health / this.maxHealth : 0));
+    const mobileHealthColor = mobileHealthRatio <= 0.25 ? C.red : (mobileHealthRatio <= 0.55 ? C.amber : C.text);
+    ctx.fillStyle = C.orangeLight;
+    ctx.font = this.dataFont(8, 900);
+    ctx.fillText("MANOR HP", x + 132, y + 50);
+    ctx.fillStyle = mobileHealthColor;
+    ctx.font = this.dataFont(15, 900);
+    ctx.fillText(`${Math.ceil(this.health)} / ${Math.ceil(this.maxHealth)}`, x + 198, y + 51);
 
     const saveSize = 36;
     const saveX = x + panelWidth - saveSize - 12;
