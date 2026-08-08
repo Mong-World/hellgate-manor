@@ -1238,8 +1238,21 @@ export class Game {
         Math.tan(referenceHorizontalFov / 2) / aspect
       );
 
+      // v1.7.2 held the horizontal framing completely fixed on increasingly
+      // wide phones. That successfully hid the spawn/manor edges, but on
+      // extra-wide devices it cropped a little too much from the top and
+      // sides. Keep 75% of that corrective crop and relax the remaining 25%
+      // back toward the 844x390 reference framing. The Portals reference
+      // itself is therefore unchanged, while longer phones gain a small
+      // amount of extra breathing room without returning to the old wide view.
+      const adaptiveVerticalFovDegrees = THREE.MathUtils.radToDeg(adaptiveVerticalFov);
+      const referenceVerticalFovDegrees = THREE.MathUtils.radToDeg(referenceVerticalFov);
+      const relaxedVerticalFov = aspect > referenceAspect
+        ? THREE.MathUtils.lerp(adaptiveVerticalFovDegrees, referenceVerticalFovDegrees, 0.25)
+        : adaptiveVerticalFovDegrees;
+
       this.camera.fov = THREE.MathUtils.clamp(
-        THREE.MathUtils.radToDeg(adaptiveVerticalFov),
+        relaxedVerticalFov,
         31.5,
         41.5
       );

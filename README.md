@@ -285,3 +285,11 @@ The GitHub Action builds `main`, copies `assets/`, `fonts/`, and `sounds/` into 
 - Landscape phones now preserve the same horizontal camera framing as the 844x390 Portals mobile reference viewport.
 - Extra-wide phones automatically tighten vertical FOV so they do not reveal additional world at the left/right edges.
 - Desktop camera and UI remain unchanged.
+
+
+## v1.7.3 mobile framing refinement
+
+- Keeps the Portals 844×390 mobile reference framing unchanged.
+- On landscape phones wider than the reference aspect ratio, relaxes the v1.7.2 adaptive crop by 25%.
+- Retains 75% of the side-crop protection that keeps demon spawn edges and the far manor edge hidden, while restoring a little more of the manor roof and left Hell Gate/fire area on extra-wide phones.
+- Desktop camera and desktop UI remain unchanged.
