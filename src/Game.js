@@ -6,27 +6,18 @@ import { GrabSystem } from "./GrabSystem.js";
 import { WaveManager } from "./WaveManager.js";
 import { DefenceSystem } from "./DefenceSystem.js";
 import { UI } from "./UI.js";
-import { AshExplosion } from "./effects/AshExplosion.js";
-import { SoulEmber } from "./effects/SoulEmber.js";
-import { ImpactRing } from "./effects/ImpactRing.js";
 import { AudioManager } from "./AudioManager.js";
+import { EffectPool } from "./EffectPool.js";
+
+const SAVE_KEY = "hellgate-manor-save-v2";
 
 export class Game {
   constructor(container) {
     this.container = container;
     this.clock = new THREE.Clock();
-    this.effects = [];
     this.running = false;
     this.gameplayActive = false;
-    this.waveIndex = 0;
-    this.souls = 0;
-    this.manorHealth = CONFIG.manor.startHealth;
-    this.manorMaxHealth = CONFIG.manor.maxHealth;
-    this.turretLevel = 0;
-    this.bombs = 0;
-    this.purchaseUsed = false;
     this.startingGame = false;
-    this.waveStartSnapshot = null;
     this.cameraShake = 0;
     this.cameraBase = new THREE.Vector3(...CONFIG.camera.position);
 
@@ -59,49 +50,74 @@ export class Game {
     this.assets = new AssetLibrary();
     this.audio = new AudioManager(CONFIG.sounds);
     this.loadingElement = document.getElementById("loading");
-    this.loadingStatus = document.getElementById("loading-status");
     this.loadingProgress = document.getElementById("loading-progress");
     this.loadingPercent = document.getElementById("loading-percent");
 
     this.ui = new UI(document.getElementById("ui-canvas"), {
-      onStart: () => this.beginGame(),
+      onNewGame: () => this.beginNewGame(),
+      onContinueSave: () => this.continueSavedGame(),
       onBomb: () => this.useBomb(),
       onPurchase: (type) => this.purchase(type),
+      onAssign: (system, delta) => this.assignBoundSoul(system, delta),
       onDeniedPurchase: () => this.playDeniedPurchase(),
       onContinue: () => this.continueAfterIntermission(),
       onRetry: () => this.retryWave(),
-      onRestart: () => this.restartGame()
+      onRestart: () => this.beginNewGame()
     });
 
+    this.resetState();
     this.onResize = this.onResize.bind(this);
     this.animate = this.animate.bind(this);
     window.addEventListener("resize", this.onResize);
   }
 
+  resetState() {
+    this.waveIndex = 0;
+    this.souls = 0;
+    this.manorHealth = CONFIG.manor.startHealth;
+    this.manorMaxHealth = CONFIG.manor.maxHealth;
+    this.demonDeaths = 0;
+    this.boundSouls = 0;
+    this.bombs = 0;
+    this.fortifyLevel = 0;
+    this.demolitionProgress = 0;
+    this.buildings = {
+      extraction: false,
+      hellfire: false,
+      demolition: false,
+      undercroft: false,
+      occult: false
+    };
+    this.assignments = {
+      hellfire: 0,
+      demolition: 0,
+      undercroft: 0,
+      occult: 0
+    };
+    this.waveStartSnapshot = null;
+  }
+
   async start() {
-    this.setLoadingProgress(3, "LOADING FONT");
+    this.setLoadingProgress(3);
     try {
       await document.fonts?.load('32px "Lansbury"');
     } catch (error) {
       console.warn("Lansbury font could not be preloaded.", error);
     }
 
-    this.setLoadingProgress(8, "DECODING SOUND AND MUSIC");
-    await this.audio.loadAll((progress) => {
-      this.setLoadingProgress(
-        8 + progress * 20,
-        "DECODING SOUND AND MUSIC"
-      );
-    });
+    this.setLoadingProgress(8);
+    await this.audio.loadAll((progress) => this.setLoadingProgress(8 + progress * 18));
 
-    this.setLoadingProgress(30, "LOADING MANOR AND HUSK");
+    this.setLoadingProgress(28);
     await this.assets.loadAll();
 
-    this.setLoadingProgress(45, "BUILDING THE BATTLEFIELD");
+    this.setLoadingProgress(43);
     this.world = new World(this.scene, this.assets);
     await this.world.load();
 
-    this.setLoadingProgress(56, "PREPARING WAVES");
+    this.setLoadingProgress(50);
+    this.effectPool = new EffectPool(this.scene, CONFIG.pool.effects);
+
     this.waveManager = new WaveManager({
       scene: this.scene,
       assets: this.assets,
@@ -109,260 +125,294 @@ export class Game {
       onEnemyDeath: (data) => this.handleEnemyDeath(data),
       onEnemyAttack: (enemy) => this.handleManorAttack(enemy),
       onEnemyImpact: (data) => this.handleEnemyImpact(data),
-      onWaveComplete: () => this.handleWaveComplete()
+      onEnemyExtracted: (enemy) => this.handleEnemyExtracted(enemy),
+      onWaveComplete: () => this.handleWaveComplete(),
+      onSiegeClick: (enemy) => this.handleSiegeClick(enemy)
     });
 
-    const maxFastHusks = Math.max(...CONFIG.waves.map((wave) => wave.fast));
-    const maxNormalHusks = Math.max(
-      ...CONFIG.waves.map((wave) => wave.total - wave.fast)
-    );
-    this.setLoadingProgress(58, "PREPARING HUSK POOL");
-    await this.waveManager.preparePool({
-      normalCount: maxNormalHusks,
-      fastCount: maxFastHusks,
-      onProgress: (progress) => {
-        this.setLoadingProgress(58 + progress * 10, "PREPARING HUSK POOL");
-      }
-    });
+    await this.waveManager.preparePools((progress) => this.setLoadingProgress(52 + progress * 23));
 
     this.grabSystem = new GrabSystem({
       camera: this.camera,
       domElement: this.renderer.domElement,
       getEnemies: () => this.waveManager.getAliveEnemies(),
-      onRelease: ({ velocity }) => this.audio.playThrow(velocity.length())
+      onRelease: (data) => this.handleRelease(data),
+      onDirectClick: (enemy) => this.handleSiegeClick(enemy)
     });
 
     this.defence = new DefenceSystem(
       this.scene,
       this.world,
-      () => this.waveManager.getAliveEnemies(),
-      (enemy, reason) => this.killEnemyByDefence(enemy, reason),
+      () => this.waveManager.getActiveCombatEnemies(),
+      (enemy, reason, amount) => this.damageEnemy(enemy, reason, amount),
       (enemy) => this.grabSystem?.isHolding(enemy) ?? false,
       () => this.audio.play("crossbowFire", {
-        volume: 0.82,
-        pitchMin: 0.94,
-        pitchMax: 1.06
-      })
+        volume: 0.68,
+        pitchMin: 0.93,
+        pitchMax: 1.08
+      }),
+      () => this.cameraShake = Math.max(this.cameraShake, 0.06)
     );
 
-    this.setLoadingProgress(62, "WARMING CREATURE ANIMATIONS");
-    await this.preWarmGame();
+    this.setLoadingProgress(78);
+    await this.preWarmEverything();
 
-    this.setLoadingProgress(100, "THE GATE IS READY");
+    this.applyUpgradeState();
     this.syncUI();
+    this.ui.setHasSave(this.hasSave());
     this.ui.setMode("start");
     this.running = true;
     requestAnimationFrame(this.animate);
 
+    this.setLoadingProgress(100);
     await this.waitForFrame();
-    await new Promise((resolve) => window.setTimeout(resolve, 240));
+    await new Promise((resolve) => window.setTimeout(resolve, 180));
     this.loadingElement.classList.add("hidden");
-    window.setTimeout(() => this.loadingElement.remove(), 700);
+    window.setTimeout(() => this.loadingElement.remove(), 650);
   }
 
-  setLoadingProgress(percent, message) {
-    const safePercent = THREE.MathUtils.clamp(percent, 0, 100);
-    if (this.loadingStatus) this.loadingStatus.textContent = message;
-    if (this.loadingProgress) this.loadingProgress.style.width = `${safePercent}%`;
-    if (this.loadingPercent) this.loadingPercent.textContent = `${Math.round(safePercent)}%`;
+  setLoadingProgress(percent) {
+    const value = THREE.MathUtils.clamp(percent, 0, 100);
+    if (this.loadingProgress) this.loadingProgress.style.width = `${value}%`;
+    if (this.loadingPercent) this.loadingPercent.textContent = `${Math.round(value)}%`;
   }
 
   waitForFrame() {
     return new Promise((resolve) => requestAnimationFrame(resolve));
   }
 
-  async preWarmGame() {
-    const warmEffects = [];
-    const warmHusks = this.waveManager.getWarmupSamples();
-    const warmPositions = [
-      new THREE.Vector3(-2.6, 0, -0.7),
-      new THREE.Vector3(2.3, 0, 0.8)
-    ];
-    warmHusks.forEach((husk, index) => {
-      husk.resetForSpawn(-(index + 1), warmPositions[index]);
+  async preWarmEverything() {
+    const samples = this.waveManager.getWarmupSamples();
+    const positions = [-10, -5, 0, 5, 10];
+    samples.forEach((enemy, index) => {
+      enemy.resetForSpawn(-(index + 1), new THREE.Vector3(positions[index] ?? 0, 0, 0));
+      enemy.preWarmAllActions();
     });
 
-    this.setLoadingProgress(68, "WARMING NORMAL AND FAST HUSKS");
-    warmHusks.forEach((husk) => husk.preWarmAction("walk"));
+    this.effectPool.preWarm();
+    this.defence.preWarm();
+    this.world.setUpgradeState({ extraction: true, demolition: true, undercroft: true, occult: true, fortifyLevel: 10 });
+    this.world.setTurretLevel(3);
 
-    this.setLoadingProgress(72, "WARMING DEATH EFFECTS");
-    warmEffects.push(
-      new AshExplosion(this.scene, new THREE.Vector3(-2, 1, 0), false),
-      new AshExplosion(this.scene, new THREE.Vector3(2, 1, 0), true),
-      new SoulEmber({
-        scene: this.scene,
-        start: new THREE.Vector3(0, 1, 0),
-        target: new THREE.Vector3(2, 4, 0)
-      }),
-      new ImpactRing(
-        this.scene,
-        new THREE.Vector3(0, 0.04, 1),
-        12,
-        0xff7a34
-      ),
-      new ImpactRing(
-        this.scene,
-        new THREE.Vector3(0, 0.04, -1),
-        15,
-        0xff3b12
-      )
-    );
-
-    this.setLoadingProgress(78, "WARMING HELLFIRE DEFENCE");
-    this.world.setTurretLevel(CONFIG.defence.turretMaxLevel);
-    this.defence.fireProjectile({
-      mountIndex: 0,
-      target: null,
-      destination: new THREE.Vector3(-2, 0.1, 0),
-      fallback: new THREE.Vector3(-2, 0.1, 0)
-    });
-    this.defence.createImpact(new THREE.Vector3(-1, 0.1, 1));
-
-    await this.waitForFrame();
-
-    this.setLoadingProgress(83, "BINDING CREATURE ANIMATIONS");
-    const actionNames = new Set();
-    warmHusks.forEach((husk) => {
-      Object.keys(husk.actions).forEach((name) => actionNames.add(name));
-    });
-
-    for (const actionName of actionNames) {
-      warmHusks.forEach((husk) => husk.preWarmAction(actionName));
+    // Render the actual first-use materials/effects while the loading screen is covering the game.
+    for (let frame = 0; frame < 6; frame += 1) {
+      const dt = 1 / 30;
+      samples.forEach((enemy) => enemy.update(dt, frame * dt, false, this.world.manorBarrierX));
+      this.effectPool.update(dt);
+      this.defence.updateProjectiles(dt);
+      this.defence.updateImpacts(dt);
+      this.world.update(frame * dt, dt);
       this.renderer.render(this.scene, this.camera);
+      this.setLoadingProgress(80 + frame * 2.3);
       await this.waitForFrame();
     }
 
-    this.setLoadingProgress(90, "COMPILING SHADERS");
+    this.setLoadingProgress(94);
     if (typeof this.renderer.compileAsync === "function") {
       await this.renderer.compileAsync(this.scene, this.camera);
     } else {
       this.renderer.compile(this.scene, this.camera);
     }
 
+    // Exercise a complete pooled death/soul path once so the first real kill does no setup work.
+    const warmStart = new THREE.Vector3(-2, 1.2, 0);
+    const warmTarget = new THREE.Vector3(2, 3, 0);
+    this.effectPool.ash(warmStart, true);
+    this.effectPool.ring(new THREE.Vector3(-2, 0.05, 0), 11, 0xff7a34);
+    this.effectPool.soul(warmStart, warmTarget);
     for (let frame = 0; frame < 8; frame += 1) {
-      const dt = 1 / 30;
-      warmHusks.forEach((husk) => {
-        husk.preWarmAction("walk", dt);
-      });
-      warmEffects.forEach((effect) => effect.update(dt));
-      this.defence.updateProjectiles(dt);
-      this.defence.updateImpacts(dt);
-      this.world.update(frame * dt, dt);
+      this.effectPool.update(1 / 30);
       this.renderer.render(this.scene, this.camera);
       await this.waitForFrame();
     }
 
-    this.setLoadingProgress(96, "FINALISING");
-    warmEffects.forEach((effect) => effect.dispose());
-    warmHusks.forEach((husk) => husk.deactivateForPool());
-
-    for (let i = this.defence.projectiles.length - 1; i >= 0; i -= 1) {
-      this.defence.removeProjectile(i);
-    }
-
-    for (const impact of this.defence.impacts) {
-      this.scene.remove(impact.mesh);
-      this.scene.remove(impact.light);
-      impact.geometry.dispose();
-      impact.material.dispose();
-    }
+    samples.forEach((enemy) => enemy.deactivateForPool());
+    this.waveManager.pooledEnemies = new Set(
+      Object.values(this.waveManager.pools).flat()
+    );
+    this.defence.projectiles.slice().forEach((projectile) => this.defence.releaseArrow(projectile));
+    this.defence.impacts.slice().forEach((impact) => {
+      impact.active = false;
+      impact.mesh.visible = false;
+    });
     this.defence.impacts = [];
     this.world.setTurretLevel(0);
-
+    this.applyUpgradeState();
     this.renderer.render(this.scene, this.camera);
+    this.setLoadingProgress(98);
     await this.waitForFrame();
   }
 
-  async beginGame() {
+  async beginNewGame() {
     if (this.startingGame) return;
     this.startingGame = true;
     await this.audio.unlock();
-    this.waveIndex = 0;
-    this.souls = 0;
-    this.manorHealth = CONFIG.manor.startHealth;
-    this.manorMaxHealth = CONFIG.manor.maxHealth;
-    this.turretLevel = 0;
-    this.bombs = 0;
-    this.defence.setLevel(0);
-    this.defence.setBombs(0);
+    this.resetState();
+    this.clearSave();
+    this.applyUpgradeState();
     this.startCurrentWave();
     this.startingGame = false;
   }
 
-  startCurrentWave() {
-    this.purchaseUsed = false;
-    this.gameplayActive = false;
-    this.grabSystem.setEnabled(false);
+  async continueSavedGame() {
+    if (this.startingGame) return;
+    this.startingGame = true;
+    await this.audio.unlock();
+    const save = this.readSave();
+    if (!save) {
+      this.startingGame = false;
+      return this.beginNewGame();
+    }
+    this.restoreState(save);
+    this.applyUpgradeState();
+    this.startCurrentWave();
+    this.startingGame = false;
+  }
 
-    this.waveStartSnapshot = {
+  snapshotState() {
+    return {
+      waveIndex: this.waveIndex,
       souls: this.souls,
       manorHealth: this.manorHealth,
       manorMaxHealth: this.manorMaxHealth,
-      turretLevel: this.turretLevel,
-      bombs: this.bombs
+      demonDeaths: this.demonDeaths,
+      boundSouls: this.boundSouls,
+      bombs: this.bombs,
+      fortifyLevel: this.fortifyLevel,
+      demolitionProgress: this.demolitionProgress,
+      buildings: { ...this.buildings },
+      assignments: { ...this.assignments }
     };
-
-    this.waveManager.startWave(this.waveIndex);
-    this.defence.resetCooldown();
-    this.audio.setMusicLevel(0.34, 0.35);
-    this.audio.playMusic(
-      this.waveIndex % 2 === 0 ? "background1" : "background2",
-      0.75
-    );
-    this.audio.play("waveStart", { volume: 0.82, pitchMin: 0.98, pitchMax: 1.02 });
-    this.ui.setMode("playing");
-    this.ui.showBanner(`WAVE ${this.waveIndex + 1}`, "KEEP YOUR MANOR SAFE", 2.4);
-    this.syncUI();
-
-    window.setTimeout(() => {
-      if (this.ui.mode !== "playing") return;
-      this.gameplayActive = true;
-      this.grabSystem.setEnabled(true);
-    }, 1550);
   }
 
-  handleEnemyDeath(data) {
-    const { enemy, position, impactStrength, reason } = data;
-    if (!enemy) return;
+  restoreState(data) {
+    this.waveIndex = THREE.MathUtils.clamp(Number(data.waveIndex) || 0, 0, CONFIG.waves.length - 1);
+    this.souls = Math.max(0, Number(data.souls) || 0);
+    this.manorHealth = Math.max(1, Number(data.manorHealth) || CONFIG.manor.startHealth);
+    this.manorMaxHealth = Math.max(CONFIG.manor.maxHealth, Number(data.manorMaxHealth) || CONFIG.manor.maxHealth);
+    this.demonDeaths = Math.max(0, Number(data.demonDeaths) || 0);
+    this.boundSouls = Math.max(0, Number(data.boundSouls) || 0);
+    this.bombs = THREE.MathUtils.clamp(Number(data.bombs) || 0, 0, CONFIG.defence.bombMaxCharges);
+    this.fortifyLevel = Math.max(0, Number(data.fortifyLevel) || 0);
+    this.demolitionProgress = Math.max(0, Number(data.demolitionProgress) || 0);
+    this.buildings = { ...this.buildings, ...(data.buildings ?? {}) };
+    this.assignments = { ...this.assignments, ...(data.assignments ?? {}) };
+    this.normaliseAssignments();
+  }
 
-    if (reason !== "bomb") {
-      this.souls += enemy.soulValue;
-      this.ui.pulseSouls();
-      this.effects.push(new SoulEmber({
-        scene: this.scene,
-        start: position.clone(),
-        target: new THREE.Vector3(this.world.manorBarrierX + 1.2, 4.2, 0),
-        onComplete: () => this.audio.play("soulCollect", {
-          volume: 0.68,
-          pitchMin: 0.92,
-          pitchMax: 1.10
-        })
-      }));
+  hasSave() {
+    return !!this.readSave();
+  }
+
+  readSave() {
+    try {
+      const raw = localStorage.getItem(SAVE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
     }
+  }
+
+  saveGame(resumeWaveIndex = this.waveIndex) {
+    try {
+      const state = this.snapshotState();
+      state.waveIndex = THREE.MathUtils.clamp(resumeWaveIndex, 0, CONFIG.waves.length - 1);
+      localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+      this.ui.setHasSave(true);
+    } catch (error) {
+      console.warn("Save could not be written.", error);
+    }
+  }
+
+  clearSave() {
+    try {
+      localStorage.removeItem(SAVE_KEY);
+    } catch {
+      // localStorage can be unavailable in restricted embeds.
+    }
+    this.ui.setHasSave(false);
+  }
+
+  startCurrentWave() {
+    this.gameplayActive = true;
+    this.grabSystem.setEnabled(true);
+    this.waveStartSnapshot = this.snapshotState();
+    this.waveManager.startWave(this.waveIndex);
+    this.defence.resetCooldown();
+    this.audio.setMusicLevel(0.34, 0.3);
+    this.audio.playMusic(this.waveIndex % 2 === 0 ? "background1" : "background2", 0.7);
+    this.audio.play("waveStart", { volume: 0.72, pitchMin: 0.97, pitchMax: 1.03 });
+    this.ui.setMode("playing");
+    this.ui.showBanner(
+      `WAVE ${this.waveIndex + 1}`,
+      this.waveIndex === 0 ? "THE FIRST DEMONS ARE COMING" : "DEFEND THE MANOR",
+      2.6
+    );
+    this.saveGame(this.waveIndex);
+    this.syncUI();
+  }
+
+  handleRelease({ enemy, velocity }) {
+    if (
+      this.buildings.extraction &&
+      enemy.convertible &&
+      this.world.isInsideExtractionZone(enemy.position) &&
+      this.waveManager.getExtractionCount() < CONFIG.extraction.maxConcurrent
+    ) {
+      const slot = this.waveManager.getExtractionCount();
+      enemy.position.copy(this.world.getExtractionPosition(slot));
+      const started = this.waveManager.startExtraction(
+        enemy,
+        CONFIG.extraction.duration,
+        slot === 0 ? -0.22 : 0.22
+      );
+      if (started) {
+        this.audio.play("ash", { volume: 0.28, pitchMin: 0.75, pitchMax: 0.9 });
+        return true;
+      }
+    }
+
+    this.audio.playThrow(velocity.length());
+    return false;
+  }
+
+  handleEnemyExtracted(enemy) {
+    const start = this.world.extractionCentre.clone().add(new THREE.Vector3(0, 2.8, 0));
+    const target = new THREE.Vector3(this.world.manorBarrierX + 1.3, 4.3, 0);
+    this.effectPool.ash(start, true);
+    this.effectPool.soul(start, target, () => {
+      this.boundSouls += 1;
+      if (this.buildings.hellfire) this.assignments.hellfire += 1;
+      this.audio.play("soulCollect", { volume: 0.62, pitchMin: 0.92, pitchMax: 1.1 });
+      this.normaliseAssignments();
+      this.applyUpgradeState();
+      this.syncUI();
+    });
+  }
+
+  handleEnemyDeath({ enemy, position, impactStrength = 9, reason }) {
+    if (!enemy) return;
+    this.souls += enemy.soulValue;
+    this.demonDeaths += 1;
+    this.ui.pulseSouls();
+
+    const target = new THREE.Vector3(this.world.manorBarrierX + 1.2, 4.2, 0);
+    this.effectPool.soul(position, target, () => {
+      this.audio.play("soulCollect", { volume: 0.58, pitchMin: 0.9, pitchMax: 1.12 });
+    });
+    this.effectPool.ash(position, reason === "bomb" || reason === "occult");
+    this.effectPool.ring(
+      position.clone().setY(0.04),
+      impactStrength,
+      reason === "occult" ? 0xa16cff : reason === "bomb" ? 0xff3b12 : 0xff7a34
+    );
 
     this.audio.play("ash", {
-      volume: reason === "bomb" ? 0.48 : 0.72,
-      pitchMin: 0.86,
-      pitchMax: 1.12
+      volume: reason === "bomb" ? 0.42 : 0.58,
+      pitchMin: 0.84,
+      pitchMax: 1.16
     });
-
-    if (reason === "turret") {
-      this.audio.playBodyImpact(10);
-    }
-
-    this.effects.push(new AshExplosion(
-      this.scene,
-      position,
-      reason === "bomb" || reason === "turret"
-    ));
-    this.effects.push(new ImpactRing(
-      this.scene,
-      position.clone().setY(0.04),
-      impactStrength || 9,
-      reason === "bomb" ? 0xff3b12 : 0xff7a34
-    ));
-
-    this.cameraShake = Math.max(this.cameraShake, reason === "bomb" ? 0.34 : 0.22);
+    this.cameraShake = Math.max(this.cameraShake, reason === "bomb" ? 0.3 : 0.18);
     this.syncUI();
   }
 
@@ -370,26 +420,30 @@ export class Game {
     this.audio.playBodyImpact(impactStrength);
   }
 
-  killEnemyByDefence(enemy, reason) {
-    if (!enemy || enemy.dead) return;
-    this.waveManager.handleEnemyDeath({
-      enemy,
-      reason,
-      position: enemy.position.clone().add(new THREE.Vector3(0, 1.25, 0)),
-      impactStrength: reason === "bomb" ? 15 : 11
-    });
+  damageEnemy(enemy, reason, amount = 1) {
+    if (!enemy || enemy.dead || enemy.removed) return;
+    enemy.applyDamage(amount, reason, reason === "bomb" ? 15 : 11);
+  }
+
+  handleSiegeClick(enemy) {
+    if (!this.gameplayActive || !enemy?.canDirectClick?.()) return;
+    const worked = enemy.staggerSiege(1);
+    if (worked) {
+      this.audio.playBodyImpact(9);
+      this.cameraShake = Math.max(this.cameraShake, 0.08);
+    }
   }
 
   handleManorAttack(enemy) {
     if (!this.gameplayActive || this.manorHealth <= 0 || !enemy || enemy.dead) return;
     this.manorHealth = Math.max(0, this.manorHealth - enemy.attackDamage);
     this.audio.play("attack", {
-      volume: enemy.fast ? 0.78 : 0.68,
-      pitchMin: enemy.fast ? 1.00 : 0.88,
-      pitchMax: enemy.fast ? 1.14 : 1.05
+      volume: enemy.type === "siege" ? 0.78 : enemy.type === "brute" ? 0.7 : 0.58,
+      pitchMin: enemy.type === "runner" ? 1.02 : 0.86,
+      pitchMax: enemy.type === "runner" ? 1.16 : 1.05
     });
     this.ui.flashHealth();
-    this.cameraShake = Math.max(this.cameraShake, 0.08);
+    this.cameraShake = Math.max(this.cameraShake, enemy.type === "siege" ? 0.22 : 0.07);
     this.syncUI();
     if (this.manorHealth <= 0) this.failWave();
   }
@@ -398,85 +452,136 @@ export class Game {
     if (!this.gameplayActive) return;
     this.gameplayActive = false;
     this.grabSystem.setEnabled(false);
-    this.audio.setMusicLevel(0.22, 0.55);
-    this.souls += 20 * (this.waveIndex + 1);
-    this.ui.pulseSouls();
+    this.audio.setMusicLevel(0.22, 0.45);
 
+    // Bound-soul systems do their between-wave work before the shop opens.
+    if (this.buildings.undercroft && this.assignments.undercroft > 0) {
+      const repair = this.assignments.undercroft * 8;
+      this.manorHealth = Math.min(this.manorMaxHealth, this.manorHealth + repair);
+    }
+
+    if (this.buildings.demolition && this.assignments.demolition > 0) {
+      this.demolitionProgress += this.assignments.demolition / 8;
+      while (this.demolitionProgress >= 1 && this.bombs < CONFIG.defence.bombMaxCharges) {
+        this.demolitionProgress -= 1;
+        this.bombs += 1;
+      }
+    }
+
+    this.syncUI();
     if (this.waveIndex >= CONFIG.waves.length - 1) {
-      this.syncUI();
+      this.clearSave();
       this.ui.setMode("complete");
       return;
     }
 
-    this.purchaseUsed = false;
-    this.syncUI();
+    this.saveGame(this.waveIndex + 1);
     this.ui.setMode("intermission");
   }
 
+  getPurchaseDefinition(type) {
+    const repairs = CONFIG.manor.repairs;
+    return {
+      repairMinor: repairs.minor.cost,
+      repairMajor: repairs.major.cost,
+      repairFull: repairs.full.cost,
+      fortify: CONFIG.manor.fortify.cost,
+      majorFortify: CONFIG.manor.majorFortify.cost,
+      extraction: CONFIG.buildings.extraction.cost,
+      hellfire: CONFIG.buildings.hellfire.cost,
+      demolition: CONFIG.buildings.demolition.cost,
+      undercroft: CONFIG.buildings.undercroft.cost,
+      occult: CONFIG.buildings.occult.cost
+    }[type];
+  }
+
   purchase(type) {
-    if (this.purchaseUsed || this.ui.mode !== "intermission") {
-      this.playDeniedPurchase();
-      return;
+    if (this.ui.mode !== "intermission") return;
+    const cost = this.getPurchaseDefinition(type);
+    if (cost == null || this.souls < cost) return this.playDeniedPurchase();
+
+    if (type.startsWith("repair") && this.manorHealth >= this.manorMaxHealth) return this.playDeniedPurchase();
+    if (["hellfire", "demolition", "undercroft", "occult"].includes(type) && !this.buildings.extraction) {
+      return this.playDeniedPurchase();
     }
+    if (this.buildings[type]) return this.playDeniedPurchase();
 
-    let purchased = false;
-
-    if (type === "repair") {
-      if (this.souls >= CONFIG.manor.repairCost && this.manorHealth < this.manorMaxHealth) {
-        this.souls -= CONFIG.manor.repairCost;
-        this.manorHealth = Math.min(
-          this.manorMaxHealth,
-          this.manorHealth + CONFIG.manor.repairAmount
-        );
-        purchased = true;
-      }
-    } else if (type === "turret") {
-      const nextWave = this.waveIndex + 2;
-      const cost = CONFIG.defence.turretCosts[this.turretLevel];
-      if (
-        nextWave >= CONFIG.defence.turretUnlockWave &&
-        this.turretLevel < CONFIG.defence.turretMaxLevel &&
-        this.souls >= cost
-      ) {
-        this.souls -= cost;
-        this.turretLevel += 1;
-        this.defence.setLevel(this.turretLevel);
-        purchased = true;
-      }
-    } else if (type === "bomb") {
-      const nextWave = this.waveIndex + 2;
-      if (
-        nextWave >= CONFIG.defence.bombUnlockWave &&
-        this.bombs < CONFIG.defence.bombMaxCharges &&
-        this.souls >= CONFIG.defence.bombCost
-      ) {
-        this.souls -= CONFIG.defence.bombCost;
-        this.bombs += 1;
-        this.defence.setBombs(this.bombs);
-        purchased = true;
+    this.souls -= cost;
+    if (type === "repairMinor") this.manorHealth = Math.min(this.manorMaxHealth, this.manorHealth + CONFIG.manor.repairs.minor.amount);
+    else if (type === "repairMajor") this.manorHealth = Math.min(this.manorMaxHealth, this.manorHealth + CONFIG.manor.repairs.major.amount);
+    else if (type === "repairFull") this.manorHealth = Math.min(this.manorMaxHealth, this.manorHealth + CONFIG.manor.repairs.full.amount);
+    else if (type === "fortify") {
+      this.manorMaxHealth += CONFIG.manor.fortify.amount;
+      this.manorHealth += CONFIG.manor.fortify.amount;
+      this.fortifyLevel += 1;
+    } else if (type === "majorFortify") {
+      this.manorMaxHealth += CONFIG.manor.majorFortify.amount;
+      this.manorHealth += CONFIG.manor.majorFortify.amount;
+      this.fortifyLevel += 10;
+    } else if (type in this.buildings) {
+      this.buildings[type] = true;
+      if (type === "hellfire") {
+        const unassigned = this.getUnassignedSouls();
+        this.assignments.hellfire += unassigned;
       }
     }
 
-    if (!purchased) {
-      this.playDeniedPurchase();
-      return;
-    }
-
-    this.audio.play("purchase", {
-      volume: 0.78,
-      pitchMin: 0.97,
-      pitchMax: 1.04
-    });
-    this.purchaseUsed = true;
+    this.audio.play("purchase", { volume: 0.68, pitchMin: 0.96, pitchMax: 1.05 });
+    this.normaliseAssignments();
+    this.applyUpgradeState();
+    this.saveGame(this.waveIndex + 1);
     this.syncUI();
   }
 
   playDeniedPurchase() {
-    this.audio.play("deniedPurchase", {
-      volume: 0.65,
-      pitchMin: 0.98,
-      pitchMax: 1.02
+    this.audio.play("deniedPurchase", { volume: 0.55, pitchMin: 0.97, pitchMax: 1.03 });
+  }
+
+  getUnassignedSouls() {
+    return Math.max(0, this.boundSouls - Object.values(this.assignments).reduce((sum, value) => sum + value, 0));
+  }
+
+  normaliseAssignments() {
+    const keys = Object.keys(this.assignments);
+    keys.forEach((key) => {
+      this.assignments[key] = Math.max(0, Math.floor(Number(this.assignments[key]) || 0));
+      if (!this.buildings[key]) this.assignments[key] = 0;
     });
+    let assigned = Object.values(this.assignments).reduce((sum, value) => sum + value, 0);
+    while (assigned > this.boundSouls) {
+      const key = keys.find((name) => this.assignments[name] > 0);
+      if (!key) break;
+      this.assignments[key] -= 1;
+      assigned -= 1;
+    }
+  }
+
+  assignBoundSoul(system, delta) {
+    if (this.ui.mode !== "intermission" || !this.buildings[system]) return;
+    if (delta > 0) {
+      if (this.getUnassignedSouls() <= 0) return this.playDeniedPurchase();
+      this.assignments[system] += 1;
+    } else if (delta < 0) {
+      if ((this.assignments[system] ?? 0) <= 0) return this.playDeniedPurchase();
+      this.assignments[system] -= 1;
+    }
+    this.audio.play("purchase", { volume: 0.34, pitchMin: 0.98, pitchMax: 1.05 });
+    this.applyUpgradeState();
+    this.saveGame(this.waveIndex + 1);
+    this.syncUI();
+  }
+
+  applyUpgradeState() {
+    if (!this.world || !this.defence) return;
+    this.world.setUpgradeState({
+      extraction: this.buildings.extraction,
+      demolition: this.buildings.demolition,
+      undercroft: this.buildings.undercroft,
+      occult: this.buildings.occult,
+      fortifyLevel: this.fortifyLevel
+    });
+    this.defence.setHellfireSouls(this.buildings.hellfire ? this.assignments.hellfire : 0);
+    this.defence.setOccultSouls(this.buildings.occult ? this.assignments.occult : 0);
   }
 
   continueAfterIntermission() {
@@ -486,76 +591,65 @@ export class Game {
   }
 
   useBomb() {
-    if (!this.gameplayActive || this.ui.mode !== "playing") return;
-    this.defence.setBombs(this.bombs);
-    if (!this.defence.useBomb()) return;
-    this.audio.play("bombExplosion", { volume: 0.92, pitchMin: 0.97, pitchMax: 1.03 });
-    this.bombs = this.defence.bombs;
+    if (!this.gameplayActive || this.bombs <= 0) return;
+    const targets = [...this.waveManager.getActiveCombatEnemies()];
+    if (targets.length === 0) return;
+    this.bombs -= 1;
+    this.audio.play("bombExplosion", { volume: 0.78, pitchMin: 0.96, pitchMax: 1.04 });
+    targets.forEach((enemy) => {
+      const amount = enemy.type === "siege" ? 2 : enemy.durability;
+      enemy.applyDamage(amount, "bomb", 15);
+    });
+    this.cameraShake = Math.max(this.cameraShake, 0.42);
     this.syncUI();
   }
 
   failWave() {
+    if (!this.gameplayActive) return;
     this.gameplayActive = false;
     this.grabSystem.setEnabled(false);
     this.waveManager.stop();
-    this.audio.stopMusic(0.8);
-    this.audio.play("gameOver", { volume: 0.92, pitchMin: 0.99, pitchMax: 1.01 });
+    this.audio.stopMusic(0.45);
+    this.audio.play("gameOver", { volume: 0.78 });
     this.ui.setMode("gameOver");
   }
 
   retryWave() {
     if (!this.waveStartSnapshot) return;
-    Object.assign(this, {
-      souls: this.waveStartSnapshot.souls,
-      manorHealth: this.waveStartSnapshot.manorHealth,
-      manorMaxHealth: this.waveStartSnapshot.manorMaxHealth,
-      turretLevel: this.waveStartSnapshot.turretLevel,
-      bombs: this.waveStartSnapshot.bombs
-    });
-    this.defence.setLevel(this.turretLevel);
-    this.defence.setBombs(this.bombs);
-    this.startCurrentWave();
-  }
-
-  restartGame() {
-    this.gameplayActive = false;
-    this.grabSystem.setEnabled(false);
     this.waveManager.clear();
-    this.beginGame();
+    this.restoreState(this.waveStartSnapshot);
+    this.applyUpgradeState();
+    this.startCurrentWave();
   }
 
   checkWorldCollisions() {
     for (const enemy of this.waveManager.getAliveEnemies()) {
       if (enemy.state === "walking") {
-        if (enemy.position.x >= this.world.manorBarrierX) {
-          enemy.position.x = this.world.manorBarrierX;
-          enemy.reachManor();
+        if (enemy.type !== "siege" && enemy.position.x >= this.world.manorBarrierX) {
+          enemy.reachManor(this.world.manorBarrierX);
         }
         continue;
       }
-
       if (enemy.state !== "airborne") continue;
       const speed = enemy.velocity.length();
 
       if (this.world.isInsideManorCollision(enemy.position)) {
-        if (speed >= CONFIG.enemy.hardSurfaceKillSpeed) {
-          enemy.hitHardSurface("manor", speed);
-        } else {
-          this.handleEnemyImpact({ impactStrength: speed, reason: "manor" });
+        if (speed >= CONFIG.enemy.hardSurfaceKillSpeed) enemy.hitHardSurface("manor", speed);
+        else {
+          this.handleEnemyImpact({ impactStrength: speed });
           enemy.position.x = this.world.manorBarrierX - 0.2;
-          enemy.velocity.x = -Math.abs(enemy.velocity.x) * 0.32;
+          enemy.velocity.x = -Math.abs(enemy.velocity.x) * 0.30;
           enemy.knockDown(enemy.velocity);
         }
         continue;
       }
 
       if (this.world.findTreeCollision(enemy.position)) {
-        if (speed >= CONFIG.enemy.treeKillSpeed) {
-          enemy.hitHardSurface("tree", speed);
-        } else {
-          this.handleEnemyImpact({ impactStrength: speed, reason: "tree" });
-          enemy.velocity.x *= -0.25;
-          enemy.velocity.z *= -0.25;
+        if (speed >= CONFIG.enemy.treeKillSpeed) enemy.hitHardSurface("tree", speed);
+        else {
+          this.handleEnemyImpact({ impactStrength: speed });
+          enemy.velocity.x *= -0.24;
+          enemy.velocity.z *= -0.24;
           enemy.knockDown(enemy.velocity);
         }
       }
@@ -563,35 +657,27 @@ export class Game {
   }
 
   checkEnemyCollisions() {
-    const enemies = this.waveManager.getAliveEnemies();
-    const minDistance = CONFIG.enemy.collisionRadius * 2;
-
+    const enemies = this.waveManager.getActiveCombatEnemies();
     for (let i = 0; i < enemies.length; i += 1) {
       for (let j = i + 1; j < enemies.length; j += 1) {
         const a = enemies[i];
         const b = enemies[j];
         if (a.collisionCooldown > 0 || b.collisionCooldown > 0) continue;
-
+        const radiusA = a.type === "brute" ? 0.9 : a.type === "siege" ? 1.5 : CONFIG.enemy.collisionRadius;
+        const radiusB = b.type === "brute" ? 0.9 : b.type === "siege" ? 1.5 : CONFIG.enemy.collisionRadius;
+        const minDistance = radiusA + radiusB;
         const dx = a.position.x - b.position.x;
         const dz = a.position.z - b.position.z;
         if (dx * dx + dz * dz > minDistance * minDistance) continue;
-
-        const aAirborne = a.state === "airborne";
-        const bAirborne = b.state === "airborne";
-        if (!aAirborne && !bAirborne) continue;
-
-        const source = aAirborne ? a : b;
+        const source = a.state === "airborne" ? a : b.state === "airborne" ? b : null;
+        if (!source || source.velocity.length() < 3) continue;
         const other = source === a ? b : a;
-        if (source.velocity.length() < 2.8) continue;
-
+        if (other.type === "siege") continue;
         const push = source.velocity.clone();
         push.y = 0;
-        source.collisionCooldown = 0.45;
-        other.collisionCooldown = 0.45;
-        this.handleEnemyImpact({
-          impactStrength: source.velocity.length(),
-          reason: "enemy"
-        });
+        source.collisionCooldown = 0.42;
+        other.collisionCooldown = 0.42;
+        this.handleEnemyImpact({ impactStrength: source.velocity.length() });
         source.knockDown(push);
         other.knockDown(push);
       }
@@ -601,13 +687,17 @@ export class Game {
   syncUI() {
     this.ui.setHUD({
       wave: Math.min(this.waveIndex + 1, CONFIG.waves.length),
-      remaining: this.waveManager ? this.waveManager.getRemainingCount() : CONFIG.waves[0].total,
+      waveTotal: CONFIG.waves.length,
       souls: this.souls,
       health: this.manorHealth,
       maxHealth: this.manorMaxHealth,
-      turretLevel: this.turretLevel,
+      deaths: this.demonDeaths,
+      boundSouls: this.boundSouls,
+      unassignedSouls: this.getUnassignedSouls(),
       bombs: this.bombs,
-      purchaseUsed: this.purchaseUsed
+      fortifyLevel: this.fortifyLevel,
+      buildings: { ...this.buildings },
+      assignments: { ...this.assignments }
     });
   }
 
@@ -629,7 +719,6 @@ export class Game {
   animate() {
     if (!this.running) return;
     requestAnimationFrame(this.animate);
-
     const dt = Math.min(this.clock.getDelta(), 1 / 30);
     const elapsed = this.clock.elapsedTime;
     this.ui.update(dt);
@@ -640,7 +729,8 @@ export class Game {
         enemy.update(
           this.gameplayActive ? dt : 0,
           elapsed,
-          this.grabSystem?.isHolding(enemy) ?? false
+          this.grabSystem?.isHolding(enemy) ?? false,
+          this.world.manorBarrierX
         );
       }
       if (this.gameplayActive) {
@@ -651,16 +741,7 @@ export class Game {
 
     this.grabSystem?.update(this.gameplayActive ? dt : 0);
     this.defence?.update(dt, this.gameplayActive);
-
-    for (let i = this.effects.length - 1; i >= 0; i -= 1) {
-      const effect = this.effects[i];
-      effect.update(dt);
-      if (effect.finished) {
-        effect.dispose();
-        this.effects.splice(i, 1);
-      }
-    }
-
+    this.effectPool?.update(dt);
     this.world?.update(elapsed, dt);
     this.updateCamera(dt);
     this.syncUI();
@@ -681,7 +762,7 @@ export class Game {
     this.grabSystem?.dispose();
     this.waveManager?.dispose();
     this.defence?.dispose();
-    this.effects.forEach((effect) => effect.dispose());
+    this.effectPool?.dispose();
     this.world?.dispose();
     this.audio.dispose();
     this.renderer.dispose();

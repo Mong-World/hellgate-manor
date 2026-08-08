@@ -87,16 +87,9 @@ canvas {
   text-shadow: 0 0 13px rgba(255, 78, 22, 0.55);
 }
 
-#loading-status {
-  min-height: 22px;
-  color: #d4cbc4;
-  font: 800 13px/1.4 "Segoe UI", Arial, sans-serif;
-  letter-spacing: 0.12em;
-}
-
 .loading-track {
   height: 10px;
-  margin: 18px 0 9px;
+  margin: 22px 0 9px;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 130, 67, 0.24);
@@ -118,4 +111,9 @@ canvas {
 
 #loading.hidden {
   opacity: 0;
+}
+
+@media (max-width: 700px) {
+  .loading-panel { padding: 24px 24px 22px; }
+  .loading-title { font-size: 38px; }
 }

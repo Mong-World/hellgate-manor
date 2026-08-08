@@ -1,249 +1,230 @@
 import * as THREE from "three";
 import { CONFIG } from "./Config.js";
 
-const ARROW_FORWARD = new THREE.Vector3(0, 0, 1);
+const FORWARD = new THREE.Vector3(0, 0, 1);
 
 export class DefenceSystem {
-  constructor(
-    scene,
-    world,
-    getEnemies,
-    onKillEnemy,
-    isEnemyHeld,
-    onFire
-  ) {
+  constructor(scene, world, getEnemies, onDamageEnemy, isEnemyHeld, onFire, onOccultPulse) {
     this.scene = scene;
     this.world = world;
     this.getEnemies = getEnemies;
-    this.onKillEnemy = onKillEnemy;
+    this.onDamageEnemy = onDamageEnemy;
     this.isEnemyHeld = isEnemyHeld ?? (() => false);
     this.onFire = onFire;
-    this.level = 0;
-    this.bombs = 0;
-    this.mountTimers = [];
+    this.onOccultPulse = onOccultPulse;
+
+    this.hellfireSouls = 0;
+    this.occultSouls = 0;
+    this.mountTimers = [1.2, 2.2, 3.2];
+    this.occultTimer = 12;
     this.projectiles = [];
     this.impacts = [];
+    this.arrowPool = [];
+    this.impactPool = [];
 
-    this.arrowShaftGeometry = new THREE.CylinderGeometry(0.042, 0.052, 1.36, 8);
-    this.arrowShaftGeometry.rotateX(Math.PI / 2);
-    this.arrowHeadGeometry = new THREE.ConeGeometry(0.11, 0.32, 8);
-    this.arrowHeadGeometry.rotateX(Math.PI / 2);
-    this.arrowMaterial = new THREE.MeshStandardMaterial({
-      color: 0x3a2518,
-      roughness: 0.76,
-      metalness: 0.12
+    this.createPools();
+  }
+
+  createPools() {
+    for (let i = 0; i < 18; i += 1) this.arrowPool.push(this.createArrow());
+    for (let i = 0; i < 14; i += 1) this.impactPool.push(this.createImpactObject());
+  }
+
+  createArrow() {
+    const group = new THREE.Group();
+    group.visible = false;
+    this.scene.add(group);
+
+    const shaftGeometry = new THREE.CylinderGeometry(0.035, 0.045, 1.24, 7);
+    shaftGeometry.rotateX(Math.PI / 2);
+    const shaftMaterial = new THREE.MeshStandardMaterial({
+      color: 0x3b2418,
+      roughness: 0.78,
+      metalness: 0.08
     });
-    this.arrowHeadMaterial = new THREE.MeshStandardMaterial({
-      color: 0x38363a,
+    const shaft = new THREE.Mesh(shaftGeometry, shaftMaterial);
+    group.add(shaft);
+
+    const headGeometry = new THREE.ConeGeometry(0.10, 0.30, 7);
+    headGeometry.rotateX(Math.PI / 2);
+    const headMaterial = new THREE.MeshStandardMaterial({
+      color: 0x49464b,
       roughness: 0.42,
-      metalness: 0.82
+      metalness: 0.8
     });
-    this.fireMaterial = new THREE.MeshBasicMaterial({
-      color: 0xff7a22,
+    const head = new THREE.Mesh(headGeometry, headMaterial);
+    head.position.z = 0.74;
+    group.add(head);
+
+    const fireGeometry = new THREE.SphereGeometry(0.17, 9, 7);
+    const fireMaterial = new THREE.MeshBasicMaterial({
+      color: 0xff8b35,
       transparent: true,
-      opacity: 0.92,
+      opacity: 0.94,
       blending: THREE.AdditiveBlending,
       depthWrite: false
     });
+    const fire = new THREE.Mesh(fireGeometry, fireMaterial);
+    fire.position.z = -0.24;
+    group.add(fire);
+
+    const flameGeometry = new THREE.ConeGeometry(0.13, 0.55, 8);
+    flameGeometry.rotateX(-Math.PI / 2);
+    const flameMaterial = new THREE.MeshBasicMaterial({
+      color: 0xff5315,
+      transparent: true,
+      opacity: 0.78,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    const flame = new THREE.Mesh(flameGeometry, flameMaterial);
+    flame.position.z = -0.56;
+    group.add(flame);
+
+    return {
+      group,
+      shaftGeometry,
+      shaftMaterial,
+      headGeometry,
+      headMaterial,
+      fireGeometry,
+      fireMaterial,
+      flameGeometry,
+      flameMaterial,
+      fire,
+      flame,
+      active: false,
+      target: null,
+      destination: new THREE.Vector3(),
+      fallback: new THREE.Vector3(),
+      age: 0,
+      speed: 16
+    };
   }
 
-  setLevel(level) {
-    this.level = THREE.MathUtils.clamp(
-      level,
-      0,
-      CONFIG.defence.turretMaxLevel
-    );
-    this.world.setTurretLevel(this.level);
+  createImpactObject() {
+    const geometry = new THREE.RingGeometry(0.22, 0.44, 20);
+    const material = new THREE.MeshBasicMaterial({
+      color: 0xff6a1d,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.visible = false;
+    this.scene.add(mesh);
+    return { mesh, geometry, material, active: false, age: 0 };
+  }
+
+  setHellfireSouls(count) {
+    this.hellfireSouls = Math.max(0, count);
+    this.world.setTurretLevel(this.getMountCount());
     this.resetCooldown();
   }
 
-  setBombs(count) {
-    this.bombs = THREE.MathUtils.clamp(
-      count,
-      0,
-      CONFIG.defence.bombMaxCharges
+  setOccultSouls(count) {
+    this.occultSouls = Math.max(0, count);
+    this.occultTimer = Math.min(this.occultTimer, this.getOccultInterval());
+  }
+
+  getMountCount() {
+    if (this.hellfireSouls <= 0) return 0;
+    if (this.hellfireSouls < 4) return 1;
+    if (this.hellfireSouls < 9) return 2;
+    return 3;
+  }
+
+  getFireInterval() {
+    return THREE.MathUtils.clamp(
+      CONFIG.defence.baseFireInterval - Math.max(0, this.hellfireSouls - 1) * 0.14,
+      2.25,
+      CONFIG.defence.baseFireInterval
     );
+  }
+
+  getOccultInterval() {
+    if (this.occultSouls <= 0) return Infinity;
+    return THREE.MathUtils.clamp(17 - this.occultSouls * 0.55, 6.5, 17);
   }
 
   update(dt, active) {
     this.updateProjectiles(dt);
     this.updateImpacts(dt);
+    if (!active) return;
 
-    if (!active || this.level <= 0) return;
-
-    for (let index = 0; index < this.level; index += 1) {
-      this.mountTimers[index] -= dt;
-      if (this.mountTimers[index] <= 0) {
-        this.fireMount(index);
-        this.mountTimers[index] += CONFIG.defence.fireInterval;
+    const mounts = this.getMountCount();
+    if (mounts > 0) {
+      for (let index = 0; index < mounts; index += 1) {
+        this.mountTimers[index] -= dt;
+        if (this.mountTimers[index] <= 0) {
+          this.fireMount(index);
+          this.mountTimers[index] += this.getFireInterval();
+        }
       }
     }
+
+    if (this.occultSouls > 0) {
+      this.occultTimer -= dt;
+      if (this.occultTimer <= 0) {
+        this.fireOccultPulse();
+        this.occultTimer = this.getOccultInterval();
+      }
+    }
+  }
+
+  chooseTarget() {
+    return this.getEnemies()
+      .filter((enemy) => !enemy.dead && !enemy.removed && enemy.state !== "extracting" && !this.isEnemyHeld(enemy))
+      .sort((a, b) => b.position.x - a.position.x)[0] ?? null;
+  }
+
+  chooseGroundPoint(mountIndex, target = null) {
+    if (target) return new THREE.Vector3(target.position.x, 0.08, target.position.z);
+    return new THREE.Vector3(
+      THREE.MathUtils.randFloat(-12, 7),
+      0.08,
+      THREE.MathUtils.clamp((mountIndex - 1) * 1.8 + THREE.MathUtils.randFloatSpread(5), -5.2, 5.2)
+    );
   }
 
   fireMount(mountIndex) {
     const target = this.chooseTarget();
     const fallback = this.chooseGroundPoint(mountIndex, target);
-    const targetPoint = target
-      ? target.position.clone().add(new THREE.Vector3(0, 1.55, 0))
+    const destination = target
+      ? target.position.clone().add(new THREE.Vector3(0, Math.min(target.definition.height * 0.4, 2.1), 0))
       : fallback.clone();
-
-    this.world.aimTurret(mountIndex, targetPoint);
-    this.fireProjectile({
-      mountIndex,
-      target,
-      destination: targetPoint,
-      fallback
-    });
+    this.world.aimTurret(mountIndex, destination);
+    this.fireProjectile(mountIndex, target, destination, fallback);
     this.onFire?.({ mountIndex, target });
   }
 
-  chooseTarget() {
-    return this.getEnemies()
-      .filter(
-        (enemy) =>
-          !enemy.dead &&
-          !enemy.removed &&
-          !this.isEnemyHeld(enemy)
-      )
-      .sort((a, b) => b.position.x - a.position.x)[0] ?? null;
+  acquireArrow() {
+    const arrow = this.arrowPool.find((item) => !item.active) ?? this.arrowPool[0];
+    arrow.active = true;
+    arrow.group.visible = true;
+    arrow.group.scale.setScalar(1);
+    return arrow;
   }
 
-  chooseGroundPoint(mountIndex, target = null) {
-    if (target) {
-      return new THREE.Vector3(
-        target.position.x,
-        0.08,
-        target.position.z
-      );
-    }
-
-    const laneOffset = (mountIndex - 1) * 1.8;
-    return new THREE.Vector3(
-      THREE.MathUtils.randFloat(-11, 7),
-      0.08,
-      THREE.MathUtils.clamp(
-        laneOffset + THREE.MathUtils.randFloatSpread(5.5),
-        -5.3,
-        5.3
-      )
-    );
-  }
-
-  createArrowMesh() {
-    const group = new THREE.Group();
-    group.scale.setScalar(0.92);
-
-    const shaft = new THREE.Mesh(
-      this.arrowShaftGeometry,
-      this.arrowMaterial
-    );
-    shaft.position.z = 0.12;
-    shaft.castShadow = true;
-    group.add(shaft);
-
-    const head = new THREE.Mesh(
-      this.arrowHeadGeometry,
-      this.arrowHeadMaterial
-    );
-    head.position.z = 0.82;
-    head.castShadow = true;
-    group.add(head);
-
-    const tailFletchGeometry = new THREE.BoxGeometry(0.18, 0.02, 0.20);
-    const tailFletchMaterial = new THREE.MeshStandardMaterial({
-      color: 0x6d1f11,
-      emissive: 0x73210d,
-      emissiveIntensity: 0.5,
-      roughness: 0.55,
-      metalness: 0.05
-    });
-    const tailFletchA = new THREE.Mesh(tailFletchGeometry, tailFletchMaterial);
-    tailFletchA.position.set(0, 0, -0.58);
-    group.add(tailFletchA);
-    const tailFletchB = new THREE.Mesh(tailFletchGeometry, tailFletchMaterial);
-    tailFletchB.position.set(0, 0, -0.58);
-    tailFletchB.rotation.z = Math.PI / 2;
-    group.add(tailFletchB);
-
-    const fireballCoreGeometry = new THREE.SphereGeometry(0.16, 10, 10);
-    const fireballCoreMaterial = new THREE.MeshBasicMaterial({
-      color: 0xffd27a,
-      transparent: true,
-      opacity: 0.98,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false
-    });
-    const fireballCore = new THREE.Mesh(fireballCoreGeometry, fireballCoreMaterial);
-    fireballCore.position.z = -0.26;
-    group.add(fireballCore);
-
-    const fireballHaloGeometry = new THREE.SphereGeometry(0.28, 10, 10);
-    const fireballHaloMaterial = new THREE.MeshBasicMaterial({
-      color: 0xff5a10,
-      transparent: true,
-      opacity: 0.40,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false
-    });
-    const fireballHalo = new THREE.Mesh(fireballHaloGeometry, fireballHaloMaterial);
-    fireballHalo.position.copy(fireballCore.position);
-    group.add(fireballHalo);
-
-    const flameGeometry = new THREE.ConeGeometry(0.14, 0.60, 8);
-    flameGeometry.rotateX(-Math.PI / 2);
-    const flame = new THREE.Mesh(flameGeometry, this.fireMaterial);
-    flame.position.z = -0.58;
-    group.add(flame);
-
-    const innerFlameGeometry = new THREE.ConeGeometry(0.075, 0.34, 8);
-    innerFlameGeometry.rotateX(-Math.PI / 2);
-    const innerFlameMaterial = new THREE.MeshBasicMaterial({
-      color: 0xffdf8e,
-      transparent: true,
-      opacity: 0.9,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false
-    });
-    const innerFlame = new THREE.Mesh(innerFlameGeometry, innerFlameMaterial);
-    innerFlame.position.z = -0.48;
-    group.add(innerFlame);
-
-    const light = new THREE.PointLight(0xff5a19, 10, 6, 1.9);
-    light.position.z = -0.12;
-    group.add(light);
-
-    return {
-      group,
-      flameGeometry,
-      flame,
-      innerFlameGeometry,
-      innerFlameMaterial,
-      innerFlame,
-      fireballCoreGeometry,
-      fireballCoreMaterial,
-      fireballCore,
-      fireballHaloGeometry,
-      fireballHaloMaterial,
-      fireballHalo,
-      tailFletchGeometry,
-      tailFletchMaterial,
-      light
-    };
-  }
-
-  fireProjectile({ mountIndex, target, destination, fallback }) {
-    const arrow = this.createArrowMesh();
+  fireProjectile(mountIndex, target, destination, fallback) {
+    const arrow = this.acquireArrow();
     arrow.group.position.copy(this.world.getTurretOrigin(mountIndex));
-    this.scene.add(arrow.group);
+    arrow.target = target;
+    arrow.destination.copy(destination);
+    arrow.fallback.copy(fallback);
+    arrow.age = 0;
+    this.projectiles.push(arrow);
+  }
 
-    this.projectiles.push({
-      ...arrow,
-      target,
-      destination: destination.clone(),
-      fallback: fallback.clone(),
-      speed: 15.5,
-      age: 0
-    });
+  releaseArrow(arrow) {
+    arrow.active = false;
+    arrow.target = null;
+    arrow.group.visible = false;
+    const index = this.projectiles.indexOf(arrow);
+    if (index >= 0) this.projectiles.splice(index, 1);
   }
 
   updateProjectiles(dt) {
@@ -255,152 +236,104 @@ export class DefenceSystem {
         projectile.target &&
         !projectile.target.dead &&
         !projectile.target.removed &&
+        projectile.target.state !== "extracting" &&
         !this.isEnemyHeld(projectile.target)
       ) {
         projectile.destination.copy(projectile.target.position).add(
-          new THREE.Vector3(0, 1.55, 0)
+          new THREE.Vector3(0, Math.min(projectile.target.definition.height * 0.4, 2.1), 0)
         );
       } else if (projectile.target) {
         projectile.destination.copy(projectile.fallback);
         projectile.target = null;
       }
 
-      const direction = projectile.destination
-        .clone()
-        .sub(projectile.group.position);
+      const direction = projectile.destination.clone().sub(projectile.group.position);
       const distance = direction.length();
-
-      if (distance <= 0.34 || projectile.age > 4.5) {
-        const impactPoint = projectile.destination.clone();
+      if (distance <= 0.32 || projectile.age > 4.6) {
         const target = projectile.target;
-
-        this.removeProjectile(i);
-        this.createImpact(impactPoint);
-
-        if (
-          target &&
-          !target.dead &&
-          !target.removed &&
-          !this.isEnemyHeld(target)
-        ) {
-          this.onKillEnemy?.(target, "turret");
+        const impact = projectile.destination.clone();
+        this.releaseArrow(projectile);
+        this.createImpact(impact);
+        if (target && !target.dead && !target.removed && !this.isEnemyHeld(target)) {
+          this.onDamageEnemy?.(target, "turret", 1);
         }
         continue;
       }
 
       direction.normalize();
-      projectile.group.quaternion.setFromUnitVectors(
-        ARROW_FORWARD,
-        direction
-      );
-      projectile.group.position.addScaledVector(
-        direction,
-        Math.min(distance, projectile.speed * dt)
-      );
-
-      const pulse = 0.92 + Math.sin(projectile.age * 24) * 0.16;
-      projectile.flame.scale.set(0.92 + pulse * 0.16, 0.92 + pulse * 0.16, 1 + pulse * 0.10);
-      projectile.innerFlame.scale.set(
-        0.9 + pulse * 0.10,
-        0.9 + pulse * 0.10,
-        0.96 + pulse * 0.10
-      );
-      projectile.fireballCore.scale.setScalar(0.94 + pulse * 0.10);
-      projectile.fireballHalo.scale.setScalar(0.96 + pulse * 0.16);
-      projectile.fireballHalo.material.opacity = 0.30 + pulse * 0.08;
-      projectile.light.intensity = 8 + pulse * 3.2;
+      projectile.group.quaternion.setFromUnitVectors(FORWARD, direction);
+      projectile.group.position.addScaledVector(direction, Math.min(distance, projectile.speed * dt));
+      const pulse = 0.92 + Math.sin(projectile.age * 24) * 0.15;
+      projectile.fire.scale.setScalar(0.95 + pulse * 0.12);
+      projectile.flame.scale.set(0.96 + pulse * 0.12, 0.96 + pulse * 0.12, 1 + pulse * 0.14);
     }
   }
 
-  removeProjectile(index) {
-    const projectile = this.projectiles[index];
-    this.scene.remove(projectile.group);
-    projectile.flameGeometry.dispose();
-    projectile.innerFlameGeometry.dispose();
-    projectile.innerFlameMaterial.dispose();
-    projectile.fireballCoreGeometry.dispose();
-    projectile.fireballCoreMaterial.dispose();
-    projectile.fireballHaloGeometry.dispose();
-    projectile.fireballHaloMaterial.dispose();
-    projectile.tailFletchGeometry.dispose();
-    projectile.tailFletchMaterial.dispose();
-    this.projectiles.splice(index, 1);
-  }
-
   createImpact(position) {
-    const geometry = new THREE.RingGeometry(0.24, 0.48, 24);
-    const material = new THREE.MeshBasicMaterial({
-      color: 0xff6a1d,
-      transparent: true,
-      opacity: 0.85,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      side: THREE.DoubleSide
-    });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.rotation.x = -Math.PI / 2;
-    mesh.position.copy(position).setY(0.09);
-    this.scene.add(mesh);
-
-    const light = new THREE.PointLight(0xff4b13, 9, 5, 2);
-    light.position.copy(position).add(new THREE.Vector3(0, 0.35, 0));
-    this.scene.add(light);
-
-    this.impacts.push({ mesh, geometry, material, light, age: 0 });
+    const impact = this.impactPool.find((item) => !item.active) ?? this.impactPool[0];
+    impact.active = true;
+    impact.age = 0;
+    impact.mesh.visible = true;
+    impact.mesh.position.copy(position).setY(0.08);
+    impact.mesh.scale.setScalar(1);
+    impact.material.opacity = 0.76;
+    if (!this.impacts.includes(impact)) this.impacts.push(impact);
   }
 
   updateImpacts(dt) {
     for (let i = this.impacts.length - 1; i >= 0; i -= 1) {
       const impact = this.impacts[i];
       impact.age += dt;
-      const t = Math.min(impact.age / 0.55, 1);
-      impact.mesh.scale.setScalar(1 + t * 7.5);
-      impact.material.opacity = (1 - t) * 0.85;
-      impact.light.intensity = (1 - t) * 16;
-
+      const t = Math.min(impact.age / 0.5, 1);
+      impact.mesh.scale.setScalar(1 + t * 6.2);
+      impact.material.opacity = (1 - t) * 0.76;
       if (t >= 1) {
-        this.scene.remove(impact.mesh);
-        this.scene.remove(impact.light);
-        impact.geometry.dispose();
-        impact.material.dispose();
+        impact.active = false;
+        impact.mesh.visible = false;
         this.impacts.splice(i, 1);
       }
     }
   }
 
-  useBomb() {
-    if (this.bombs <= 0) return false;
-    const targets = this.getEnemies().filter(
-      (enemy) => !enemy.dead && !enemy.removed
-    );
-    if (targets.length === 0) return false;
-    this.bombs -= 1;
-    targets.forEach((enemy) => this.onKillEnemy?.(enemy, "bomb"));
-    return true;
+  fireOccultPulse() {
+    const targets = this.getEnemies()
+      .filter((enemy) => !enemy.dead && !enemy.removed && enemy.state !== "extracting")
+      .sort((a, b) => b.position.x - a.position.x)
+      .slice(0, Math.min(4, 1 + Math.floor(this.occultSouls / 5)));
+    if (targets.length === 0) return;
+    this.world.pulseOccultEffect?.();
+    targets.forEach((target) => this.onDamageEnemy?.(target, "occult", target.type === "siege" ? 1 : 2));
+    this.onOccultPulse?.(targets.length);
+  }
+
+  preWarm() {
+    this.world.setTurretLevel(3);
+    this.fireProjectile(0, null, new THREE.Vector3(-2, 0.1, 0), new THREE.Vector3(-2, 0.1, 0));
+    this.createImpact(new THREE.Vector3(-3, 0.1, 0));
+    this.updateProjectiles(1 / 30);
+    this.updateImpacts(1 / 30);
   }
 
   resetCooldown() {
-    this.mountTimers = Array.from(
-      { length: CONFIG.defence.turretMaxLevel },
-      (_, index) => 1.2 + index * CONFIG.defence.fireStagger
-    );
+    this.mountTimers = [1.2, 1.2 + CONFIG.defence.fireStagger, 1.2 + CONFIG.defence.fireStagger * 2];
   }
 
   dispose() {
-    for (let i = this.projectiles.length - 1; i >= 0; i -= 1) {
-      this.removeProjectile(i);
-    }
-    for (const impact of this.impacts) {
+    this.arrowPool.forEach((arrow) => {
+      this.scene.remove(arrow.group);
+      arrow.shaftGeometry.dispose();
+      arrow.shaftMaterial.dispose();
+      arrow.headGeometry.dispose();
+      arrow.headMaterial.dispose();
+      arrow.fireGeometry.dispose();
+      arrow.fireMaterial.dispose();
+      arrow.flameGeometry.dispose();
+      arrow.flameMaterial.dispose();
+    });
+    this.impactPool.forEach((impact) => {
       this.scene.remove(impact.mesh);
-      this.scene.remove(impact.light);
       impact.geometry.dispose();
       impact.material.dispose();
-    }
-    this.impacts = [];
-    this.arrowShaftGeometry.dispose();
-    this.arrowHeadGeometry.dispose();
-    this.arrowMaterial.dispose();
-    this.arrowHeadMaterial.dispose();
-    this.fireMaterial.dispose();
+    });
   }
 }

@@ -6,60 +6,80 @@ import { CONFIG } from "./Config.js";
 export class AssetLibrary {
   constructor() {
     this.loader = new GLTFLoader();
-    this.huskAsset = null;
-    this.manorAsset = null;
-    this.huskMaterialVariants = {
-      normal: new Map(),
-      fast: new Map()
-    };
+    this.assets = new Map();
+    this.materialVariants = new Map();
   }
 
   async loadAll() {
-    const [husk, manor] = await Promise.all([
-      this.loader.loadAsync(CONFIG.assets.husk),
-      this.loader.loadAsync(CONFIG.assets.manor)
-    ]);
-    this.huskAsset = husk;
-    this.manorAsset = manor;
+    const entries = Object.entries(CONFIG.assets);
+    const loaded = await Promise.all(entries.map(async ([key, url]) => {
+      const gltf = await this.loader.loadAsync(url);
+      return [key, gltf];
+    }));
+    loaded.forEach(([key, gltf]) => this.assets.set(key, gltf));
   }
 
-  createHuskClone(fast = false) {
-    if (!this.huskAsset) throw new Error("Husk asset has not loaded.");
-    const scene = SkeletonUtils.clone(this.huskAsset.scene);
-    const variant = fast ? "fast" : "normal";
+  getAsset(key) {
+    const asset = this.assets.get(key);
+    if (!asset) throw new Error(`Asset has not loaded: ${key}`);
+    return asset;
+  }
+
+  createEnemyClone(type) {
+    const definition = CONFIG.enemyTypes[type];
+    if (!definition) throw new Error(`Unknown enemy type: ${type}`);
+    const asset = this.getAsset(definition.asset);
+    const scene = SkeletonUtils.clone(asset.scene);
 
     scene.traverse((object) => {
       if (!object.isMesh || !object.material) return;
-      const materials = Array.isArray(object.material)
-        ? object.material
-        : [object.material];
-
-      const prepared = materials.map((material) => {
-        const key = material.uuid;
-        const cached = this.huskMaterialVariants[variant].get(key);
-        if (cached) return cached;
-
-        const clone = material.clone();
-        if ("emissive" in clone) {
-          clone.emissive = new THREE.Color(fast ? 0x35170e : 0x142237);
-          clone.emissiveIntensity = fast ? 0.42 : 0.28;
-        }
-        this.huskMaterialVariants[variant].set(key, clone);
-        return clone;
-      });
-
-      object.material = Array.isArray(object.material) ? prepared : prepared[0];
+      const input = Array.isArray(object.material) ? object.material : [object.material];
+      const output = input.map((material) => this.getEnemyMaterial(material, type));
+      object.material = Array.isArray(object.material) ? output : output[0];
     });
 
-    return {
-      scene,
-      animations: this.huskAsset.animations
-    };
+    return { scene, animations: asset.animations ?? [] };
+  }
+
+  getEnemyMaterial(material, type) {
+    const key = `${type}:${material.uuid}`;
+    if (this.materialVariants.has(key)) return this.materialVariants.get(key);
+
+    const clone = material.clone();
+    if (type === "strong") {
+      if (clone.color) clone.color.multiply(new THREE.Color(0.72, 0.46, 0.38));
+      if ("emissive" in clone) {
+        clone.emissive = new THREE.Color(0x5d1407);
+        clone.emissiveIntensity = 0.5;
+      }
+    } else if (type === "runner") {
+      if ("emissive" in clone) {
+        clone.emissive = new THREE.Color(0x2a1710);
+        clone.emissiveIntensity = 0.22;
+      }
+    } else if (type === "brute") {
+      if (clone.color) clone.color.multiplyScalar(0.82);
+      if ("emissive" in clone) {
+        clone.emissive = new THREE.Color(0x1c2027);
+        clone.emissiveIntensity = 0.18;
+      }
+    } else if (type === "siege") {
+      if (clone.color) clone.color.multiply(new THREE.Color(0.68, 0.74, 0.82));
+      if ("emissive" in clone) {
+        clone.emissive = new THREE.Color(0x25142e);
+        clone.emissiveIntensity = 0.34;
+      }
+    } else if ("emissive" in clone) {
+      clone.emissive = new THREE.Color(0x142237);
+      clone.emissiveIntensity = 0.24;
+    }
+
+    this.materialVariants.set(key, clone);
+    return clone;
   }
 
   createManorClone() {
-    if (!this.manorAsset) throw new Error("Manor asset has not loaded.");
-    return this.manorAsset.scene.clone(true);
+    return this.getAsset("manor").scene.clone(true);
   }
 
   static prepareModel(model) {

@@ -1,11 +1,12 @@
 import * as THREE from "three";
 
 export class GrabSystem {
-  constructor({ camera, domElement, getEnemies, onRelease }) {
+  constructor({ camera, domElement, getEnemies, onRelease, onDirectClick }) {
     this.camera = camera;
     this.domElement = domElement;
     this.getEnemies = getEnemies;
     this.onRelease = onRelease;
+    this.onDirectClick = onDirectClick;
     this.raycaster = new THREE.Raycaster();
     this.pointer = new THREE.Vector2();
     this.previousPointer = new THREE.Vector2();
@@ -43,19 +44,30 @@ export class GrabSystem {
 
   onPointerDown(event) {
     if (!this.enabled || event.button !== 0) return;
-    const enemies = this.getEnemies().filter((enemy) => !enemy.dead && !enemy.removed);
+    const enemies = this.getEnemies().filter(
+      (enemy) => !enemy.dead && !enemy.removed && (enemy.isPickable?.() || enemy.canDirectClick?.())
+    );
     this.setPointer(event);
     this.raycaster.setFromCamera(this.pointer, this.camera);
     const hits = this.raycaster.intersectObjects(enemies.map((enemy) => enemy.group), true);
     if (!hits.length) return;
 
     const enemy = hits[0].object.userData.enemy;
-    if (!enemy || enemy.dead) return;
+    if (!enemy || enemy.dead || enemy.removed) return;
+
+    if (enemy.canDirectClick?.()) {
+      event.preventDefault();
+      this.onDirectClick?.(enemy);
+      return;
+    }
+
+    if (!enemy.isPickable?.()) return;
+    if (!enemy.beginGrab()) return;
+
     this.heldEnemy = enemy;
     this.initialGrabPosition.copy(enemy.position);
     this.springVelocity.copy(enemy.velocity);
     enemy.velocity.set(0, 0, 0);
-    enemy.beginGrab();
     this.depthDrift = 0;
 
     const cameraDirection = new THREE.Vector3();
@@ -99,8 +111,9 @@ export class GrabSystem {
 
   update(dt) {
     if (!this.heldEnemy) return;
-    const stiffness = 92;
-    const damping = 10.8;
+    const massScale = this.heldEnemy.type === "brute" ? 0.63 : 1;
+    const stiffness = 92 * massScale;
+    const damping = this.heldEnemy.type === "brute" ? 13 : 10.8;
     const displacement = this.target.clone().sub(this.heldEnemy.position);
     this.springVelocity.addScaledVector(displacement, stiffness * dt);
     this.springVelocity.multiplyScalar(Math.exp(-damping * dt));
@@ -139,8 +152,13 @@ export class GrabSystem {
     this.pointerHistory.length = 0;
     this.springVelocity.set(0, 0, 0);
     document.body.classList.remove("grabbing");
-    enemy.launch(releaseVelocity);
-    this.onRelease?.({ enemy, velocity: releaseVelocity.clone() });
+
+    const handled = this.onRelease?.({
+      enemy,
+      velocity: releaseVelocity.clone(),
+      position: enemy.position.clone()
+    });
+    if (handled !== true) enemy.launch(releaseVelocity);
   }
 
   forceRelease() {

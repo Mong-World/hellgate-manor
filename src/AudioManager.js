@@ -143,9 +143,9 @@ export class AudioManager {
   playBodyImpact(strength = 8) {
     const intensity = Math.min(Math.max(strength / 15, 0), 1);
     return this.play("bodyImpact", {
-      volume: 0.48 + intensity * 0.42,
-      pitchMin: 0.80,
-      pitchMax: 1.15
+      volume: (0.48 + intensity * 0.42) * 0.60,
+      pitchMin: 0.82,
+      pitchMax: 1.18
     });
   }
 

@@ -2,6 +2,8 @@ import * as THREE from "three";
 import { CONFIG } from "./Config.js";
 import { Husk } from "./Husk.js";
 
+const TYPES = ["husk", "strong", "runner", "brute", "siege"];
+
 export class WaveManager {
   constructor({
     scene,
@@ -10,7 +12,9 @@ export class WaveManager {
     onEnemyDeath,
     onEnemyAttack,
     onEnemyImpact,
-    onWaveComplete
+    onEnemyExtracted,
+    onWaveComplete,
+    onSiegeClick
   }) {
     this.scene = scene;
     this.assets = assets;
@@ -18,201 +22,233 @@ export class WaveManager {
     this.onEnemyDeath = onEnemyDeath;
     this.onEnemyAttack = onEnemyAttack;
     this.onEnemyImpact = onEnemyImpact;
+    this.onEnemyExtracted = onEnemyExtracted;
     this.onWaveComplete = onWaveComplete;
+    this.onSiegeClick = onSiegeClick;
+
     this.waveIndex = -1;
     this.config = null;
     this.enemies = [];
+    this.queue = [];
     this.spawned = 0;
-    this.defeated = 0;
+    this.resolved = 0;
     this.spawnTimer = 0;
     this.running = false;
     this.nextEnemyId = 1;
-    this.fastQueue = [];
-    this.normalPool = [];
-    this.fastPool = [];
+    this.pools = Object.fromEntries(TYPES.map((type) => [type, []]));
     this.pooledEnemies = new Set();
+    this.activeExtractions = new Set();
   }
 
-  async preparePool({ normalCount, fastCount, onProgress = null }) {
-    const total = normalCount + fastCount;
-    let created = 0;
+  async preparePools(onProgress = null) {
+    const counts = CONFIG.pool;
+    const jobs = [];
+    for (const type of TYPES) {
+      for (let i = 0; i < counts[type]; i += 1) jobs.push(type);
+    }
 
-    const makePooledEnemy = (fast) => {
+    for (let index = 0; index < jobs.length; index += 1) {
+      const type = jobs[index];
       const enemy = this.createEnemy({
-        id: -(created + 1),
-        fast,
-        position: new THREE.Vector3(-40, 0, 0)
+        id: -(index + 1),
+        type,
+        position: new THREE.Vector3(-45, 0, 0)
       });
-
-      Object.keys(enemy.actions).forEach((name) => {
-        enemy.preWarmAction(name);
-      });
-      enemy.resetAfterWarmup();
+      enemy.preWarmAllActions();
       enemy.deactivateForPool();
-
-      const pool = fast ? this.fastPool : this.normalPool;
-      pool.push(enemy);
+      this.pools[type].push(enemy);
       this.pooledEnemies.add(enemy);
-      created += 1;
-      onProgress?.(created / Math.max(total, 1));
-    };
-
-    for (let i = 0; i < normalCount; i += 1) {
-      makePooledEnemy(false);
-      if (i % 2 === 1) {
-        await new Promise((resolve) => requestAnimationFrame(resolve));
-      }
-    }
-
-    for (let i = 0; i < fastCount; i += 1) {
-      makePooledEnemy(true);
-      if (i % 2 === 1) {
+      onProgress?.((index + 1) / jobs.length);
+      if (index % 2 === 1) {
         await new Promise((resolve) => requestAnimationFrame(resolve));
       }
     }
   }
 
-  createEnemy({ id, fast, position }) {
+  createEnemy({ id, type, position }) {
     return new Husk({
       id,
+      type,
       scene: this.scene,
       assets: this.assets,
       camera: this.camera,
       position,
-      fast,
       onDeath: (data) => this.handleEnemyDeath(data),
-      onAttack: (target) => this.onEnemyAttack?.(target),
-      onImpact: (data) => this.onEnemyImpact?.(data)
+      onAttack: (enemy) => this.onEnemyAttack?.(enemy),
+      onImpact: (data) => this.onEnemyImpact?.(data),
+      onSiegeClick: (enemy) => this.onSiegeClick?.(enemy),
+      onExtractionComplete: (enemy) => this.finishExtraction(enemy)
     });
   }
 
   getWarmupSamples() {
-    return [
-      this.normalPool[0] ?? null,
-      this.fastPool[0] ?? null
-    ].filter(Boolean);
+    return TYPES.map((type) => this.pools[type][0]).filter(Boolean);
   }
 
-  acquireEnemy(fast, id, position) {
-    const pool = fast ? this.fastPool : this.normalPool;
-    const enemy = pool.pop() ?? this.createEnemy({ id, fast, position });
+  acquireEnemy(type, id, position) {
+    const pool = this.pools[type];
+    const enemy = pool.pop() ?? this.createEnemy({ id, type, position });
     this.pooledEnemies.delete(enemy);
-    enemy.resetForSpawn(id, position);
+    enemy.resetForSpawn(id, position, type);
     return enemy;
   }
 
   releaseEnemy(enemy) {
     if (!enemy || this.pooledEnemies.has(enemy)) return;
+    this.activeExtractions.delete(enemy);
     enemy.deactivateForPool();
-    const pool = enemy.fast ? this.fastPool : this.normalPool;
-    pool.push(enemy);
+    this.pools[enemy.type].push(enemy);
     this.pooledEnemies.add(enemy);
   }
 
+  makeQueue(counts) {
+    const queue = [];
+    for (const type of TYPES) {
+      for (let i = 0; i < (counts[type] ?? 0); i += 1) queue.push(type);
+    }
+
+    // Shuffle, but keep the first few spawns readable by biasing basic enemies forward.
+    for (let i = queue.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [queue[i], queue[j]] = [queue[j], queue[i]];
+    }
+
+    if ((counts.husk ?? 0) > 0) {
+      const firstHusk = queue.indexOf("husk");
+      if (firstHusk > 0) [queue[0], queue[firstHusk]] = [queue[firstHusk], queue[0]];
+    }
+    return queue;
+  }
+
   startWave(index) {
-    this.clear();
+    this.clearActiveOnly();
     this.waveIndex = index;
     this.config = CONFIG.waves[index];
+    this.queue = this.makeQueue(this.config.counts);
     this.spawned = 0;
-    this.defeated = 0;
-    this.spawnTimer = 0.2;
+    this.resolved = 0;
+    this.spawnTimer = this.config.initialDelay;
     this.running = true;
-
-    this.fastQueue = Array(this.config.total).fill(false);
-    const indices = [...Array(this.config.total).keys()];
-    for (let i = indices.length - 1; i > 0; i -= 1) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [indices[i], indices[j]] = [indices[j], indices[i]];
-    }
-    indices.slice(0, this.config.fast).forEach((index) => {
-      this.fastQueue[index] = true;
-    });
   }
 
   update(dt) {
     if (!this.running || !this.config) return;
     this.enemies = this.enemies.filter((enemy) => !enemy.removed);
-    const aliveCount = this.getAliveEnemies().length;
 
-    if (this.spawned < this.config.total && aliveCount < this.config.maxActive) {
+    if (this.spawned < this.queue.length) {
       this.spawnTimer -= dt;
       if (this.spawnTimer <= 0) {
-        this.spawnEnemy();
-        this.spawnTimer = this.config.spawnGap;
+        const available = Math.max(0, this.config.maxActive - this.getActiveCombatEnemies().length);
+        if (available > 0) {
+          let burst = 1;
+          if (Math.random() < this.config.burstChance) {
+            burst = THREE.MathUtils.randInt(2, this.config.burstMax);
+          }
+          burst = Math.min(burst, available, this.queue.length - this.spawned);
+          for (let i = 0; i < burst; i += 1) this.spawnEnemy(i, burst);
+          const jitter = THREE.MathUtils.randFloat(0.78, 1.22);
+          this.spawnTimer = this.config.spawnGap * jitter;
+        } else {
+          // The 25-enemy cap is the only thing that pauses spawning.
+          this.spawnTimer = 0.2;
+        }
       }
     }
 
     if (
-      this.spawned >= this.config.total &&
-      this.defeated >= this.config.total &&
-      this.getAliveEnemies().length === 0
+      this.spawned >= this.queue.length &&
+      this.resolved >= this.queue.length &&
+      this.getActiveCombatEnemies().length === 0 &&
+      this.activeExtractions.size === 0
     ) {
       this.running = false;
       this.onWaveComplete?.(this.waveIndex);
     }
   }
 
-  spawnEnemy() {
-    const lanes = [-3.8, -2.5, -1.2, 0, 1.2, 2.5, 3.8];
-    const z = lanes[Math.floor(Math.random() * lanes.length)] + THREE.MathUtils.randFloatSpread(0.28);
-    const fast = this.fastQueue[this.spawned] ?? false;
-
+  spawnEnemy(burstIndex = 0, burstSize = 1) {
+    const lanes = [-4.3, -3.1, -1.9, -0.7, 0.7, 1.9, 3.1, 4.3];
+    const lane = lanes[Math.floor(Math.random() * lanes.length)];
+    const type = this.queue[this.spawned] ?? "husk";
+    const z = THREE.MathUtils.clamp(
+      lane + THREE.MathUtils.randFloatSpread(0.3) + (burstIndex - (burstSize - 1) / 2) * 0.18,
+      -5.3,
+      5.3
+    );
     const enemy = this.acquireEnemy(
-      fast,
+      type,
       this.nextEnemyId++,
       new THREE.Vector3(
-        THREE.MathUtils.randFloat(
-          CONFIG.enemy.spawnXMin,
-          CONFIG.enemy.spawnXMax
-        ),
+        THREE.MathUtils.randFloat(CONFIG.enemy.spawnXMin, CONFIG.enemy.spawnXMax) - burstIndex * 0.35,
         0,
         z
       )
     );
-
     this.enemies.push(enemy);
     this.spawned += 1;
   }
 
   handleEnemyDeath(data) {
     const enemy = data.enemy;
-    if (!enemy || enemy.dead) return;
+    if (!enemy || enemy.dead || enemy.removed) return;
     enemy.kill();
-    this.defeated += 1;
+    this.resolved += 1;
     this.onEnemyDeath?.(data);
-    window.setTimeout(() => this.releaseEnemy(enemy), 90);
+    window.setTimeout(() => this.releaseEnemy(enemy), 80);
+  }
+
+  startExtraction(enemy, duration, slotOffset = 0) {
+    if (!enemy || enemy.dead || enemy.removed || !enemy.convertible) return false;
+    if (this.activeExtractions.has(enemy)) return false;
+    const started = enemy.beginExtraction(duration, slotOffset);
+    if (!started) return false;
+    this.activeExtractions.add(enemy);
+    this.resolved += 1;
+    return true;
+  }
+
+  finishExtraction(enemy) {
+    if (!this.activeExtractions.has(enemy)) return;
+    this.activeExtractions.delete(enemy);
+    this.onEnemyExtracted?.(enemy);
+    this.releaseEnemy(enemy);
   }
 
   getAliveEnemies() {
     return this.enemies.filter((enemy) => !enemy.dead && !enemy.removed);
   }
 
-  getRemainingCount() {
-    if (!this.config) return 0;
-    return Math.max(0, this.config.total - this.defeated);
+  getActiveCombatEnemies() {
+    return this.enemies.filter(
+      (enemy) => !enemy.dead && !enemy.removed && enemy.state !== "extracting"
+    );
+  }
+
+  getExtractionCount() {
+    return this.activeExtractions.size;
   }
 
   stop() {
     this.running = false;
   }
 
-  clear() {
+  clearActiveOnly() {
     this.enemies.forEach((enemy) => this.releaseEnemy(enemy));
     this.enemies = [];
+    this.activeExtractions.clear();
     this.running = false;
   }
 
+  clear() {
+    this.clearActiveOnly();
+  }
+
   dispose() {
-    const allEnemies = new Set([
-      ...this.enemies,
-      ...this.normalPool,
-      ...this.fastPool
-    ]);
-    allEnemies.forEach((enemy) => enemy.dispose());
-    this.enemies = [];
-    this.normalPool = [];
-    this.fastPool = [];
+    this.clearActiveOnly();
+    for (const type of TYPES) {
+      this.pools[type].forEach((enemy) => enemy.dispose());
+      this.pools[type] = [];
+    }
     this.pooledEnemies.clear();
-    this.running = false;
   }
 }

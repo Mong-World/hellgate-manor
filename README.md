@@ -1,133 +1,156 @@
-# Hellgate Manor — Five-Wave Vertical Slice v0.17
+# Hellgate Manor — Full Game First Draft v1.0
 
-This update builds directly on the working v0.10 five-wave version.
+This is the first full-game draft built from the previous five-wave vertical slice.
 
-## Required repository files
+## Keep these repository folders
 
-Keep these existing files and folders:
+The ZIP contains code/workflow files only. Keep the existing folders already in the GitHub repository:
+
+```text
+assets/
+fonts/
+sounds/
+```
+
+Expected asset filenames:
 
 ```text
 assets/husk.glb
 assets/manor.glb
-fonts/lansbury.ttf
+assets/running-crawl.glb
+assets/slow-walk.glb
+assets/skinny-monster.glb
 ```
 
-The ZIP contains the revised game code and workflow, but it does not duplicate your GLB assets or font.
+Expected sound filenames:
 
-## v0.17 changes
+```text
+sounds/ashsound.mp3
+sounds/attacksound.mp3
+sounds/background1.mp3
+sounds/background2.mp3
+sounds/body-impact-sound.mp3
+sounds/bomb-explosion.mp3
+sounds/crossbow-fire-sound.mp3
+sounds/denied-purchase-sound.mp3
+sounds/game-over-sound.mp3
+sounds/purchasesound.mp3
+sounds/soulcollectsound.mp3
+sounds/wave-start-sound.MP3
+sounds/whoosh.mp3
+```
 
-- The previous fast-Husk movement range is now used for standard Husks.
-- Fast Husks move at approximately twice the new standard speed.
-- Animation playback is increased but capped separately from world movement.
-- Husks now spawn fully off-screen to the left.
-- The left battlefield contains a glowing, animated breach with lava fissures, embers and infernal lighting.
-- The background now has a moon, stars and slowly drifting clouds.
-- Low ground fog drifts gently across the battlefield.
-- Hellfire Defence is locked until it can be purchased for Wave 3.
-- Hell Bombs are locked until they can be purchased for Wave 4.
-- Unlock rules are enforced both in the UI and in game logic.
-- The Lansbury font is used for titles, buttons and key UI labels.
-- The HUD is smaller and positioned along the bottom edge.
-- The intermission screen uses spacious horizontal upgrade rows with larger gaps and clearer mouse targets.
+## Full game structure
 
-## Interpretation
+- 50 waves, with Wave 50 as the final siege.
+- Maximum 25 active combat demons on-screen at once.
+- Spawning is independent of enemy deaths. Later waves can arrive in bursts until the 25-enemy cap is reached.
+- Wave 1 waits roughly 7 seconds before the first Husk and is deliberately much longer than the original demo opening.
+- No boss encounters.
+- Automatic local browser save after waves/purchases and a Continue option on the title screen.
 
-The request for “stairs” in the sky was treated as “stars,” alongside the moon and clouds.
+## Enemy roster
 
+- **Husk** — standard grab/throw enemy, 10 Souls.
+- **Strong Husk** — recoloured Husk, slower, survives two lethal hits, 20 Souls.
+- **Running Husk** — uses `running-crawl.glb`, much faster, 10 Souls.
+- **Brute** — uses `slow-walk.glb`, larger/heavier to drag and throw, survives two lethal hits, 30 Souls.
+- **Siege Demon** — uses `skinny-monster.glb`, large and cannot be picked up. Clicking it staggers it; it requires repeated successful staggers and becomes temporarily unavailable while recovering. 50 Souls.
 
-## v0.17 visual and usability pass
+Fallen/recovering demons cannot be grabbed until they return to their walking state.
 
-- Added a much larger invisible grab collider around each Husk so selection is far less frustrating.
-- Enlarged and re-angled the manor so it now sits partly off the right edge of the screen.
-- Moved and intensified the infernal breach so the left-side glow reads properly on desktop.
-- Increased ground fog visibility and movement.
-- Reworked the ground with a darker textured surface instead of a flat plain look.
-- Kept Lansbury for headers and key labels, but increased smaller menu text and made the supporting font bolder for readability.
+## Economy
 
+Standard Husks award 10 Souls. Costs use multiples of 10 and are based approximately on the original Defend Your Castle kill-to-upgrade ratios.
 
-## v0.17 wave and defence pass
+### Manor
 
-- Every wave can continue spawning until as many as 25 living Husks are present at once.
-- The enlarged manor has been fully reversed by 180 degrees rather than merely angled.
-- Hellfire Defence now fires continuously every 10 seconds, even with no enemy target.
-- Empty shots strike a random point on the battlefield.
-- Held Husks are excluded from target selection. If a Husk is grabbed after an arrow has launched, the arrow continues to the ground position where the Husk was instead of following it.
-- The old soul-like projectile has been replaced with a procedural gothic crossbow and visible flaming arrows.
-- Additional crossbows fire one second apart rather than simultaneously.
-- The first crossbow remains 60 souls; the second now costs 900 souls and cannot realistically be acquired during the five-wave demo.
+- Patch Damage: 20 Souls / +50 health
+- Major Repair: 80 Souls / +250 health
+- Restore Manor: 330 Souls / +1000 health
+- Fortify: 130 Souls / +100 maximum health
+- Major Fortify: 1250 Souls / +1000 maximum health
 
+The manor begins at 1000/1000 health.
 
-## v0.17 defence visibility and pacing
+### Systems
 
-- Enlarged the gothic crossbow emplacements substantially and moved them in front of the manor so they are readable on mobile.
-- Rebuilt the projectile as a large flaming arrow with a bright fireball core, orange halo, layered flame and stronger light.
-- Slowed the projectile slightly so its flight can be seen.
-- Hellfire Defence now fires every 5 seconds during active waves.
-- A newly purchased defence takes its first shot shortly after the wave starts.
-- Removed rapid multi-Husk burst spawning.
-- All waves retain a maximum of 25 active Husks, but their arrival is more consistently spaced.
-- The second and third crossbows remain priced beyond the current five-wave demo.
+- Soul Extraction: 830 Souls
+- Hellfire Battery: 1330 Souls
+- Demolition Crypt: 2500 Souls
+- Undercroft: 4200 Souls
+- Occult Tower: 6700 Souls
 
+Players may make as many purchases as they can afford between waves. There is no one-purchase limit.
 
-## v0.17 startup pre-warming
+## Soul Extraction / Bound Souls
 
-- Added a staged loading screen with progress messages and a progress bar.
-- Loads the font, GLB assets, battlefield, waves and defence before showing Start.
-- Creates and renders a temporary animated Husk during loading.
-- Pre-warms normal ash, warm ash, soul, impact-ring and Hellfire projectile materials.
-- Temporarily reveals all defence mounts so their shaders are compiled.
-- Uses `renderer.compileAsync()` when available, with `renderer.compile()` as a fallback.
-- Renders several warm-up frames before gameplay.
-- Removes all temporary warm-up objects and effects before the Start screen appears.
+Purchasing Soul Extraction reveals a glowing ritual/fire area near the manor.
 
-This targets the one-time hitch previously seen on the first Husk death.
+- Drop a grab-able living demon into the area to start conversion.
+- Conversion takes about 14 seconds.
+- Up to two conversions can run simultaneously.
+- Converted enemies award no normal Souls and do not count as Demon Deaths.
+- Completed conversions create permanent Bound Souls.
+- If the Hellfire Battery is already owned, newly created Bound Souls automatically join it.
+- Between waves, Bound Souls can be reassigned between owned systems.
 
+## Bound Soul systems
 
-## v0.17 visual readability pass
+- **Hellfire Battery** — more assigned Bound Souls activate more manor defence positions and increase firing frequency.
+- **Demolition Crypt** — assigned Bound Souls build progress toward Hell Bomb charges between waves.
+- **Undercroft** — assigned Bound Souls automatically repair the manor between waves.
+- **Occult Tower** — assigned Bound Souls trigger increasingly frequent automatic occult strikes.
 
-- Reduced and re-mounted the gothic crossbows so they sit against the manor more cleanly.
-- Reworked defence projectiles into clearer flaming arrows with a more compact silhouette.
-- Added better Husk readability through cooler fill / emissive visibility tuning.
-- Replaced the blocky fog sheets with layered drifting sprite fog.
-- Brought the hell breach farther into view and added taller glow plumes so it reads on desktop.
-- Removed the obvious rectangular ground overlay and kept the battlefield cleaner.
-- Added larger HUD safe margins so panels are less likely to clip at the edges.
-- Toned down and sharpened the moon so it feels less blown out.
+## HUD / UI
 
+- Wave number
+- Permanent Demon Deaths tally
+- Manor health
+- Souls
+- Bound Souls
+- Hell Bomb count when available
 
-## v0.17 audio and animation warm-up
+The old “Husks Remaining” display has been removed.
 
-This build adds the complete supplied audio set and a stronger startup warm-up.
+The between-wave menu is now paged into **Manor**, **Systems**, and **Bound Souls** sections with larger touch targets for mobile.
 
-### Audio
+## Visual changes
 
-The loading screen now fetches and decodes every MP3 before the Start screen appears. Playback is unlocked by the player's Start-button press, which follows browser autoplay rules.
+- Ground fog now uses soft feathered oval/circular mist sprites rather than visible rectangular fog sheets.
+- Existing manor fire positions are retained, but each brazier now has a bowl/rim, multiple flame layers, sparks and flickering light.
+- Fortification purchases progressively add visible manor reinforcement/ward elements.
+- Soul Extraction adds an orange glowing ritual zone.
+- Demolition uses red accents.
+- Undercroft uses amber structural accents.
+- Occult uses purple rotating rings/orb effects.
+- Standard Husks and their grab hitboxes are smaller than in the previous build.
 
-Sound assignments:
+## Loading / performance
 
-- `sounds/ashsound.mp3` — Husk disintegration
-- `sounds/attacksound.mp3` — Husk striking the manor
-- `sounds/background1.mp3` and `sounds/background2.mp3` — alternating wave music
-- `sounds/body impact sound.mp3` — ground, tree, manor and Husk collisions
-- `sounds/bomb-explosion.mp3` — Hell Bomb
-- `sounds/crossbow-fire-sound.mp3` — Hellfire crossbow
-- `sounds/denied-purchase-sound.mp3` — unavailable or unaffordable purchases
-- `sounds/game-over-sound.mp3` — manor destroyed
-- `sounds/purchasesound.mp3` — successful purchases and repairs
-- `sounds/soulcollectsound.mp3` — soul reaching the manor
-- `sounds/wave-start-sound.MP3` — wave beginning; uppercase extension is intentional
-- `sounds/whoosh.mp3` — Husk released by the player
+The loading screen now shows only the title, loading bar and percentage.
 
-Repeated effects use subtle random pitch and volume changes. Background music is never pitch-shifted. Simultaneous-effect limits prevent large groups of Husks from creating excessive audio overlap.
+Before the Start screen appears, the game:
 
-### Reduced first-use animation lag
+- downloads and decodes all supplied audio;
+- loads all five required GLB assets plus the manor;
+- creates reusable pools for every demon type;
+- binds/advances every available animation during loading;
+- pre-creates pooled soul, ash and impact effects;
+- pre-creates defence projectiles/impact effects;
+- renders representative demons/effects while the loading overlay is covering the game;
+- compiles shaders before gameplay.
 
-- Pre-creates a complete 25-Husk pool during loading: 15 normal and 10 fast, matching the maximum Wave 5 mixture.
-- Binds and advances every animation action on every pooled Husk before gameplay.
-- Reuses the pooled Husk instances across waves instead of cloning models and animation mixers during combat.
-- Renders multiple warm-up frames before gameplay.
-- Prepares shared normal and fast Husk material variants during loading instead of cloning new materials for every spawn.
-- Removes the per-fast-Husk point light, which previously changed the active light count and could trigger a new shader compilation when the first fast Husk appeared. Fast Husks retain their warm emissive appearance.
-- Continues to pre-warm death, soul, impact and Hellfire effects.
+The death/soul path no longer creates new soul/ash/impact geometry on the first kill, targeting the first-death hitch seen in previous builds.
 
-The GitHub Action now also copies the existing `sounds/` folder into the `portals-build` output. Keep the existing `assets/`, `fonts/` and `sounds/` folders when replacing the project code.
+## Audio
+
+- `body-impact-sound.mp3` uses the corrected hyphenated filename.
+- Body-impact playback volume is reduced to 60% of the previous level (40% quieter).
+- Body impacts use random pitch variation on every eligible playback.
+- Other repeated SFX retain subtle variation.
+- `background1.mp3` and `background2.mp3` alternate between waves.
+
+## Portals build
+
+The GitHub Action builds `main`, copies `assets/`, `fonts/`, and `sounds/` into `dist/`, then force-publishes the result to `portals-build`.
