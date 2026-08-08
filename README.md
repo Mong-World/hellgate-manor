@@ -200,9 +200,14 @@ The GitHub Action builds `main`, copies `assets/`, `fonts/`, and `sounds/` into 
 - Required Husk/Manor failures now display the exact asset error on the loading screen.
 
 
-## v1.4.2 strict asset loading
+## v1.4.3 strict asset loading
 
 - Removed all enemy-model fallbacks.
 - Every configured GLB is treated as required.
 - GLBs still load sequentially with retries for Portals reliability.
 - If any GLB fails, startup stops and the loading screen explicitly displays the failed asset filename.
+
+
+## v1.4.3 hotfix
+- Fixed startup crash `CONFIG is not defined` by importing CONFIG in World.js.
+- Exact required-asset failure reporting remains enabled; no enemy model fallbacks are used.

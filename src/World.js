@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { AssetLibrary } from "./AssetLibrary.js";
+import { CONFIG } from "./Config.js";
 
 function makeMoonTexture() {
   const canvas = document.createElement("canvas");
