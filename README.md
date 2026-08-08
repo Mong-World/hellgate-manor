@@ -168,3 +168,13 @@ The GitHub Action builds `main`, copies `assets/`, `fonts/`, and `sounds/` into 
 - Hell Gate fissure moved into the visible left battlefield, enlarged, brightened and given animated flame tongues; spawn positions now emerge immediately behind it.
 - Startup warm-up now renders every pooled enemy clone and every pooled soul/ash/ring effect during the loading screen. Pool sizes cover the configured per-type maxima to avoid runtime GLB construction during normal play.
 - Body impact remains at 60% of its old volume with randomized pitch on each valid playback.
+
+
+## v1.3 gameplay correction pass
+
+- Added optional `assets/click-sound.mp3` for all menu button presses.
+- Removed demon-to-demon collision response so thrown Husks no longer stop crowds or create pile-ups.
+- Fixed low-speed manor/tree impacts leaving demons suspended in mid-air; fallen demons are now snapped to the battlefield floor.
+- Surviving demons thrown fully behind the manor are recovered to the front attack line so they remain interactable.
+- Replaced the large tubular Hell Gate fissure that could read like glowing logs with flat ground-level glowing tear shapes.
+- Winning the final wave now closes the Hell Gate, extinguishes the braziers, fades the moon/stars, raises a dawn sun, brightens the scene, and displays a congratulations message.

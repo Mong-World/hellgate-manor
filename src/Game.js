@@ -54,6 +54,7 @@ export class Game {
     this.loadingPercent = document.getElementById("loading-percent");
 
     this.ui = new UI(document.getElementById("ui-canvas"), {
+      onUIClick: () => this.playUIClick(),
       onNewGame: () => this.beginNewGame(),
       onContinueSave: () => this.continueSavedGame(),
       onBomb: () => this.useBomb(),
@@ -254,10 +255,22 @@ export class Game {
     await this.waitForFrame();
   }
 
+  async playUIClick() {
+    await this.audio.unlock();
+    this.audio.play("click", {
+      volume: 0.34,
+      pitchMin: 0.97,
+      pitchMax: 1.04,
+      cooldown: 0.02,
+      maxInstances: 2
+    });
+  }
+
   async beginNewGame() {
     if (this.startingGame) return;
     this.startingGame = true;
     await this.audio.unlock();
+    this.world.resetNight?.();
     this.resetState();
     this.clearSave();
     this.applyUpgradeState();
@@ -269,6 +282,7 @@ export class Game {
     if (this.startingGame) return;
     this.startingGame = true;
     await this.audio.unlock();
+    this.world.resetNight?.();
     const save = this.readSave();
     if (!save) {
       this.startingGame = false;
@@ -489,6 +503,8 @@ export class Game {
     this.syncUI();
     if (this.waveIndex >= CONFIG.waves.length - 1) {
       this.clearSave();
+      this.audio.stopMusic(2.2);
+      this.world.startDawn?.();
       this.ui.setMode("complete");
       return;
     }
@@ -662,6 +678,30 @@ export class Game {
 
   checkWorldCollisions() {
     for (const enemy of this.waveManager.getAliveEnemies()) {
+      // If a throwable demon gets launched completely behind the manor and
+      // survives, recover it to the attack line rather than letting it become
+      // inaccessible behind the model.
+      const escapedBehindManor =
+        enemy.type !== "siege" &&
+        enemy.state !== "grabbed" &&
+        enemy.state !== "extracting" &&
+        enemy.position.x > this.world.manorBounds.max.x + 0.6 &&
+        enemy.position.y <= 1.8;
+
+      if (escapedBehindManor) {
+        enemy.position.set(
+          this.world.manorBarrierX - 0.05,
+          0,
+          THREE.MathUtils.clamp(enemy.position.z, -4.8, 4.8)
+        );
+        enemy.group.rotation.set(0, 0, 0);
+        enemy.modelRoot.rotation.set(0, 0, 0);
+        enemy.velocity.set(0, 0, 0);
+        enemy.state = "walking";
+        enemy.reachManor(this.world.manorBarrierX);
+        continue;
+      }
+
       if (enemy.state === "walking") {
         if (enemy.type !== "siege" && enemy.position.x >= this.world.manorBarrierX) {
           enemy.reachManor(this.world.manorBarrierX);
@@ -676,6 +716,7 @@ export class Game {
         else {
           this.handleEnemyImpact({ impactStrength: speed });
           enemy.position.x = this.world.manorBarrierX - 0.2;
+          enemy.position.y = 0;
           enemy.velocity.x = -Math.abs(enemy.velocity.x) * 0.30;
           enemy.knockDown(enemy.velocity);
         }
@@ -686,6 +727,7 @@ export class Game {
         if (speed >= CONFIG.enemy.treeKillSpeed) enemy.hitHardSurface("tree", speed);
         else {
           this.handleEnemyImpact({ impactStrength: speed });
+          enemy.position.y = 0;
           enemy.velocity.x *= -0.24;
           enemy.velocity.z *= -0.24;
           enemy.knockDown(enemy.velocity);
@@ -695,31 +737,8 @@ export class Game {
   }
 
   checkEnemyCollisions() {
-    const enemies = this.waveManager.getActiveCombatEnemies();
-    for (let i = 0; i < enemies.length; i += 1) {
-      for (let j = i + 1; j < enemies.length; j += 1) {
-        const a = enemies[i];
-        const b = enemies[j];
-        if (a.collisionCooldown > 0 || b.collisionCooldown > 0) continue;
-        const radiusA = a.type === "brute" ? 0.9 : a.type === "siege" ? 1.5 : CONFIG.enemy.collisionRadius;
-        const radiusB = b.type === "brute" ? 0.9 : b.type === "siege" ? 1.5 : CONFIG.enemy.collisionRadius;
-        const minDistance = radiusA + radiusB;
-        const dx = a.position.x - b.position.x;
-        const dz = a.position.z - b.position.z;
-        if (dx * dx + dz * dz > minDistance * minDistance) continue;
-        const source = a.state === "airborne" ? a : b.state === "airborne" ? b : null;
-        if (!source || source.velocity.length() < 3) continue;
-        const other = source === a ? b : a;
-        if (other.type === "siege") continue;
-        const push = source.velocity.clone();
-        push.y = 0;
-        source.collisionCooldown = 0.42;
-        other.collisionCooldown = 0.42;
-        this.handleEnemyImpact({ impactStrength: source.velocity.length() });
-        source.knockDown(push);
-        other.knockDown(push);
-      }
-    }
+    // Intentionally disabled. Demons pass through one another so a thrown
+    // Husk cannot stop a crowd and create an artificial pile-up.
   }
 
   syncUI() {
@@ -772,7 +791,6 @@ export class Game {
       }
       if (this.gameplayActive) {
         this.checkWorldCollisions();
-        this.checkEnemyCollisions();
       }
     }
 

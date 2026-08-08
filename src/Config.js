@@ -100,6 +100,7 @@ export const CONFIG = Object.freeze({
     bodyImpact: "./sounds/body-impact-sound.mp3",
     bombExplosion: "./sounds/bomb-explosion.mp3",
     crossbowFire: "./sounds/crossbow-fire-sound.mp3",
+    click: "./assets/click-sound.mp3",
     deniedPurchase: "./sounds/denied-purchase-sound.mp3",
     gameOver: "./sounds/game-over-sound.mp3",
     purchase: "./sounds/purchasesound.mp3",

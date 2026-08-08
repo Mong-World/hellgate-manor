@@ -220,6 +220,10 @@ export class Husk {
 
   stumble(duration = 0.85, pushVelocity = null) {
     if (this.dead || this.removed) return;
+    // A stumble/fall always resolves on the battlefield floor. Previously a
+    // low-speed manor/tree collision could switch to fallen while the group
+    // was still several metres above y=0, leaving the demon suspended there.
+    this.position.y = 0;
     this.state = "fallen";
     this.fallTimer = duration;
     this.attackTimer = 0;

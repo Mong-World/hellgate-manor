@@ -106,6 +106,7 @@ export class UI {
       if (x >= button.x && x <= button.x + button.w && y >= button.y && y <= button.y + button.h) {
         event.preventDefault();
         event.stopImmediatePropagation();
+        this.callbacks.onUIClick?.();
         if (button.disabled) button.onDenied?.();
         else button.onClick?.();
         return;
@@ -624,24 +625,24 @@ export class UI {
 
   drawComplete(width, height) {
     const ctx = this.ctx;
-    ctx.fillStyle = "rgba(0,0,0,.78)";
+    ctx.fillStyle = "rgba(0,0,0,.16)";
     ctx.fillRect(0, 0, width, height);
     const panelWidth = Math.min(650, width - 30);
     const panelHeight = 330;
     const x = (width - panelWidth) / 2;
     const y = (height - panelHeight) / 2;
-    this.panel(x, y, panelWidth, panelHeight, C.panel, 15);
+    this.panel(x, y, panelWidth, panelHeight, "rgba(7,8,11,.80)", 15);
     ctx.textAlign = "center";
-    ctx.fillStyle = C.orangeLight;
-    ctx.font = this.font(Math.min(52, width * 0.07));
-    ctx.fillText("THE GATE IS SEALED", width / 2, y + 78);
+    ctx.fillStyle = "#ffe2b8";
+    ctx.font = this.font(Math.min(54, width * 0.07));
+    ctx.fillText("CONGRATULATIONS", width / 2, y + 76);
     ctx.fillStyle = C.text;
-    ctx.font = this.dataFont(15, 850);
-    ctx.fillText("YOU SURVIVED ALL 50 WAVES", width / 2, y + 120);
+    ctx.font = this.dataFont(16, 900);
+    ctx.fillText("THE NIGHT IS OVER — HELLGATE MANOR STILL STANDS", width / 2, y + 120);
     ctx.fillStyle = C.muted;
     ctx.font = this.dataFont(13, 800);
-    ctx.fillText(`${this.deaths} DEMON DEATHS  •  ${this.boundSouls} BOUND SOULS`, width / 2, y + 154);
-    this.button("NEW GAME", width / 2 - 110, y + 200, 220, 50, () => this.callbacks.onRestart?.());
+    ctx.fillText(`${this.deaths} DEMON DEATHS  •  ${this.boundSouls} BOUND SOULS`, width / 2, y + 158);
+    this.button("NEW GAME", width / 2 - 110, y + 205, 220, 50, () => this.callbacks.onRestart?.());
   }
 
   dispose() {

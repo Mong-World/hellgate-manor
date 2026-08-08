@@ -197,6 +197,10 @@ export class World {
     this.upgradeGroups = {};
     this.fortifyGroups = [];
     this.occultPulseTimer = 0;
+    this.dawnActive = false;
+    this.dawnProgress = 0;
+    this.dawnSun = null;
+    this.dawnLight = null;
 
     this.createMaterials();
     this.createSky();
@@ -332,6 +336,7 @@ export class World {
     this.scene.add(new THREE.HemisphereLight(0x7d8fb2, 0x120b0b, 1.7));
 
     const moonLight = new THREE.DirectionalLight(0xb2c8f3, 3.25);
+    this.moonLight = moonLight;
     moonLight.position.set(-18, 24, 13);
     moonLight.castShadow = true;
     moonLight.shadow.mapSize.set(2048, 2048);
@@ -345,10 +350,12 @@ export class World {
     this.scene.add(moonLight);
 
     const rim = new THREE.DirectionalLight(0x6f91d6, 1.2);
+    this.rimLight = rim;
     rim.position.set(-12, 7, 12);
     this.scene.add(rim);
 
     const huskFill = new THREE.DirectionalLight(0x89a7ea, 0.75);
+    this.huskFillLight = huskFill;
     huskFill.position.set(14, 8, 18);
     this.scene.add(huskFill);
 
@@ -403,25 +410,34 @@ export class World {
     this.riftGroup.position.set(-23.0, 0.025, 0.0);
     this.scene.add(this.riftGroup);
 
-    // A large, continuous glowing fissure makes the Hell Gate readable from the game camera.
-    const fissurePoints = [
-      new THREE.Vector3(-0.25, 0.04, -6.0),
-      new THREE.Vector3(0.32, 0.05, -4.2),
-      new THREE.Vector3(-0.18, 0.04, -2.3),
-      new THREE.Vector3(0.42, 0.05, -0.4),
-      new THREE.Vector3(-0.28, 0.04, 1.5),
-      new THREE.Vector3(0.30, 0.05, 3.5),
-      new THREE.Vector3(-0.08, 0.04, 5.7)
+    // Keep the Hell Gate as a flat tear in the ground. Earlier TubeGeometry
+    // read as bright logs from the game camera, so the central fissure is now
+    // built from overlapping feathered ground ovals instead.
+    const fissurePools = [
+      [-0.18, -5.2, 0.48, 1.25],
+      [0.22, -3.7, 0.54, 1.35],
+      [-0.14, -2.1, 0.46, 1.30],
+      [0.28, -0.55, 0.58, 1.45],
+      [-0.22, 1.0, 0.48, 1.30],
+      [0.20, 2.7, 0.52, 1.42],
+      [-0.06, 4.45, 0.44, 1.25]
     ];
-    const fissureCurve = new THREE.CatmullRomCurve3(fissurePoints);
-    const fissureOuterGeometry = new THREE.TubeGeometry(fissureCurve, 42, 0.42, 8, false);
-    const fissureOuter = new THREE.Mesh(fissureOuterGeometry, this.materials.crater);
-    this.riftGroup.add(fissureOuter);
-    const fissureGeometry = new THREE.TubeGeometry(fissureCurve, 42, 0.19, 8, false);
-    const fissure = new THREE.Mesh(fissureGeometry, this.materials.riftHot);
-    fissure.position.y = 0.035;
-    this.riftGroup.add(fissure);
-    this.disposables.push(fissureOuterGeometry, fissureGeometry);
+    fissurePools.forEach(([x, z, sx, sz], index) => {
+      const outerGeometry = new THREE.CircleGeometry(1, 28);
+      outerGeometry.rotateX(-Math.PI / 2);
+      const outer = new THREE.Mesh(outerGeometry, this.materials.crater);
+      outer.position.set(x, 0.008 + index * 0.0005, z);
+      outer.scale.set(sx * 1.7, sz * 1.15, 1);
+      this.riftGroup.add(outer);
+
+      const hotGeometry = new THREE.CircleGeometry(1, 28);
+      hotGeometry.rotateX(-Math.PI / 2);
+      const hot = new THREE.Mesh(hotGeometry, this.materials.riftHot);
+      hot.position.set(x, 0.025 + index * 0.0005, z);
+      hot.scale.set(sx, sz, 1);
+      this.riftGroup.add(hot);
+      this.disposables.push(outerGeometry, hotGeometry);
+    });
 
     this.riftFlames = [];
     [-5.0, -3.2, -1.4, 0.5, 2.5, 4.5].forEach((z, index) => {
@@ -1138,6 +1154,83 @@ export class World {
     mount.pivot.rotation.x = THREE.MathUtils.clamp(pitch, -0.25, 0.28);
   }
 
+  resetNight() {
+    this.dawnActive = false;
+    this.dawnProgress = 0;
+    this.scene.background.set(0x050609);
+    if (this.scene.fog?.color) this.scene.fog.color.set(0x08090d);
+    if (this.riftGroup) this.riftGroup.visible = true;
+    if (this.moon?.material) this.moon.material.opacity = 0.78;
+    if (this.stars?.material) this.stars.material.opacity = 0.86;
+    if (this.moonLight) this.moonLight.intensity = 3.25;
+    if (this.rimLight) this.rimLight.intensity = 1.2;
+    if (this.huskFillLight) this.huskFillLight.intensity = 0.75;
+    if (this.riftLight) this.riftLight.intensity = 92;
+    if (this.hellGlow) this.hellGlow.intensity = 33;
+
+    this.flames.forEach(({ flames, light, sparks }) => {
+      flames?.forEach(({ flame }) => { flame.visible = true; });
+      if (sparks) sparks.visible = true;
+      if (light) light.intensity = 12;
+    });
+
+    if (this.dawnSun) {
+      this.scene.remove(this.dawnSun);
+      this.dawnSun = null;
+    }
+    if (this.dawnLight) {
+      this.scene.remove(this.dawnLight);
+      this.dawnLight = null;
+    }
+  }
+
+  startDawn() {
+    if (this.dawnActive) return;
+    this.dawnActive = true;
+    this.dawnProgress = 0;
+
+    // Hell closes immediately when the final siege is won.
+    if (this.riftGroup) this.riftGroup.visible = false;
+    if (this.riftLight) this.riftLight.intensity = 0;
+
+    // Extinguish the two manor braziers while leaving their metal stands.
+    this.flames.forEach(({ flames, light, sparks }) => {
+      flames?.forEach(({ flame }) => { flame.visible = false; });
+      if (sparks) sparks.visible = false;
+      if (light) light.intensity = 0;
+    });
+
+    const sunCanvas = document.createElement("canvas");
+    sunCanvas.width = 192;
+    sunCanvas.height = 192;
+    const ctx = sunCanvas.getContext("2d");
+    const gradient = ctx.createRadialGradient(96, 96, 18, 96, 96, 92);
+    gradient.addColorStop(0, "rgba(255,246,196,1)");
+    gradient.addColorStop(0.48, "rgba(255,196,119,.96)");
+    gradient.addColorStop(0.72, "rgba(255,145,87,.42)");
+    gradient.addColorStop(1, "rgba(255,124,72,0)");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 192, 192);
+    const sunTexture = new THREE.CanvasTexture(sunCanvas);
+    sunTexture.colorSpace = THREE.SRGBColorSpace;
+    const sunMaterial = new THREE.SpriteMaterial({
+      map: sunTexture,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      fog: false
+    });
+    this.dawnSun = new THREE.Sprite(sunMaterial);
+    this.dawnSun.position.set(-8.5, 1.0, -35);
+    this.dawnSun.scale.set(7.4, 7.4, 1);
+    this.scene.add(this.dawnSun);
+
+    this.dawnLight = new THREE.DirectionalLight(0xffd09a, 0);
+    this.dawnLight.position.set(-14, 16, 12);
+    this.scene.add(this.dawnLight);
+    this.disposables.push(sunTexture, sunMaterial);
+  }
+
   isInsideManorCollision(position) {
     return (
       position.x >= this.manorBarrierX &&
@@ -1158,7 +1251,27 @@ export class World {
   }
 
   update(elapsed, dt = 0) {
-    this.flames.forEach(({ flames, light, sparks, sparkBase, phase }) => {
+    if (this.dawnActive) {
+      this.dawnProgress = Math.min(1, this.dawnProgress + dt / 8);
+      const t = this.dawnProgress;
+      const eased = t * t * (3 - 2 * t);
+      const night = new THREE.Color(0x050609);
+      const morning = new THREE.Color(0x8ea7b4);
+      this.scene.background.copy(night).lerp(morning, eased);
+      if (this.scene.fog?.color) this.scene.fog.color.copy(new THREE.Color(0x08090d).lerp(new THREE.Color(0xa5a7a0), eased));
+      if (this.dawnSun) {
+        this.dawnSun.position.y = THREE.MathUtils.lerp(1.0, 14.5, eased);
+        this.dawnSun.material.opacity = Math.min(1, eased * 1.35);
+      }
+      if (this.dawnLight) this.dawnLight.intensity = eased * 3.2;
+      if (this.moon?.material) this.moon.material.opacity = 0.78 * (1 - eased);
+      if (this.stars?.material) this.stars.material.opacity = 0.86 * (1 - eased);
+      if (this.moonLight) this.moonLight.intensity = 3.25 * (1 - eased * 0.78);
+      if (this.rimLight) this.rimLight.intensity = 1.2 * (1 - eased * 0.55);
+      if (this.huskFillLight) this.huskFillLight.intensity = 0.75 * (1 - eased);
+    }
+
+    if (!this.dawnActive) this.flames.forEach(({ flames, light, sparks, sparkBase, phase }) => {
       const basePulse = 0.9 + Math.sin(elapsed * 8 + phase) * 0.12 + Math.sin(elapsed * 15 + phase) * 0.04;
       flames.forEach(({ flame, phase: flamePhase }, index) => {
         const pulse = basePulse + Math.sin(elapsed * (10 + index * 2) + flamePhase) * 0.08;
@@ -1241,7 +1354,7 @@ export class World {
     }
     this.occultPulseTimer = Math.max(0, this.occultPulseTimer - dt);
 
-    this.riftFlames?.forEach(({ group, outer, inner, light, phase }) => {
+    if (!this.dawnActive) this.riftFlames?.forEach(({ group, outer, inner, light, phase }) => {
       const pulse = 0.92 + Math.sin(elapsed * 7.5 + phase) * 0.16 + Math.sin(elapsed * 13 + phase) * 0.05;
       group.position.x += Math.sin(elapsed * 1.6 + phase) * dt * 0.015;
       outer.scale.set(0.9 / pulse, 1.15 * pulse, 0.9 / pulse);
@@ -1249,8 +1362,13 @@ export class World {
       light.intensity = 8.5 + pulse * 4.5;
     });
 
-    this.riftLight.intensity = 92 + Math.sin(elapsed * 4.2) * 14;
-    this.hellGlow.intensity = 33 + Math.sin(elapsed * 2.1) * 2;
+    if (!this.dawnActive) {
+      this.riftLight.intensity = 92 + Math.sin(elapsed * 4.2) * 14;
+      this.hellGlow.intensity = 33 + Math.sin(elapsed * 2.1) * 2;
+    } else {
+      this.riftLight.intensity = 0;
+      this.hellGlow.intensity = Math.max(0, 33 * (1 - this.dawnProgress));
+    }
   }
 
   dispose() {
