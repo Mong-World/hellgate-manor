@@ -89,17 +89,18 @@ class PooledAsh {
     this.active = false;
     this.finished = false;
     this.age = 0;
-    this.life = 1.05;
+    this.life = 1.12;
     this.positions = new Float32Array(count * 3);
     this.velocities = new Float32Array(count * 3);
     this.geometry = new THREE.BufferGeometry();
     this.geometry.setAttribute("position", new THREE.BufferAttribute(this.positions, 3));
     this.material = new THREE.PointsMaterial({
-      color: 0x211a18,
-      size: 0.32,
+      color: 0xff8d3a,
+      size: 0.42,
       transparent: true,
       opacity: 0,
       depthWrite: false,
+      blending: THREE.AdditiveBlending,
       sizeAttenuation: true
     });
     this.points = new THREE.Points(this.geometry, this.material);
@@ -111,17 +112,17 @@ class PooledAsh {
     this.active = true;
     this.finished = false;
     this.age = 0;
-    this.material.color.setHex(warm ? 0x7a2a12 : 0x211a18);
-    this.material.size = (warm ? 0.38 : 0.32) * scale;
-    this.material.opacity = 0.92;
+    this.material.color.setHex(warm ? 0xffcc74 : 0xff8d3a);
+    this.material.size = (warm ? 0.52 : 0.42) * scale;
+    this.material.opacity = 0.98;
     for (let i = 0; i < this.count; i += 1) {
       const idx = i * 3;
       this.positions[idx] = position.x;
       this.positions[idx + 1] = position.y;
       this.positions[idx + 2] = position.z;
-      this.velocities[idx] = THREE.MathUtils.randFloatSpread((warm ? 7.5 : 5.2) * scale);
-      this.velocities[idx + 1] = THREE.MathUtils.randFloat(1.1 * scale, (warm ? 8.2 : 6.6) * scale);
-      this.velocities[idx + 2] = THREE.MathUtils.randFloatSpread((warm ? 5.8 : 4.2) * scale);
+      this.velocities[idx] = THREE.MathUtils.randFloatSpread((warm ? 8.0 : 5.8) * scale);
+      this.velocities[idx + 1] = THREE.MathUtils.randFloat(1.8 * scale, (warm ? 8.8 : 7.4) * scale);
+      this.velocities[idx + 2] = THREE.MathUtils.randFloatSpread((warm ? 6.2 : 4.8) * scale);
     }
     this.geometry.attributes.position.needsUpdate = true;
     this.points.visible = true;
@@ -134,8 +135,8 @@ class PooledAsh {
     const positionArray = this.geometry.attributes.position.array;
     for (let i = 0; i < this.count; i += 1) {
       const idx = i * 3;
-      this.velocities[idx + 1] -= 8.4 * dt;
-      const damping = Math.pow(0.985, dt * 60);
+      this.velocities[idx + 1] -= 7.1 * dt;
+      const damping = Math.pow(0.986, dt * 60);
       this.velocities[idx] *= damping;
       this.velocities[idx + 1] *= damping;
       this.velocities[idx + 2] *= damping;
@@ -144,7 +145,7 @@ class PooledAsh {
       positionArray[idx + 2] += this.velocities[idx + 2] * dt;
     }
     this.geometry.attributes.position.needsUpdate = true;
-    this.material.opacity = Math.max(0, 0.92 * (1 - this.age / this.life));
+    this.material.opacity = Math.max(0, 0.98 * (1 - this.age / this.life));
     if (this.age >= this.life) {
       this.active = false;
       this.finished = true;

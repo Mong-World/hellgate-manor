@@ -5,7 +5,7 @@ export class AshExplosion {
     this.scene = scene;
     this.finished = false;
     this.age = 0;
-    this.life = 1.15;
+    this.life = 1.18;
     this.count = warm ? 76 : 58;
     this.geometry = new THREE.BufferGeometry();
     this.positions = new Float32Array(this.count * 3);
@@ -17,18 +17,19 @@ export class AshExplosion {
       this.positions[i * 3 + 2] = position.z;
       this.velocities.push(new THREE.Vector3(
         THREE.MathUtils.randFloatSpread(warm ? 8 : 5.5),
-        THREE.MathUtils.randFloat(1.2, warm ? 9 : 7),
+        THREE.MathUtils.randFloat(1.8, warm ? 9.2 : 7.6),
         THREE.MathUtils.randFloatSpread(warm ? 6 : 4.5)
       ));
     }
 
     this.geometry.setAttribute("position", new THREE.BufferAttribute(this.positions, 3));
     this.material = new THREE.PointsMaterial({
-      color: warm ? 0x7a2a12 : 0x1a1718,
-      size: warm ? 0.4 : 0.34,
+      color: warm ? 0xffcc74 : 0xff8d3a,
+      size: warm ? 0.5 : 0.42,
       transparent: true,
       opacity: 0.95,
       depthWrite: false,
+      blending: THREE.AdditiveBlending,
       sizeAttenuation: true
     });
     this.points = new THREE.Points(this.geometry, this.material);
@@ -40,7 +41,7 @@ export class AshExplosion {
     const attribute = this.geometry.attributes.position;
     for (let i = 0; i < this.count; i += 1) {
       const velocity = this.velocities[i];
-      velocity.y -= 8.5 * dt;
+      velocity.y -= 7.0 * dt;
       velocity.multiplyScalar(Math.pow(0.985, dt * 60));
       attribute.array[i * 3] += velocity.x * dt;
       attribute.array[i * 3 + 1] += velocity.y * dt;
