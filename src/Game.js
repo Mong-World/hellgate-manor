@@ -34,6 +34,7 @@ export class Game {
     this.endingTimer = 0;
     this.endingDawnMusicStarted = false;
     this.runtimePrimed = false;
+    this.mobileOptimized = (window.matchMedia?.("(pointer: coarse)")?.matches || navigator.maxTouchPoints > 0) && Math.min(window.innerWidth, window.innerHeight) <= 900;
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x050609);
@@ -53,7 +54,7 @@ export class Game {
       powerPreference: "high-performance"
     });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.mobileOptimized ? 1.35 : 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -138,6 +139,13 @@ export class Game {
 
   async start() {
     this.setLoadingProgress(3);
+    const uiAssetsReady = await this.ui.preloadVisualAssets();
+    if (!uiAssetsReady) {
+      const error = new Error("UI ASSET FAILED: demon-image.png");
+      error.assetFilename = "demon-image.png";
+      throw error;
+    }
+    this.setLoadingProgress(5);
     try {
       await document.fonts?.load('32px "Lansbury"');
     } catch (error) {
@@ -153,7 +161,7 @@ export class Game {
     });
 
     this.setLoadingProgress(43);
-    this.world = new World(this.scene, this.assets);
+    this.world = new World(this.scene, this.assets, { mobile: this.mobileOptimized });
     await this.world.load();
     this.world.setNewGamePlusMode?.(false);
 
@@ -1275,6 +1283,7 @@ export class Game {
   onResize() {
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.mobileOptimized ? 1.35 : 2));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
   }
 

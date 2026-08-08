@@ -63,25 +63,79 @@ export class UI {
     this.endingData = null;
     this.endingElapsed = 0;
 
+    this.touchDevice = window.matchMedia?.("(pointer: coarse)")?.matches || navigator.maxTouchPoints > 0;
+    this.shopScroll = 0;
+    this.shopScrollMax = 0;
+    this.shopViewport = null;
+    this.activeButtonClip = null;
+    this.pointerGesture = null;
+    this.tutorialDemonImage = new Image();
+    this.tutorialDemonImage.decoding = "async";
+    this.tutorialDemonImage.src = "./assets/demon-image.png";
+    this.tutorialDemonReady = false;
+
     this.onPointerDown = this.onPointerDown.bind(this);
+    this.onPointerMove = this.onPointerMove.bind(this);
+    this.onPointerUp = this.onPointerUp.bind(this);
+    this.onWheel = this.onWheel.bind(this);
     this.resize = this.resize.bind(this);
     window.addEventListener("pointerdown", this.onPointerDown, true);
+    window.addEventListener("pointermove", this.onPointerMove, true);
+    window.addEventListener("pointerup", this.onPointerUp, true);
+    window.addEventListener("pointercancel", this.onPointerUp, true);
+    window.addEventListener("wheel", this.onWheel, { passive: false, capture: true });
     window.addEventListener("resize", this.resize);
     this.resize();
   }
 
   resize() {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const maxDpr = this.isMobileLandscape() ? 1.35 : 2;
+    const dpr = Math.min(window.devicePixelRatio || 1, maxDpr);
     this.canvas.width = Math.floor(window.innerWidth * dpr);
     this.canvas.height = Math.floor(window.innerHeight * dpr);
     this.canvas.style.width = `${window.innerWidth}px`;
     this.canvas.style.height = `${window.innerHeight}px`;
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.shopScroll = Math.min(this.shopScroll, this.shopScrollMax);
+  }
+
+  isMobileLandscape() {
+    return !!this.touchDevice && window.innerWidth > window.innerHeight && window.innerHeight <= 700;
+  }
+
+  async preloadVisualAssets() {
+    if (this.tutorialDemonReady) return true;
+    try {
+      if (this.tutorialDemonImage.complete && this.tutorialDemonImage.naturalWidth > 0) {
+        await this.tutorialDemonImage.decode?.().catch(() => {});
+        this.tutorialDemonReady = true;
+        return true;
+      }
+      await new Promise((resolve, reject) => {
+        const onLoad = () => { cleanup(); resolve(); };
+        const onError = () => { cleanup(); reject(new Error("demon-image.png failed to load")); };
+        const cleanup = () => {
+          this.tutorialDemonImage.removeEventListener("load", onLoad);
+          this.tutorialDemonImage.removeEventListener("error", onError);
+        };
+        this.tutorialDemonImage.addEventListener("load", onLoad, { once: true });
+        this.tutorialDemonImage.addEventListener("error", onError, { once: true });
+      });
+      await this.tutorialDemonImage.decode?.().catch(() => {});
+      this.tutorialDemonReady = true;
+      return true;
+    } catch (error) {
+      console.warn("Tutorial demon image could not be preloaded.", error);
+      return false;
+    }
   }
 
   setMode(mode) {
     this.mode = mode;
-    if (mode === "intermission") this.shopPage = 0;
+    if (mode === "intermission") {
+      this.shopPage = 0;
+      this.shopScroll = 0;
+    }
   }
 
   setHUD(data) {
@@ -168,20 +222,78 @@ export class UI {
     });
   }
 
+  findButtonAt(x, y) {
+    for (let i = this.buttons.length - 1; i >= 0; i -= 1) {
+      const button = this.buttons[i];
+      if (x >= button.x && x <= button.x + button.w && y >= button.y && y <= button.y + button.h) return button;
+    }
+    return null;
+  }
+
+  activateButton(button) {
+    if (!button) return;
+    this.callbacks.onUIClick?.();
+    if (button.disabled) button.onDenied?.();
+    else button.onClick?.();
+  }
+
+  pointInShopViewport(x, y) {
+    const v = this.shopViewport;
+    return !!v && x >= v.x && x <= v.x + v.w && y >= v.y && y <= v.y + v.h;
+  }
+
   onPointerDown(event) {
     const x = event.clientX;
     const y = event.clientY;
-    for (let i = this.buttons.length - 1; i >= 0; i -= 1) {
-      const button = this.buttons[i];
-      if (x >= button.x && x <= button.x + button.w && y >= button.y && y <= button.y + button.h) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        this.callbacks.onUIClick?.();
-        if (button.disabled) button.onDenied?.();
-        else button.onClick?.();
-        return;
-      }
+    const button = this.findButtonAt(x, y);
+
+    if (this.isMobileLandscape() && this.mode === "intermission" && this.pointInShopViewport(x, y)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      this.pointerGesture = {
+        pointerId: event.pointerId,
+        startY: y,
+        lastY: y,
+        moved: false,
+        pendingButton: button
+      };
+      return;
     }
+
+    if (button) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      this.activateButton(button);
+    }
+  }
+
+  onPointerMove(event) {
+    const gesture = this.pointerGesture;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    const dy = event.clientY - gesture.lastY;
+    if (Math.abs(event.clientY - gesture.startY) > 7) gesture.moved = true;
+    if (gesture.moved && this.shopScrollMax > 0) {
+      this.shopScroll = Math.max(0, Math.min(this.shopScrollMax, this.shopScroll - dy));
+      gesture.lastY = event.clientY;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
+  }
+
+  onPointerUp(event) {
+    const gesture = this.pointerGesture;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (!gesture.moved && gesture.pendingButton) this.activateButton(gesture.pendingButton);
+    this.pointerGesture = null;
+  }
+
+  onWheel(event) {
+    if (this.mode !== "intermission" || !this.pointInShopViewport(event.clientX, event.clientY) || this.shopScrollMax <= 0) return;
+    this.shopScroll = Math.max(0, Math.min(this.shopScrollMax, this.shopScroll + event.deltaY));
+    event.preventDefault();
+    event.stopImmediatePropagation();
   }
 
   update(dt) {
@@ -290,14 +402,29 @@ export class UI {
     ctx.textBaseline = "middle";
     ctx.fillText(label, x + width / 2, y + height / 2 + 1);
     ctx.restore();
-    this.buttons.push({ x, y, w: width, h: height, onClick, disabled, onDenied });
+
+    const pad = this.touchDevice ? 5 : 0;
+    let hit = { x: x - pad, y: y - pad, w: width + pad * 2, h: height + pad * 2 };
+    if (this.activeButtonClip) {
+      const c = this.activeButtonClip;
+      const x1 = Math.max(hit.x, c.x);
+      const y1 = Math.max(hit.y, c.y);
+      const x2 = Math.min(hit.x + hit.w, c.x + c.w);
+      const y2 = Math.min(hit.y + hit.h, c.y + c.h);
+      if (x2 <= x1 || y2 <= y1) return;
+      hit = { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
+    }
+    this.buttons.push({ ...hit, onClick, disabled, onDenied });
   }
 
   drawStart(width, height) {
-    const mobile = width < 700 || height < 620;
+    const mobileLandscape = this.isMobileLandscape();
+    const mobile = mobileLandscape || width < 700 || height < 620;
     const buttonCount = 1 + (this.hasSave && !this.developerMode ? 1 : 0) + (this.ngPlusUnlocked && !this.developerMode ? 1 : 0);
-    const panelWidth = Math.min(560, width - 32);
-    const panelHeight = (mobile ? 214 : 232) + buttonCount * (mobile ? 58 : 60) + (this.bestRank && !this.developerMode ? 24 : 0) + (this.developerMode ? 48 : 0);
+    const panelWidth = Math.min(mobileLandscape ? 500 : 560, width - (mobileLandscape ? 18 : 32));
+    const panelHeight = mobileLandscape
+      ? 120 + buttonCount * 46 + (this.bestRank && !this.developerMode ? 18 : 0) + (this.developerMode ? 30 : 0)
+      : (mobile ? 214 : 232) + buttonCount * (mobile ? 58 : 60) + (this.bestRank && !this.developerMode ? 24 : 0) + (this.developerMode ? 48 : 0);
     const x = (width - panelWidth) / 2;
     const y = (height - panelHeight) / 2;
     this.panel(x, y, panelWidth, panelHeight, C.panel, 14);
@@ -305,34 +432,36 @@ export class UI {
     const ctx = this.ctx;
     ctx.textAlign = "center";
     ctx.fillStyle = C.text;
-    ctx.font = this.font(mobile ? 39 : 54);
+    ctx.font = this.font(mobileLandscape ? 34 : (mobile ? 39 : 54));
     ctx.shadowColor = "rgba(255,80,24,.7)";
     ctx.shadowBlur = 12;
-    ctx.fillText("HELLGATE MANOR", width / 2, y + (mobile ? 56 : 68));
+    ctx.fillText("HELLGATE MANOR", width / 2, y + (mobileLandscape ? 42 : (mobile ? 56 : 68)));
     ctx.shadowBlur = 0;
     ctx.fillStyle = C.muted;
-    ctx.font = this.dataFont(mobile ? 11 : 14, 800);
-    ctx.fillText("DEFEND THE MANOR.", width / 2, y + (mobile ? 85 : 103));
+    ctx.font = this.dataFont(mobileLandscape ? 9 : (mobile ? 11 : 14), 800);
+    ctx.fillText("DEFEND THE MANOR.", width / 2, y + (mobileLandscape ? 63 : (mobile ? 85 : 103)));
 
     if (this.bestRank && !this.developerMode) {
       ctx.fillStyle = C.orangeLight;
-      ctx.font = this.dataFont(mobile ? 10 : 12, 900);
-      ctx.fillText(`BEST RANK  ${this.bestRank}`, width / 2, y + (mobile ? 108 : 126));
+      ctx.font = this.dataFont(mobileLandscape ? 8 : (mobile ? 10 : 12), 900);
+      ctx.fillText(`BEST RANK  ${this.bestRank}`, width / 2, y + (mobileLandscape ? 80 : (mobile ? 108 : 126)));
     }
 
-    const buttonHeight = mobile ? 50 : 50;
-    let buttonY = y + (this.bestRank && !this.developerMode ? (mobile ? 126 : 148) : (mobile ? 110 : 132));
+    const buttonHeight = mobileLandscape ? 38 : 50;
+    let buttonY = y + (this.bestRank && !this.developerMode
+      ? (mobileLandscape ? 91 : (mobile ? 126 : 148))
+      : (mobileLandscape ? 75 : (mobile ? 110 : 132)));
     this.button("NEW GAME", width / 2 - 105, buttonY, 210, buttonHeight, () => this.callbacks.onNewGame?.());
-    buttonY += buttonHeight + 10;
+    buttonY += buttonHeight + (mobileLandscape ? 7 : 10);
 
     if (this.hasSave && !this.developerMode) {
       this.button("CONTINUE", width / 2 - 105, buttonY, 210, buttonHeight, () => this.callbacks.onContinueSave?.());
-      buttonY += buttonHeight + 10;
+      buttonY += buttonHeight + (mobileLandscape ? 7 : 10);
     }
 
     if (this.ngPlusUnlocked && !this.developerMode) {
       this.button("NEW GAME+ (HELL MODE)", width / 2 - 130, buttonY, 260, buttonHeight, () => this.callbacks.onNewGamePlus?.(), false, null, C.red);
-      buttonY += buttonHeight + 10;
+      buttonY += buttonHeight + (mobileLandscape ? 7 : 10);
     }
 
     if (this.developerMode) {
@@ -344,6 +473,7 @@ export class UI {
   }
 
   drawHUD(width, height) {
+    if (this.isMobileLandscape()) return this.drawMobileHUD(width, height);
     const compact = width < 820;
     const margin = compact ? 12 : 20;
     const hudHeight = compact ? 62 : 68;
@@ -456,7 +586,101 @@ export class UI {
     this.drawSoulFlights(width, height);
   }
 
+  drawMobileHUD(width, height) {
+    const ctx = this.ctx;
+    const margin = 6;
+    const hudH = 44;
+    const y = height - margin - hudH;
+    const leftW = Math.min(122, width * 0.19);
+    const rightW = Math.min(132, width * 0.20);
+    const healthW = Math.min(250, Math.max(175, width * 0.31));
+    const leftX = margin;
+    const rightX = width - margin - rightW;
+    const healthX = (width - healthW) / 2;
+
+    this.panel(leftX, y, leftW, hudH, "rgba(7,8,11,.90)", 7);
+    ctx.textAlign = "left";
+    ctx.fillStyle = C.orangeLight;
+    ctx.font = this.font(16);
+    ctx.fillText(`WAVE ${this.wave}`, leftX + 8, y + 18);
+    ctx.fillStyle = C.text;
+    ctx.font = this.dataFont(8, 850);
+    ctx.fillText(`DEATHS ${this.deaths}`, leftX + 8, y + 34);
+    if (this.newGamePlus) {
+      ctx.textAlign = "right";
+      ctx.fillStyle = C.red;
+      ctx.font = this.dataFont(7, 900);
+      ctx.fillText("HELL", leftX + leftW - 8, y + 16);
+    }
+
+    this.panel(healthX, y, healthW, hudH, "rgba(7,8,11,.90)", 7);
+    ctx.textAlign = "center";
+    ctx.fillStyle = C.text;
+    ctx.font = this.font(14);
+    ctx.fillText("MANOR", width / 2, y + 16);
+    const barX = healthX + 9;
+    const barY = y + 25;
+    const barW = healthW - 18;
+    const ratio = Math.max(0, Math.min(1, this.health / this.maxHealth));
+    ctx.fillStyle = "rgba(255,255,255,.07)";
+    ctx.fillRect(barX, barY, barW, 10);
+    ctx.fillStyle = this.healthFlash > 0 || ratio <= 0.35 ? C.red : C.orange;
+    ctx.fillRect(barX, barY, barW * ratio, 10);
+    ctx.strokeStyle = "rgba(255,255,255,.18)";
+    ctx.strokeRect(barX, barY, barW, 10);
+    ctx.fillStyle = C.text;
+    ctx.font = this.dataFont(7, 900);
+    ctx.fillText(`${Math.ceil(this.health)} / ${this.maxHealth}`, width / 2, barY + 9);
+
+    const pulse = this.soulPulse > 0 ? 1 + this.soulPulse * 0.08 : 1;
+    ctx.save();
+    ctx.translate(rightX + rightW / 2, y + hudH / 2);
+    ctx.scale(pulse, pulse);
+    ctx.translate(-(rightX + rightW / 2), -(y + hudH / 2));
+    this.panel(rightX, y, rightW, hudH, "rgba(7,8,11,.90)", 7);
+    ctx.textAlign = "left";
+    ctx.fillStyle = C.orangeLight;
+    ctx.font = this.dataFont(8, 900);
+    ctx.fillText("SOULS", rightX + 9, y + 14);
+    ctx.fillStyle = C.orange;
+    ctx.beginPath();
+    ctx.arc(rightX + 13, y + 29, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = C.text;
+    ctx.font = this.dataFont(19, 900);
+    ctx.fillText(String(this.souls), rightX + 24, y + 35);
+    ctx.restore();
+
+    let upperY = y - 31;
+    if (this.boundSouls > 0) {
+      const boundH = 27;
+      this.panel(rightX, upperY, rightW, boundH, "rgba(7,8,11,.88)", 6);
+      ctx.textAlign = "left";
+      ctx.fillStyle = C.orangeLight;
+      ctx.font = this.dataFont(7, 900);
+      ctx.fillText("BOUND", rightX + 8, upperY + 11);
+      ctx.textAlign = "right";
+      ctx.fillStyle = "#ffe2bb";
+      ctx.font = this.dataFont(14, 900);
+      ctx.fillText(String(this.boundSouls), rightX + rightW - 8, upperY + 19);
+      upperY -= 31;
+    }
+
+    if (this.bombs > 0) {
+      this.button(`BOMB ×${this.bombs}`, rightX + rightW - 96, upperY, 96, 30, () => this.callbacks.onBomb?.());
+    }
+
+    this.drawSoulFlights(width, height);
+  }
+
   getSoulCounterPosition(width, height) {
+    if (this.isMobileLandscape()) {
+      const margin = 6;
+      const hudH = 44;
+      const rightW = Math.min(132, width * 0.20);
+      const rightX = width - margin - rightW;
+      return { x: rightX + 16, y: height - margin - hudH + 29 };
+    }
     const compact = width < 820;
     const margin = compact ? 12 : 20;
     const hudHeight = compact ? 62 : 68;
@@ -492,9 +716,10 @@ export class UI {
   }
 
   drawPauseButton(width) {
+    const mobileTouch = this.isMobileLandscape();
     const compact = width < 820;
-    const size = compact ? 42 : 46;
-    const margin = compact ? 12 : 18;
+    const size = mobileTouch ? 44 : (compact ? 42 : 46);
+    const margin = mobileTouch ? 7 : (compact ? 12 : 18);
     const x = width - margin - size;
     const y = margin;
     const ctx = this.ctx;
@@ -544,6 +769,7 @@ export class UI {
   }
 
   drawResults(width, height) {
+    if (this.isMobileLandscape()) return this.drawMobileResults(width, height);
     const ctx = this.ctx;
     ctx.fillStyle = "rgba(0,0,0,.76)";
     ctx.fillRect(0, 0, width, height);
@@ -610,7 +836,60 @@ export class UI {
     );
   }
 
+  drawMobileResults(width, height) {
+    const ctx = this.ctx;
+    ctx.fillStyle = "rgba(0,0,0,.76)";
+    ctx.fillRect(0, 0, width, height);
+
+    const panelW = Math.min(620, width - 16);
+    const panelH = height - 14;
+    const x = (width - panelW) / 2;
+    const y = 7;
+    this.panel(x, y, panelW, panelH, C.panel, 11);
+
+    ctx.textAlign = "center";
+    ctx.fillStyle = C.text;
+    ctx.font = this.font(27);
+    ctx.fillText(`WAVE ${this.wave} SURVIVED`, width / 2, y + 34);
+
+    const r = this.waveResults;
+    const gap = 7;
+    const cardW = (panelW - 34 - gap) / 2;
+    const cardH = 57;
+    const startX = x + 17;
+    const firstY = y + 49;
+    const cards = [
+      ["SOULS COLLECTED", `+${r.souls}`, C.orange],
+      ["DEMONS DESTROYED", String(r.deaths), C.orangeLight],
+      ["MANOR DAMAGE", r.damage > 0 ? `-${r.damage}` : "0", r.damage > 0 ? C.red : C.text],
+      ["MANOR CONDITION", `${Math.ceil(r.health)} / ${r.maxHealth}`, C.text]
+    ];
+    cards.forEach(([label, value, color], index) => {
+      const col = index % 2;
+      const row = Math.floor(index / 2);
+      const cx = startX + col * (cardW + gap);
+      const cy = firstY + row * (cardH + gap);
+      this.panel(cx, cy, cardW, cardH, C.panel2, 6);
+      ctx.textAlign = "left";
+      ctx.fillStyle = C.muted;
+      ctx.font = this.dataFont(8, 850);
+      ctx.fillText(label, cx + 11, cy + 18);
+      ctx.fillStyle = color;
+      ctx.font = this.dataFont(19, 900);
+      ctx.fillText(value, cx + 11, cy + 43);
+    });
+
+    const saveY = firstY + 2 * (cardH + gap) + 2;
+    ctx.textAlign = "center";
+    ctx.fillStyle = r.saved ? C.orangeLight : C.muted;
+    ctx.font = this.dataFont(9, 900);
+    ctx.fillText(r.saved ? "▣  GAME DATA SAVED" : "SAVE UNAVAILABLE", width / 2, saveY + 14);
+
+    this.button("UPGRADES", width / 2 - 94, y + panelH - 43, 188, 36, () => this.callbacks.onResultsContinue?.());
+  }
+
   drawIntermission(width, height) {
+    if (this.isMobileLandscape()) return this.drawMobileIntermission(width, height);
     const ctx = this.ctx;
     ctx.fillStyle = "rgba(0,0,0,.72)";
     ctx.fillRect(0, 0, width, height);
@@ -705,6 +984,128 @@ export class UI {
       y + panelHeight - (mobile ? 52 : 58),
       216,
       mobile ? 44 : 46,
+      () => this.callbacks.onContinue?.()
+    );
+  }
+
+  drawMobileIntermission(width, height) {
+    const ctx = this.ctx;
+    ctx.fillStyle = "rgba(0,0,0,.76)";
+    ctx.fillRect(0, 0, width, height);
+
+    const margin = 7;
+    const x = margin;
+    const y = margin;
+    const panelWidth = width - margin * 2;
+    const panelHeight = height - margin * 2;
+    this.panel(x, y, panelWidth, panelHeight, C.panel, 11);
+
+    ctx.textAlign = "left";
+    ctx.fillStyle = C.text;
+    ctx.font = this.font(25);
+    ctx.fillText("MANOR UPGRADES", x + 16, y + 31);
+
+    ctx.fillStyle = C.orangeLight;
+    ctx.font = this.dataFont(8, 900);
+    ctx.fillText("SOULS", x + 18, y + 50);
+    ctx.fillStyle = C.orange;
+    ctx.font = this.dataFont(20, 900);
+    ctx.fillText(String(this.souls), x + 64, y + 51);
+
+    const saveSize = 36;
+    const saveX = x + panelWidth - saveSize - 12;
+    const saveY = y + 10;
+    ctx.save();
+    this.angularPath(saveX, saveY, saveSize, saveSize, 5);
+    ctx.fillStyle = "rgba(48,23,17,.98)";
+    ctx.fill();
+    ctx.strokeStyle = C.borderHot;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.strokeStyle = C.orangeLight;
+    ctx.lineWidth = 1.8;
+    ctx.strokeRect(saveX + 10, saveY + 8, 15, 17);
+    ctx.strokeRect(saveX + 14, saveY + 10, 7, 5);
+    ctx.fillStyle = C.orange;
+    ctx.fillRect(saveX + 14, saveY + 21, 7, 3);
+    ctx.restore();
+    this.buttons.push({ x: saveX - 4, y: saveY - 4, w: saveSize + 8, h: saveSize + 8, onClick: () => this.callbacks.onSave?.(), disabled: false });
+
+    if (this.saveNoticeTimer > 0) {
+      ctx.textAlign = "right";
+      ctx.fillStyle = this.saveNoticeSuccess ? C.orangeLight : C.muted;
+      ctx.font = this.dataFont(8, 900);
+      ctx.fillText(this.saveNoticeSuccess ? "GAME DATA SAVED" : "SAVE UNAVAILABLE", saveX - 8, saveY + 21);
+    }
+
+    const tabs = ["MANOR", "SYSTEMS", "BOUND SOULS"];
+    const tabY = y + 61;
+    const tabGap = 5;
+    const tabW = (panelWidth - 24 - tabGap * 2) / 3;
+    tabs.forEach((label, index) => {
+      this.button(
+        label,
+        x + 12 + index * (tabW + tabGap),
+        tabY,
+        tabW,
+        38,
+        () => { this.shopPage = index; this.shopScroll = 0; },
+        false,
+        null,
+        index === this.shopPage ? C.borderHot : C.borderSoft
+      );
+    });
+
+    const footerH = 50;
+    const viewportY = tabY + 44;
+    const viewportBottom = y + panelHeight - footerH;
+    const viewportH = Math.max(90, viewportBottom - viewportY);
+    const viewportX = x + 12;
+    const viewportW = panelWidth - 24;
+    this.shopViewport = { x: viewportX, y: viewportY, w: viewportW, h: viewportH };
+
+    let contentHeight = 330;
+    if (this.shopPage === 2) {
+      const systemCount = [this.buildings.hellfire, this.buildings.demolition, this.buildings.undercroft, this.buildings.occult].filter(Boolean).length;
+      contentHeight = systemCount > 0 ? 42 + systemCount * 86 + Math.max(0, systemCount - 1) * 8 : 130;
+    }
+    this.shopScrollMax = Math.max(0, contentHeight - viewportH);
+    this.shopScroll = Math.max(0, Math.min(this.shopScrollMax, this.shopScroll));
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(viewportX, viewportY, viewportW, viewportH);
+    ctx.clip();
+    this.activeButtonClip = this.shopViewport;
+    const contentY = viewportY - this.shopScroll;
+    if (this.shopPage === 0) this.drawManorShop(viewportX, contentY, viewportW, contentHeight, true);
+    else if (this.shopPage === 1) this.drawSystemsShop(viewportX, contentY, viewportW, contentHeight, true);
+    else this.drawAssignments(viewportX, contentY, viewportW, contentHeight, true);
+    this.activeButtonClip = null;
+    ctx.restore();
+
+    if (this.shopScrollMax > 0) {
+      const trackX = x + panelWidth - 6;
+      const trackY = viewportY + 4;
+      const trackH = viewportH - 8;
+      const thumbH = Math.max(28, trackH * (viewportH / contentHeight));
+      const thumbY = trackY + (trackH - thumbH) * (this.shopScroll / this.shopScrollMax);
+      ctx.fillStyle = "rgba(255,255,255,.08)";
+      ctx.fillRect(trackX, trackY, 2, trackH);
+      ctx.fillStyle = C.orange;
+      ctx.fillRect(trackX - 1, thumbY, 4, thumbH);
+      ctx.textAlign = "right";
+      ctx.fillStyle = C.muted;
+      ctx.font = this.dataFont(7, 800);
+      ctx.fillText("SWIPE TO SCROLL", x + panelWidth - 14, viewportBottom - 6);
+    }
+
+    this.button(
+      "CONTINUE",
+      width / 2 - 94,
+      y + panelHeight - 43,
+      188,
+      36,
       () => this.callbacks.onContinue?.()
     );
   }
@@ -911,7 +1312,7 @@ export class UI {
 
     const mobile = width < 700 || height < 620;
     const panelWidth = Math.min(mobile ? width - 28 : 590, width - 28);
-    const panelHeight = mobile ? 280 : 300;
+    const panelHeight = mobile ? 304 : 326;
     const x = (width - panelWidth) / 2;
     const y = (height - panelHeight) / 2;
     this.panel(x, y, panelWidth, panelHeight, C.panel, 14);
@@ -921,111 +1322,53 @@ export class UI {
     ctx.font = this.font(mobile ? 31 : 40);
     ctx.fillText(this.tutorial.title, width / 2, y + 55);
 
-    // Visual shorthand: a close-up husk face -> glowing portal. This is drawn
-    // directly on the UI canvas from the in-game creature reference, so it does
-    // not introduce another runtime image asset.
-    const iconY = y + 110;
-    const demonX = width / 2 - 102;
+    // Use the actual transparent Husk image supplied in assets.
+    const iconY = y + (mobile ? 96 : 104);
+    const demonX = width / 2 - (mobile ? 96 : 112);
+    const demonH = mobile ? 104 : 122;
+    const demonW = this.tutorialDemonReady && this.tutorialDemonImage.naturalHeight > 0
+      ? demonH * (this.tutorialDemonImage.naturalWidth / this.tutorialDemonImage.naturalHeight)
+      : demonH * 0.58;
+
     ctx.save();
-    ctx.translate(demonX, iconY + 12);
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-
-    const headGlow = ctx.createRadialGradient(0, -10, 2, 0, -10, 54);
-    headGlow.addColorStop(0, "rgba(255,121,43,.22)");
-    headGlow.addColorStop(1, "rgba(255,80,20,0)");
-    ctx.fillStyle = headGlow;
+    const demonGlow = ctx.createRadialGradient(demonX, iconY + demonH * 0.5, 4, demonX, iconY + demonH * 0.5, demonH * 0.62);
+    demonGlow.addColorStop(0, "rgba(255,105,35,.20)");
+    demonGlow.addColorStop(1, "rgba(255,75,20,0)");
+    ctx.fillStyle = demonGlow;
     ctx.beginPath();
-    ctx.arc(0, -10, 54, 0, Math.PI * 2);
+    ctx.arc(demonX, iconY + demonH * 0.5, demonH * 0.62, 0, Math.PI * 2);
     ctx.fill();
-
-    ctx.fillStyle = "#17191c";
-    ctx.strokeStyle = "#b5aba4";
-    ctx.lineWidth = 2.2;
-    ctx.beginPath();
-    ctx.ellipse(0, -13, 32, 42, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    // Heavy ridged brow / eye sockets.
-    ctx.strokeStyle = "#827a74";
-    ctx.lineWidth = 3;
-    for (let i = -4; i <= 4; i += 1) {
-      const bx = i * 5.3;
-      ctx.beginPath();
-      ctx.moveTo(bx - 2, -30 + Math.abs(i) * 0.9);
-      ctx.lineTo(bx + 1, -21 + Math.abs(i) * 0.5);
-      ctx.stroke();
+    if (this.tutorialDemonReady) {
+      ctx.shadowColor = "rgba(255,93,27,.38)";
+      ctx.shadowBlur = 12;
+      ctx.drawImage(
+        this.tutorialDemonImage,
+        demonX - demonW / 2,
+        iconY,
+        demonW,
+        demonH
+      );
     }
-    ctx.fillStyle = "#030405";
-    ctx.beginPath();
-    ctx.ellipse(-12, -18, 8, 5, -0.12, 0, Math.PI * 2);
-    ctx.ellipse(12, -18, 8, 5, 0.12, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#ff9b50";
-    ctx.beginPath();
-    ctx.arc(-11, -18, 1.7, 0, Math.PI * 2);
-    ctx.arc(11, -18, 1.7, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Small skeletal nose.
-    ctx.fillStyle = "#050506";
-    ctx.beginPath();
-    ctx.ellipse(-3.6, -6, 2.5, 5, 0.18, 0, Math.PI * 2);
-    ctx.ellipse(3.6, -6, 2.5, 5, -0.18, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Wide tooth-filled grin.
-    ctx.fillStyle = "#050506";
-    ctx.strokeStyle = "#6e5148";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(-24, 4);
-    ctx.quadraticCurveTo(0, 24, 25, 3);
-    ctx.quadraticCurveTo(0, 31, -24, 4);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = "#c7b7a3";
-    for (let i = 0; i < 9; i += 1) {
-      const tx = -20 + i * 5;
-      const top = 8 + Math.abs(i - 4) * 0.9;
-      ctx.beginPath();
-      ctx.moveTo(tx, top);
-      ctx.lineTo(tx + 2.2, top + 9);
-      ctx.lineTo(tx + 4.2, top + 1);
-      ctx.closePath();
-      ctx.fill();
-    }
-
-    // Neck and shoulders, fading into the panel.
-    ctx.fillStyle = "rgba(23,25,28,.95)";
-    ctx.beginPath();
-    ctx.moveTo(-14, 26);
-    ctx.lineTo(-18, 51);
-    ctx.lineTo(-48, 67);
-    ctx.lineTo(48, 67);
-    ctx.lineTo(18, 51);
-    ctx.lineTo(14, 26);
-    ctx.closePath();
-    ctx.fill();
     ctx.restore();
 
     ctx.fillStyle = C.orange;
     ctx.font = this.dataFont(28, 900);
-    ctx.fillText("→", width / 2, iconY + 27);
-    const portal = ctx.createRadialGradient(width / 2 + 100, iconY + 22, 2, width / 2 + 100, iconY + 22, 34);
+    ctx.fillText("→", width / 2, iconY + (mobile ? 48 : 56));
+    const portalY = iconY + (mobile ? 50 : 58);
+    const portalX = width / 2 + (mobile ? 92 : 108);
+    const portal = ctx.createRadialGradient(portalX, portalY, 2, portalX, portalY, mobile ? 31 : 36);
     portal.addColorStop(0, "rgba(255,255,235,1)");
     portal.addColorStop(0.35, "rgba(255,184,96,.95)");
     portal.addColorStop(1, "rgba(255,93,24,0)");
     ctx.fillStyle = portal;
     ctx.beginPath();
-    ctx.arc(width / 2 + 100, iconY + 22, 36, 0, Math.PI * 2);
+    ctx.arc(portalX, portalY, mobile ? 32 : 38, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.fillStyle = C.text;
     ctx.font = this.dataFont(mobile ? 10 : 12, 850);
     this.tutorial.lines.forEach((line, index) => {
-      ctx.fillText(line, width / 2, y + 178 + index * 20);
+      ctx.fillText(line, width / 2, y + (mobile ? 190 : 196) + index * (mobile ? 18 : 20));
     });
 
     this.button("GOT IT", width / 2 - 95, y + panelHeight - 58, 190, 42, () => {
@@ -1189,11 +1532,12 @@ export class UI {
 
     const panelA = this.fadeInAt(t, 13.2, 0.9);
     if (panelA <= 0) return;
-    const mobile = width < 760 || height < 650;
-    const panelWidth = Math.min(mobile ? width - 24 : 650, width - 24);
-    const panelHeight = mobile ? 452 : 492;
+    const mobileLandscape = this.isMobileLandscape();
+    const mobile = mobileLandscape || width < 760 || height < 650;
+    const panelWidth = Math.min(mobile ? width - 18 : 650, width - 18);
+    const panelHeight = mobileLandscape ? Math.min(350, height - 12) : (mobile ? 452 : 492);
     const x = (width - panelWidth) / 2;
-    const y = Math.min(height - panelHeight - 18, height * 0.39);
+    const y = mobileLandscape ? 6 : Math.min(height - panelHeight - 18, height * 0.39);
     ctx.save();
     ctx.globalAlpha = panelA;
     this.panel(x, y, panelWidth, panelHeight, "rgba(7,8,11,.83)", 14);
@@ -1201,32 +1545,32 @@ export class UI {
 
     ctx.textAlign = "center";
     ctx.fillStyle = data.newGamePlus ? C.red : C.orangeLight;
-    ctx.font = this.font(mobile ? 28 : 34);
-    ctx.fillText(data.newGamePlus ? "HELL MODE COMPLETE" : "FINAL REPORT", width / 2, y + 44);
+    ctx.font = this.font(mobileLandscape ? 24 : (mobile ? 28 : 34));
+    ctx.fillText(data.newGamePlus ? "HELL MODE COMPLETE" : "FINAL REPORT", width / 2, y + (mobileLandscape ? 34 : 44));
 
     const rows = [
       ["SURVIVAL", data.survival, 14.1],
       ["DEFENCE", data.defence, 16.5],
       ["BINDING", data.binding, 18.9]
     ];
-    const rowX = x + 28;
-    const rowW = panelWidth - 56;
-    const rowH = mobile ? 67 : 70;
+    const rowX = x + (mobileLandscape ? 18 : 28);
+    const rowW = panelWidth - (mobileLandscape ? 36 : 56);
+    const rowH = mobileLandscape ? 50 : (mobile ? 67 : 70);
     rows.forEach(([label, rating, reveal], index) => {
       const alpha = this.fadeInAt(t, reveal, 0.65);
       if (alpha <= 0) return;
-      const ry = y + 64 + index * (rowH + 7);
+      const ry = y + (mobileLandscape ? 48 : 64) + index * (rowH + (mobileLandscape ? 5 : 7));
       ctx.save();
       ctx.globalAlpha = alpha;
       this.panel(rowX, ry, rowW, rowH, "rgba(13,13,17,.90)", 7);
       ctx.textAlign = "left";
       ctx.fillStyle = C.text;
-      ctx.font = this.font(mobile ? 20 : 23);
-      ctx.fillText(label, rowX + 14, ry + 28);
+      ctx.font = this.font(mobileLandscape ? 17 : (mobile ? 20 : 23));
+      ctx.fillText(label, rowX + 14, ry + (mobileLandscape ? 21 : 28));
       ctx.fillStyle = C.muted;
-      ctx.font = this.dataFont(mobile ? 8 : 10, 820);
-      ctx.fillText(rating.detail, rowX + 14, ry + 49);
-      this.drawStars(rating.stars, rowX + rowW - (mobile ? 128 : 150), ry + 43, mobile ? 20 : 23);
+      ctx.font = this.dataFont(mobileLandscape ? 7 : (mobile ? 8 : 10), 820);
+      ctx.fillText(rating.detail, rowX + 14, ry + (mobileLandscape ? 37 : 49));
+      this.drawStars(rating.stars, rowX + rowW - (mobileLandscape ? 108 : (mobile ? 128 : 150)), ry + (mobileLandscape ? 34 : 43), mobileLandscape ? 17 : (mobile ? 20 : 23));
       ctx.restore();
     });
 
@@ -1237,18 +1581,21 @@ export class UI {
       ctx.textAlign = "center";
       ctx.fillStyle = C.muted;
       ctx.font = this.dataFont(11, 900);
-      ctx.fillText("FINAL RANK", width / 2, y + panelHeight - 132);
+      ctx.fillText("FINAL RANK", width / 2, y + panelHeight - (mobileLandscape ? 112 : 132));
       ctx.fillStyle = data.finalRank === "S" ? "#ffe5a8" : data.finalRank === "A" ? C.orangeLight : C.text;
-      ctx.font = this.font(mobile ? 54 : 66);
+      ctx.font = this.font(mobileLandscape ? 45 : (mobile ? 54 : 66));
       ctx.shadowColor = data.newGamePlus ? "rgba(239,81,78,.8)" : "rgba(255,112,49,.75)";
       ctx.shadowBlur = 18;
-      ctx.fillText(data.finalRank, width / 2, y + panelHeight - 78);
+      ctx.fillText(data.finalRank, width / 2, y + panelHeight - (mobileLandscape ? 68 : 78));
       ctx.restore();
     }
 
     if (t >= 24.5) {
-      const buttonY = y + panelHeight - (mobile ? 54 : 60);
-      if (mobile) {
+      const buttonY = y + panelHeight - (mobileLandscape ? 43 : (mobile ? 54 : 60));
+      if (mobileLandscape) {
+        this.button("NEW GAME", width / 2 - 204, buttonY, 174, 36, () => this.callbacks.onRestart?.());
+        this.button("NEW GAME+ (HELL MODE)", width / 2 - 20, buttonY, 224, 36, () => this.callbacks.onNewGamePlus?.(), false, null, C.red);
+      } else if (mobile) {
         this.button("NEW GAME", width / 2 - 208, buttonY, 185, 42, () => this.callbacks.onRestart?.());
         this.button("NEW GAME+ (HELL MODE)", width / 2 - 13, buttonY, 220, 42, () => this.callbacks.onNewGamePlus?.(), false, null, C.red);
       } else {
@@ -1282,6 +1629,10 @@ export class UI {
 
   dispose() {
     window.removeEventListener("pointerdown", this.onPointerDown, true);
+    window.removeEventListener("pointermove", this.onPointerMove, true);
+    window.removeEventListener("pointerup", this.onPointerUp, true);
+    window.removeEventListener("pointercancel", this.onPointerUp, true);
+    window.removeEventListener("wheel", this.onWheel, true);
     window.removeEventListener("resize", this.resize);
   }
 }

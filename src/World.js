@@ -229,9 +229,10 @@ function makeDamageDustTexture() {
 }
 
 export class World {
-  constructor(scene, assets) {
+  constructor(scene, assets, { mobile = false } = {}) {
     this.scene = scene;
     this.assets = assets;
+    this.mobile = !!mobile;
     this.disposables = [];
     this.flames = [];
     this.treeColliders = [];
@@ -332,7 +333,7 @@ export class World {
   }
 
   createSky() {
-    const starCount = 190;
+    const starCount = this.mobile ? 130 : 190;
     const starPositions = new Float32Array(starCount * 3);
     for (let i = 0; i < starCount; i += 1) {
       starPositions[i * 3] = THREE.MathUtils.randFloat(-38, 38);
@@ -414,7 +415,7 @@ export class World {
     this.ngPlusSkyGlow.visible = false;
     this.scene.add(this.ngPlusSkyGlow);
 
-    const ngEmberCount = 280;
+    const ngEmberCount = this.mobile ? 170 : 280;
     const ngPositions = new Float32Array(ngEmberCount * 3);
     const ngBase = new Float32Array(ngEmberCount * 3);
     for (let i = 0; i < ngEmberCount; i += 1) {
@@ -451,7 +452,7 @@ export class World {
     this.moonLight = moonLight;
     moonLight.position.set(-18, 24, 13);
     moonLight.castShadow = true;
-    moonLight.shadow.mapSize.set(2048, 2048);
+    moonLight.shadow.mapSize.set(this.mobile ? 1024 : 2048, this.mobile ? 1024 : 2048);
     moonLight.shadow.camera.left = -36;
     moonLight.shadow.camera.right = 36;
     moonLight.shadow.camera.top = 24;
@@ -665,7 +666,7 @@ export class World {
     });
     this.disposables.push(glowTexture);
 
-    const emberCount = 170;
+    const emberCount = this.mobile ? 110 : 170;
     const positions = new Float32Array(emberCount * 3);
     const base = new Float32Array(emberCount * 3);
     for (let i = 0; i < emberCount; i += 1) {
@@ -701,7 +702,7 @@ export class World {
     const trunkGeometry = new THREE.CylinderGeometry(0.12, 0.28, 8.5, 6);
     const branchGeometry = new THREE.CylinderGeometry(0.035, 0.075, 2.4, 5);
     this.disposables.push(trunkGeometry, branchGeometry);
-    for (let i = 0; i < 34; i += 1) {
+    for (let i = 0; i < (this.mobile ? 27 : 34); i += 1) {
       const tree = new THREE.Group();
       let treeX;
       let treeZ;
@@ -752,6 +753,7 @@ export class World {
     ];
 
     fogData.forEach(([x, z, sx, sy, speed], index) => {
+      if (this.mobile && index % 2 === 1) return;
       const material = new THREE.SpriteMaterial({
         map: texture,
         color: index % 2 === 0 ? 0xc4ccd4 : 0xd6dde4,

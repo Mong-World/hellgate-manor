@@ -271,3 +271,11 @@ The GitHub Action builds `main`, copies `assets/`, `fonts/`, and `sounds/` into 
 
 - S rank now requires 14 total category stars rather than a rounded 4.67 average. This means 5 + 5 + 4 stars correctly earns S.
 - New Game+ is now labelled `NEW GAME+ (HELL MODE)` in the main/end menus, with the in-game NG+ HUD tag simplified to `HELL MODE`.
+
+## v1.7.0 mobile/responsive pass
+- Requires `assets/demon-image.png` for the Soul Extraction tutorial.
+- Portrait phones show a rotate-to-landscape gate before play.
+- Landscape phones use a compact HUD and mobile-only scrollable upgrade shop.
+- Touch controls use larger invisible hit areas and swipe scrolling inside shop content.
+- Mobile rendering caps DPR and reduces cosmetic particle/shadow load; desktop rendering/layout remains unchanged.
+- Developer tools remain enabled (`Ctrl + Shift + D` on desktop).

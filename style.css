@@ -117,3 +117,81 @@ canvas {
   .loading-panel { padding: 24px 24px 22px; }
   .loading-title { font-size: 38px; }
 }
+
+
+/* Mobile-only portrait gate. Desktop layout is untouched. */
+#rotate-device {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  place-items: center;
+  background:
+    radial-gradient(circle at 50% 56%, rgba(110, 31, 10, .24), transparent 42%),
+    #050609;
+  color: #f4ebe3;
+  text-align: center;
+  pointer-events: auto;
+}
+
+.rotate-card {
+  width: min(390px, calc(100vw - 42px));
+  padding: 28px 24px 26px;
+  border: 1px solid rgba(255,112,49,.68);
+  background: rgba(7,8,11,.95);
+  box-shadow: 0 0 28px rgba(255,74,18,.18);
+  clip-path: polygon(12px 0, calc(100% - 12px) 0, 100% 12px, 100% calc(100% - 12px), calc(100% - 12px) 100%, 12px 100%, 0 calc(100% - 12px), 0 12px);
+}
+
+.rotate-title {
+  margin-top: 18px;
+  color: #ffc39e;
+  font: 34px/1 "Lansbury", Georgia, serif;
+}
+
+.rotate-copy {
+  margin-top: 12px;
+  color: #b8afaa;
+  font: 800 13px/1.35 "Segoe UI", Arial, sans-serif;
+  letter-spacing: .02em;
+}
+
+.rotate-phone {
+  position: relative;
+  width: 44px;
+  height: 72px;
+  margin: 0 auto;
+  border: 3px solid #ff8b4d;
+  border-radius: 8px;
+  transform: rotate(0deg);
+  animation: rotate-phone-demo 1.8s ease-in-out infinite;
+  box-shadow: 0 0 16px rgba(255,90,28,.24);
+}
+
+.rotate-phone::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 5px;
+  width: 7px;
+  height: 7px;
+  border: 2px solid #ffc39e;
+  border-radius: 50%;
+  transform: translateX(-50%);
+}
+
+.rotate-phone span {
+  position: absolute;
+  inset: 7px 5px 16px;
+  background: rgba(255,106,40,.08);
+  border: 1px solid rgba(255,106,40,.28);
+}
+
+@keyframes rotate-phone-demo {
+  0%, 20% { transform: rotate(0deg); }
+  60%, 100% { transform: rotate(90deg); }
+}
+
+@media (orientation: portrait) and (pointer: coarse) and (max-width: 1000px) {
+  #rotate-device { display: grid; }
+}
