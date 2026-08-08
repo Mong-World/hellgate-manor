@@ -138,6 +138,11 @@ export class Game {
       undercroft: 0,
       occult: 0
     };
+    this.tutorialsSeen = {
+      demolition: false,
+      undercroft: false,
+      occult: false
+    };
     this.waveStartSnapshot = null;
     this.continuesUsed = 0;
     this.totalManorDamageTaken = 0;
@@ -421,7 +426,8 @@ export class Game {
       totalManorDamageTaken: this.totalManorDamageTaken,
       newGamePlus: this.newGamePlus,
       buildings: { ...this.buildings },
-      assignments: { ...this.assignments }
+      assignments: { ...this.assignments },
+      tutorialsSeen: { ...this.tutorialsSeen }
     };
   }
 
@@ -450,6 +456,7 @@ export class Game {
     this.newGamePlus = !!data.newGamePlus;
     this.buildings = { ...this.buildings, ...(data.buildings ?? {}) };
     this.assignments = { ...this.assignments, ...(data.assignments ?? {}) };
+    this.tutorialsSeen = { ...this.tutorialsSeen, ...(data.tutorialsSeen ?? {}) };
     this.normaliseAssignments();
   }
 
@@ -825,13 +832,26 @@ export class Game {
     return CONFIG.buildings[type]?.unlockWave ?? 1;
   }
 
+  showLaterSystemTutorial(type) {
+    const tutorials = {
+      demolition: () => this.ui.showBombForgeTutorial(),
+      undercroft: () => this.ui.showUndercroftTutorial(),
+      occult: () => this.ui.showOccultTutorial()
+    };
+    if (!tutorials[type] || this.tutorialsSeen[type]) return false;
+    this.tutorialsSeen[type] = true;
+    tutorials[type]();
+    this.saveGame(this.waveIndex + 1);
+    this.syncUI();
+    return true;
+  }
+
   purchase(type) {
     if (this.ui.mode !== "intermission") return;
     const poweredSystems = ["hellfire", "demolition", "undercroft", "occult"];
     const firstPoweredSystemPurchase = poweredSystems.includes(type) &&
       !poweredSystems.some((key) => this.buildings[key]);
     const cost = this.getPurchaseDefinition(type);
-    if (cost == null || this.souls < cost) return this.playDeniedPurchase();
 
     if (type.startsWith("repair") && this.manorHealth >= this.manorMaxHealth) return this.playDeniedPurchase();
     if ((type === "fortify" || type === "majorFortify") && this.fortifyLevel >= CONFIG.manor.maxFortifyLevel) {
@@ -852,6 +872,14 @@ export class Game {
     if (type === "extractionUpgrade" && (!this.buildings.extraction || this.extractionLevel >= CONFIG.extraction.maxLevel)) {
       return this.playDeniedPurchase();
     }
+
+    // The three later systems explain themselves the first time the player
+    // clicks their unlocked shop button. The tutorial intentionally appears
+    // before affordability/purchase handling so players can learn what they
+    // are saving Souls for. Extraction and Hellfire keep their existing flow.
+    if (this.showLaterSystemTutorial(type)) return;
+
+    if (cost == null || this.souls < cost) return this.playDeniedPurchase();
 
     this.souls -= cost;
     if (type === "repairMinor") this.manorHealth = Math.min(this.manorMaxHealth, this.manorHealth + CONFIG.manor.repairs.minor.amount);

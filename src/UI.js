@@ -205,6 +205,39 @@ export class UI {
     };
   }
 
+  showBombForgeTutorial() {
+    this.tutorial = {
+      simple: true,
+      title: "HELL BOMB FORGE",
+      lines: [
+        "ASSIGN BOUND SOULS TO CREATE HELL BOMBS.",
+        "CLICK THE BOMB COUNTER TO ACTIVATE ONE."
+      ]
+    };
+  }
+
+  showUndercroftTutorial() {
+    this.tutorial = {
+      simple: true,
+      title: "UNDERCROFT",
+      lines: [
+        "ASSIGN BOUND SOULS TO AUTOMATICALLY REPAIR",
+        "THE MANOR AFTER EACH WAVE."
+      ]
+    };
+  }
+
+  showOccultTutorial() {
+    this.tutorial = {
+      simple: true,
+      title: "OCCULT TOWER",
+      lines: [
+        "ASSIGN BOUND SOULS TO AUTOMATICALLY SUMMON",
+        "OCCULT STRIKES AGAINST DEMONS."
+      ]
+    };
+  }
+
   setWaveResults(results) {
     this.waveResults = { ...this.waveResults, ...results };
   }
@@ -408,16 +441,39 @@ export class UI {
     ctx.restore();
   }
 
-  button(label, x, y, width, height, onClick, disabled = false, onDenied = null, accent = C.borderHot) {
+  button(label, x, y, width, height, onClick, disabled = false, onDenied = null, accent = C.borderHot, visualState = null) {
     const ctx = this.ctx;
     ctx.save();
     this.angularPath(x, y, width, height, Math.min(8, height * 0.2));
-    ctx.fillStyle = disabled ? "rgba(35,35,39,.96)" : "rgba(48,23,17,.98)";
+
+    let fill = disabled ? "rgba(35,35,39,.96)" : "rgba(48,23,17,.98)";
+    let stroke = disabled ? "rgba(120,120,120,.25)" : accent;
+    let text = disabled ? "#777" : C.text;
+    let lineWidth = disabled ? 1 : 1.5;
+
+    if (visualState === "locked") {
+      fill = "rgba(31,32,36,.98)";
+      stroke = "rgba(112,116,122,.28)";
+      text = "#73777d";
+      lineWidth = 1;
+    } else if (visualState === "unaffordable") {
+      fill = "rgba(65,31,24,.98)";
+      stroke = "rgba(167,84,58,.68)";
+      text = "#c28a73";
+      lineWidth = 1.25;
+    } else if (visualState === "available") {
+      fill = "rgba(48,23,17,.98)";
+      stroke = accent;
+      text = C.text;
+      lineWidth = 1.5;
+    }
+
+    ctx.fillStyle = fill;
     ctx.fill();
-    ctx.strokeStyle = disabled ? "rgba(120,120,120,.25)" : accent;
-    ctx.lineWidth = disabled ? 1 : 1.5;
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = lineWidth;
     ctx.stroke();
-    ctx.fillStyle = disabled ? "#777" : C.text;
+    ctx.fillStyle = text;
     ctx.font = this.font(Math.min(23, height * 0.47));
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -1328,8 +1384,17 @@ export class UI {
       const by = rowY + (rowH - buttonH) / 2;
       const purchased = buildings && ownedOrFull && labelOverride !== "MAX";
       const maxed = labelOverride === "MAX";
-      const disabled = locked || purchased || maxed || (!buildings && ownedOrFull) || this.souls < cost;
+      const insufficientSouls = !locked && !purchased && !maxed && !(!buildings && ownedOrFull) && this.souls < cost;
+      const disabled = locked || purchased || maxed || (!buildings && ownedOrFull) || insufficientSouls;
       const label = labelOverride ?? (locked ? "LOCKED" : purchased ? "OWNED" : `${cost}`);
+      const visualState = locked
+        ? "locked"
+        : insufficientSouls
+          ? "unaffordable"
+          : disabled
+            ? "locked"
+            : "available";
+      const laterSystem = buildings && ["demolition", "undercroft", "occult"].includes(type);
       this.button(
         label,
         bx,
@@ -1338,7 +1403,12 @@ export class UI {
         buttonH,
         () => this.callbacks.onPurchase?.(type),
         disabled,
-        () => this.callbacks.onDeniedPurchase?.()
+        () => {
+          if (insufficientSouls && laterSystem) this.callbacks.onPurchase?.(type);
+          else this.callbacks.onDeniedPurchase?.();
+        },
+        C.borderHot,
+        visualState
       );
     });
   }
