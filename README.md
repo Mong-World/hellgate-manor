@@ -80,7 +80,7 @@ The manor begins at 1000/1000 health.
 ### Systems
 
 - Soul Extraction: 830 Souls
-- Hellfire Battery: 1330 Souls
+- Hellfire Battery: 1000 Souls
 - Demolition Crypt: 2500 Souls
 - Undercroft: 4200 Souls
 - Occult Tower: 6700 Souls
@@ -325,3 +325,11 @@ The GitHub Action builds `main`, copies `assets/`, `fonts/`, and `sounds/` into 
 ## v1.8.3
 - Tightened and vertically balanced the Start and Pause panels to remove excess empty space.
 - Developer access shortcut: Ctrl + Shift + D (password still required).
+
+
+## v1.8.4 early-upgrade balance / Bound Soul reminder / dev shortcut reliability
+
+- Hellfire Battery purchase cost reduced from 1800 Souls to **1000 Souls**, keeping the first active defence realistically accessible before Wave 10 after buying Soul Extraction.
+- The first purchased Bound-Soul-powered system now opens a short reminder that Bound Souls must be explicitly allocated to power upgrades.
+- Removed the Moof Studios production logo from the pause screen; start/loading branding is unchanged.
+- Protected developer access remains **Ctrl + Shift + D** with the existing password check. The shortcut now listens in capture phase, has a keyup fallback, and focuses the game canvas after interaction to improve reliability inside Portals/browser iframes.

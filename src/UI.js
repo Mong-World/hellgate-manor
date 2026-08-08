@@ -194,6 +194,17 @@ export class UI {
     };
   }
 
+  showAllocationTutorial() {
+    this.tutorial = {
+      simple: true,
+      title: "POWER YOUR UPGRADES",
+      lines: [
+        "MAKE SURE YOU ALLOCATE YOUR BOUND SOULS.",
+        "UPGRADES ONLY GAIN POWER FROM SOULS ASSIGNED TO THEM."
+      ]
+    };
+  }
+
   setWaveResults(results) {
     this.waveResults = { ...this.waveResults, ...results };
   }
@@ -794,10 +805,10 @@ export class UI {
     ctx.fillStyle = "rgba(0,0,0,.68)";
     ctx.fillRect(0, 0, width, height);
 
-    // Compact pause card: the branding, pause label and button are treated as
-    // one centred block so there is no oversized empty lower half.
-    const panelWidth = Math.min(mobileLandscape ? 360 : (mobile ? 390 : 405), width - (mobileLandscape ? 18 : 30));
-    const panelHeight = mobileLandscape ? Math.min(180, height - 18) : (mobile ? 205 : 215);
+    // Pause is intentionally simpler than the title screen. The studio credit
+    // is omitted here so the game title and pause state stay easy to read.
+    const panelWidth = Math.min(mobileLandscape ? 350 : (mobile ? 382 : 400), width - (mobileLandscape ? 18 : 30));
+    const panelHeight = mobileLandscape ? Math.min(168, height - 18) : (mobile ? 188 : 198);
     const x = (width - panelWidth) / 2;
     const y = (height - panelHeight) / 2;
     this.panel(x, y, panelWidth, panelHeight, C.panel, 13);
@@ -807,30 +818,22 @@ export class UI {
     ctx.font = this.font(mobileLandscape ? 25 : (mobile ? 31 : 36));
     ctx.shadowColor = "rgba(255,80,24,.55)";
     ctx.shadowBlur = 9;
-    const titleY = y + (mobileLandscape ? 31 : (mobile ? 38 : 41));
+    const titleY = y + (mobileLandscape ? 32 : (mobile ? 38 : 41));
     ctx.fillText("HELLGATE MANOR", width / 2, titleY);
     ctx.shadowBlur = 0;
 
-    const logoCenterY = titleY + (mobileLandscape ? 17 : 22);
-    this.drawStudioLogo(
-      width / 2,
-      logoCenterY,
-      mobileLandscape ? 82 : (mobile ? 98 : 106),
-      mobileLandscape ? 23 : (mobile ? 27 : 29)
-    );
-
     ctx.fillStyle = C.orangeLight;
     ctx.font = this.font(mobileLandscape ? 23 : (mobile ? 27 : 30));
-    const pausedY = logoCenterY + (mobileLandscape ? 35 : 43);
+    const pausedY = titleY + (mobileLandscape ? 37 : 45);
     ctx.fillText("PAUSED", width / 2, pausedY);
 
     ctx.fillStyle = C.muted;
     ctx.font = this.dataFont(mobileLandscape ? 8 : 10, 800);
-    const helpY = pausedY + (mobileLandscape ? 18 : 22);
+    const helpY = pausedY + (mobileLandscape ? 17 : 21);
     ctx.fillText(mobileLandscape ? "TAP RESUME TO RETURN" : "ESC OR RESUME TO RETURN", width / 2, helpY);
 
-    const buttonHeight = mobileLandscape ? 38 : (mobile ? 44 : 48);
-    const buttonY = y + panelHeight - buttonHeight - (mobileLandscape ? 14 : 18);
+    const buttonHeight = mobileLandscape ? 36 : (mobile ? 42 : 46);
+    const buttonY = y + panelHeight - buttonHeight - (mobileLandscape ? 10 : 14);
     this.button(
       "RESUME",
       width / 2 - 105,
@@ -1417,13 +1420,39 @@ export class UI {
 
   drawTutorial(width, height) {
     if (!this.tutorial) return;
-    // Block the shop underneath while this first-use help card is open.
+    // Block the shop underneath while first-use help is open.
     this.buttons = [];
     const ctx = this.ctx;
     ctx.fillStyle = "rgba(0,0,0,.72)";
     ctx.fillRect(0, 0, width, height);
 
     const mobile = width < 700 || height < 620;
+
+    if (this.tutorial.simple) {
+      const panelWidth = Math.min(mobile ? width - 28 : 510, width - 28);
+      const panelHeight = mobile ? 190 : 210;
+      const x = (width - panelWidth) / 2;
+      const y = (height - panelHeight) / 2;
+      this.panel(x, y, panelWidth, panelHeight, C.panel, 14);
+
+      ctx.textAlign = "center";
+      ctx.fillStyle = C.orangeLight;
+      ctx.font = this.font(mobile ? 28 : 36);
+      ctx.fillText(this.tutorial.title, width / 2, y + (mobile ? 46 : 52));
+
+      ctx.fillStyle = C.text;
+      ctx.font = this.dataFont(mobile ? 10 : 12, 850);
+      const lineY = y + (mobile ? 82 : 92);
+      this.tutorial.lines.forEach((line, index) => {
+        ctx.fillText(line, width / 2, lineY + index * (mobile ? 18 : 21));
+      });
+
+      this.button("GOT IT", width / 2 - 90, y + panelHeight - 52, 180, 38, () => {
+        this.tutorial = null;
+      });
+      return;
+    }
+
     const panelWidth = Math.min(mobile ? width - 28 : 590, width - 28);
     const panelHeight = mobile ? 304 : 326;
     const x = (width - panelWidth) / 2;

@@ -35,6 +35,7 @@ export class Game {
     this.developerPanelOpen = false;
     this.developerPanelPreviousMode = "start";
     this.developerPanelPreviousPaused = false;
+    this.developerShortcutLatch = false;
     this.meta = this.readMeta();
     this.endingActive = false;
     this.endingTimer = 0;
@@ -64,6 +65,7 @@ export class Game {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.domElement.tabIndex = 0;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.15;
     this.container.appendChild(this.renderer.domElement);
@@ -105,9 +107,15 @@ export class Game {
     this.resetState({ newGamePlus: false });
     this.onResize = this.onResize.bind(this);
     this.onKeyDown = this.onKeyDown.bind(this);
+    this.onKeyUp = this.onKeyUp.bind(this);
+    this.focusGameCanvas = this.focusGameCanvas.bind(this);
     this.animate = this.animate.bind(this);
     window.addEventListener("resize", this.onResize);
-    window.addEventListener("keydown", this.onKeyDown);
+    // Capture phase plus a keyup fallback makes the private shortcut more
+    // reliable inside Portals/browser iframes.
+    window.addEventListener("keydown", this.onKeyDown, true);
+    window.addEventListener("keyup", this.onKeyUp, true);
+    this.renderer.domElement.addEventListener("pointerdown", this.focusGameCanvas);
   }
 
   resetState({ newGamePlus = false } = {}) {
@@ -823,6 +831,9 @@ export class Game {
 
   purchase(type) {
     if (this.ui.mode !== "intermission") return;
+    const poweredSystems = ["hellfire", "demolition", "undercroft", "occult"];
+    const firstPoweredSystemPurchase = poweredSystems.includes(type) &&
+      !poweredSystems.some((key) => this.buildings[key]);
     const cost = this.getPurchaseDefinition(type);
     if (cost == null || this.souls < cost) return this.playDeniedPurchase();
 
@@ -866,6 +877,7 @@ export class Game {
       this.extractionLevel = Math.min(CONFIG.extraction.maxLevel, this.extractionLevel + 1);
     } else if (type in this.buildings) {
       this.buildings[type] = true;
+      if (firstPoweredSystemPurchase) this.ui.showAllocationTutorial();
     }
 
     this.audio.play("purchase", { volume: 0.68, pitchMin: 0.96, pitchMax: 1.05 });
@@ -1057,13 +1069,35 @@ export class Game {
     };
   }
 
+  focusGameCanvas() {
+    try {
+      this.renderer?.domElement?.focus?.({ preventScroll: true });
+    } catch (_) {
+      this.renderer?.domElement?.focus?.();
+    }
+  }
+
+  isDeveloperShortcut(event) {
+    const dKey = event.code === "KeyD" || String(event.key || "").toLowerCase() === "d";
+    return !!(event.ctrlKey && event.shiftKey && !event.altKey && dKey);
+  }
+
+  triggerDeveloperShortcut(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.repeat || this.developerAccessPending) return;
+    if (this.developerPanelOpen) this.closeDeveloperPanel();
+    else if (this.developerAccessGranted) this.openDeveloperPanel();
+    else void this.requestDeveloperAccess();
+  }
+
   onKeyDown(event) {
-    if (event.ctrlKey && event.shiftKey && !event.altKey && event.key.toLowerCase() === "d") {
-      event.preventDefault();
-      if (event.repeat || this.developerAccessPending) return;
-      if (this.developerPanelOpen) this.closeDeveloperPanel();
-      else if (this.developerAccessGranted) this.openDeveloperPanel();
-      else void this.requestDeveloperAccess();
+    if (this.isDeveloperShortcut(event)) {
+      // Latch the keydown so the matching keyup cannot immediately toggle the
+      // developer panel closed. If a browser swallows keydown, keyup remains a
+      // fallback route below.
+      this.developerShortcutLatch = true;
+      this.triggerDeveloperShortcut(event);
       return;
     }
 
@@ -1076,6 +1110,17 @@ export class Game {
     if (this.ui.mode !== "playing" && this.ui.mode !== "paused") return;
     event.preventDefault();
     this.togglePause();
+  }
+
+  onKeyUp(event) {
+    if (!this.isDeveloperShortcut(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (this.developerShortcutLatch) {
+      this.developerShortcutLatch = false;
+      return;
+    }
+    this.triggerDeveloperShortcut(event);
   }
 
   async hashDeveloperPassword(value) {
@@ -1384,7 +1429,9 @@ export class Game {
   dispose() {
     this.running = false;
     window.removeEventListener("resize", this.onResize);
-    window.removeEventListener("keydown", this.onKeyDown);
+    window.removeEventListener("keydown", this.onKeyDown, true);
+    window.removeEventListener("keyup", this.onKeyUp, true);
+    this.renderer?.domElement?.removeEventListener("pointerdown", this.focusGameCanvas);
     this.ui.dispose();
     this.grabSystem?.dispose();
     this.waveManager?.dispose();
