@@ -178,3 +178,15 @@ The GitHub Action builds `main`, copies `assets/`, `fonts/`, and `sounds/` into 
 - Surviving demons thrown fully behind the manor are recovered to the front attack line so they remain interactable.
 - Replaced the large tubular Hell Gate fissure that could read like glowing logs with flat ground-level glowing tear shapes.
 - Winning the final wave now closes the Hell Gate, extinguishes the braziers, fades the moon/stars, raises a dawn sun, brightens the scene, and displays a congratulations message.
+
+
+## v1.4 gameplay / bound-soul clarity pass
+
+- Added pause button plus Escape-key pause/resume.
+- Normal demon Souls now fly in screen space to the bottom-right Souls counter and trigger its glow/pulse on arrival.
+- Bound Souls only appear in the HUD after the first conversion, in their own counter above Souls.
+- New Bound Souls remain unassigned until the player explicitly assigns them between waves.
+- Hellfire scaling is now stepped and visible in the Bound Souls menu (14 = 3 crossbows / 5.0s, 16 = 3 / 4.0s, 30+ = 3 / 2.2s).
+- Reworked Soul Extraction into a broad glowing roof target with two reusable vertical light-beam conversion slots. Captured demons disappear immediately and no longer hold a wave open.
+- Renamed Demolition Crypt to Hell Bomb Forge. Every 5 assigned Bound Souls produces one Hell Bomb after each wave, up to the 3-bomb cap.
+- Siege Demon now first appears at Wave 25, is roughly twice as large, and is materially darkened.

@@ -162,8 +162,7 @@ export class WaveManager {
     if (
       this.spawned >= this.queue.length &&
       this.resolved >= this.queue.length &&
-      this.getActiveCombatEnemies().length === 0 &&
-      this.activeExtractions.size === 0
+      this.getActiveCombatEnemies().length === 0
     ) {
       this.running = false;
       this.onWaveComplete?.(this.waveIndex);
@@ -199,6 +198,16 @@ export class WaveManager {
     this.resolved += 1;
     this.onEnemyDeath?.(data);
     window.setTimeout(() => this.releaseEnemy(enemy), 80);
+  }
+
+
+  captureEnemy(enemy) {
+    if (!enemy || enemy.dead || enemy.removed || !enemy.convertible) return false;
+    enemy.kill();
+    this.activeExtractions.delete(enemy);
+    this.resolved += 1;
+    window.setTimeout(() => this.releaseEnemy(enemy), 70);
+    return true;
   }
 
   startExtraction(enemy, duration, slotOffset = 0) {

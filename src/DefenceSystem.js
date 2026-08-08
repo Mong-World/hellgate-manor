@@ -132,17 +132,21 @@ export class DefenceSystem {
 
   getMountCount() {
     if (this.hellfireSouls <= 0) return 0;
-    if (this.hellfireSouls < 4) return 1;
-    if (this.hellfireSouls < 9) return 2;
+    if (this.hellfireSouls < 5) return 1;
+    if (this.hellfireSouls < 10) return 2;
     return 3;
   }
 
   getFireInterval() {
-    return THREE.MathUtils.clamp(
-      CONFIG.defence.baseFireInterval - Math.max(0, this.hellfireSouls - 1) * 0.14,
-      2.25,
-      CONFIG.defence.baseFireInterval
-    );
+    const souls = this.hellfireSouls;
+    if (souls <= 0) return Infinity;
+    if (souls < 5) return 7.0;
+    if (souls < 10) return 6.0;
+    if (souls < 15) return 5.0;
+    if (souls < 20) return 4.0;
+    if (souls < 25) return 3.3;
+    if (souls < 30) return 2.7;
+    return 2.2;
   }
 
   getOccultInterval() {

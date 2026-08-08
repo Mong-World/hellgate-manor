@@ -40,6 +40,8 @@ export class UI {
     this.bannerTimer = 0;
     this.healthFlash = 0;
     this.soulPulse = 0;
+    this.boundPulse = 0;
+    this.soulFlights = [];
     this.buttons = [];
     this.shopPage = 0;
     this.saveNoticeTimer = 0;
@@ -95,7 +97,21 @@ export class UI {
   }
 
   pulseSouls() {
-    this.soulPulse = 0.45;
+    this.soulPulse = 0.55;
+  }
+
+  pulseBound() {
+    this.boundPulse = 0.55;
+  }
+
+  addSoulFlight(x, y, onArrive = null) {
+    this.soulFlights.push({
+      x,
+      y,
+      age: 0,
+      duration: 0.72 + Math.random() * 0.16,
+      onArrive
+    });
   }
 
   onPointerDown(event) {
@@ -118,7 +134,17 @@ export class UI {
     this.bannerTimer = Math.max(0, this.bannerTimer - dt);
     this.healthFlash = Math.max(0, this.healthFlash - dt);
     this.soulPulse = Math.max(0, this.soulPulse - dt);
+    this.boundPulse = Math.max(0, this.boundPulse - dt);
     this.saveNoticeTimer = Math.max(0, this.saveNoticeTimer - dt);
+    for (let i = this.soulFlights.length - 1; i >= 0; i -= 1) {
+      const flight = this.soulFlights[i];
+      flight.age += dt;
+      if (flight.age >= flight.duration) {
+        this.soulFlights.splice(i, 1);
+        this.pulseSouls();
+        flight.onArrive?.();
+      }
+    }
   }
 
   draw() {
@@ -131,7 +157,13 @@ export class UI {
     if (this.mode === "start") return this.drawStart(width, height);
     if (this.mode === "playing") {
       this.drawHUD(width, height);
+      this.drawPauseButton(width, height);
       if (this.bannerTimer > 0) this.drawBanner(width, height);
+      return;
+    }
+    if (this.mode === "paused") {
+      this.drawHUD(width, height);
+      this.drawPaused(width, height);
       return;
     }
     if (this.mode === "results") {
@@ -295,24 +327,122 @@ export class UI {
     ctx.fillStyle = C.text;
     ctx.font = this.dataFont(compact ? 24 : 29, 900);
     ctx.fillText(String(this.souls), rightX + 34, y + 47);
-    ctx.fillStyle = C.orangeLight;
-    ctx.font = this.dataFont(compact ? 9 : 10, 850);
-    ctx.textAlign = "right";
-    ctx.fillText(`BOUND ${this.boundSouls}`, rightX + rightWidth - 12, y + 18);
     ctx.restore();
+
+    if (this.soulPulse > 0) {
+      ctx.save();
+      ctx.shadowColor = "rgba(255,108,40,.95)";
+      ctx.shadowBlur = 12 + this.soulPulse * 24;
+      this.angularPath(rightX - 1, y - 1, rightWidth + 2, hudHeight + 2, 8);
+      ctx.strokeStyle = `rgba(255,150,86,${0.28 + this.soulPulse})`;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    let upperY = y - 44;
+    if (this.boundSouls > 0) {
+      const boundH = 36;
+      const bpulse = this.boundPulse > 0 ? 1 + this.boundPulse * 0.08 : 1;
+      ctx.save();
+      ctx.translate(rightX + rightWidth / 2, upperY + boundH / 2);
+      ctx.scale(bpulse, bpulse);
+      ctx.translate(-(rightX + rightWidth / 2), -(upperY + boundH / 2));
+      this.panel(rightX, upperY, rightWidth, boundH, C.panel, 7);
+      ctx.fillStyle = C.orangeLight;
+      ctx.font = this.dataFont(compact ? 9 : 10, 900);
+      ctx.textAlign = "left";
+      ctx.fillText("BOUND SOULS", rightX + 12, upperY + 14);
+      ctx.fillStyle = "#ffe2bb";
+      ctx.font = this.dataFont(compact ? 16 : 18, 900);
+      ctx.textAlign = "right";
+      ctx.fillText(String(this.boundSouls), rightX + rightWidth - 12, upperY + 24);
+      ctx.restore();
+      upperY -= 42;
+    }
 
     if (this.bombs > 0) {
       const bombW = compact ? 132 : 150;
       this.button(
         `HELL BOMB ×${this.bombs}`,
         width - margin - bombW,
-        y - 44,
+        upperY,
         bombW,
         36,
         () => this.callbacks.onBomb?.(),
         false
       );
     }
+
+    this.drawSoulFlights(width, height);
+  }
+
+  getSoulCounterPosition(width, height) {
+    const compact = width < 820;
+    const margin = compact ? 12 : 20;
+    const hudHeight = compact ? 62 : 68;
+    const y = height - margin - hudHeight;
+    const rightWidth = compact ? 168 : 215;
+    const rightX = width - margin - rightWidth;
+    return { x: rightX + 25, y: y + 38 };
+  }
+
+  drawSoulFlights(width, height) {
+    if (this.soulFlights.length === 0) return;
+    const target = this.getSoulCounterPosition(width, height);
+    const ctx = this.ctx;
+    for (const flight of this.soulFlights) {
+      const t = Math.min(1, flight.age / flight.duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      const controlX = (flight.x + target.x) * 0.5;
+      const controlY = Math.min(flight.y, target.y) - 90;
+      const inv = 1 - eased;
+      const x = inv * inv * flight.x + 2 * inv * eased * controlX + eased * eased * target.x;
+      const y = inv * inv * flight.y + 2 * inv * eased * controlY + eased * eased * target.y;
+      const size = 5 + (1 - t) * 4;
+      ctx.save();
+      ctx.globalAlpha = 0.45 + (1 - t) * 0.55;
+      ctx.shadowColor = "rgba(255,111,38,.95)";
+      ctx.shadowBlur = 16;
+      ctx.fillStyle = "#ffd29a";
+      ctx.beginPath();
+      ctx.arc(x, y, size, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  drawPauseButton(width) {
+    const compact = width < 820;
+    const size = compact ? 42 : 46;
+    const margin = compact ? 12 : 18;
+    const x = width - margin - size;
+    const y = margin;
+    const ctx = this.ctx;
+    this.panel(x, y, size, size, "rgba(7,8,11,.88)", 7);
+    ctx.fillStyle = C.orangeLight;
+    ctx.fillRect(x + size * 0.32, y + size * 0.27, size * 0.11, size * 0.46);
+    ctx.fillRect(x + size * 0.57, y + size * 0.27, size * 0.11, size * 0.46);
+    this.buttons.push({ x, y, w: size, h: size, onClick: () => this.callbacks.onPause?.(), disabled: false });
+  }
+
+  drawPaused(width, height) {
+    const ctx = this.ctx;
+    ctx.fillStyle = "rgba(0,0,0,.68)";
+    ctx.fillRect(0, 0, width, height);
+    const panelWidth = Math.min(430, width - 30);
+    const panelHeight = 210;
+    const x = (width - panelWidth) / 2;
+    const y = (height - panelHeight) / 2;
+    this.panel(x, y, panelWidth, panelHeight, C.panel, 13);
+    ctx.textAlign = "center";
+    ctx.fillStyle = C.text;
+    ctx.font = this.font(Math.min(46, width * 0.08));
+    ctx.fillText("PAUSED", width / 2, y + 72);
+    ctx.fillStyle = C.muted;
+    ctx.font = this.dataFont(11, 800);
+    ctx.fillText("ESC OR RESUME TO RETURN", width / 2, y + 102);
+    this.button("RESUME", width / 2 - 105, y + 126, 210, 50, () => this.callbacks.onPause?.());
   }
 
   drawBanner(width, height) {
@@ -516,7 +646,7 @@ export class UI {
     const items = [
       ["SOUL EXTRACTION", "DROP DEMONS OVER THE GLOWING ROOF EXTRACTOR", b.extraction.cost, "extraction", this.buildings.extraction, false],
       ["HELLFIRE BATTERY", "BOUND SOULS POWER AUTOMATIC DEFENCES", b.hellfire.cost, "hellfire", this.buildings.hellfire, !this.buildings.extraction],
-      ["DEMOLITION CRYPT", "BOUND SOULS PRODUCE HELL BOMBS", b.demolition.cost, "demolition", this.buildings.demolition, !this.buildings.extraction],
+      ["HELL BOMB FORGE", "5 BOUND SOULS = +1 BOMB EACH WAVE", b.demolition.cost, "demolition", this.buildings.demolition, !this.buildings.extraction],
       ["UNDERCROFT", "BOUND SOULS REPAIR BETWEEN WAVES", b.undercroft.cost, "undercroft", this.buildings.undercroft, !this.buildings.extraction],
       ["OCCULT TOWER", "BOUND SOULS TRIGGER OCCULT STRIKES", b.occult.cost, "occult", this.buildings.occult, !this.buildings.extraction]
     ];
@@ -568,7 +698,7 @@ export class UI {
 
     const systems = [
       ["hellfire", "HELLFIRE", this.buildings.hellfire, C.orange],
-      ["demolition", "DEMOLITION", this.buildings.demolition, C.red],
+      ["demolition", "HELL BOMB FORGE", this.buildings.demolition, C.red],
       ["undercroft", "UNDERCROFT", this.buildings.undercroft, C.amber],
       ["occult", "OCCULT", this.buildings.occult, C.purple]
     ].filter((entry) => entry[2]);
@@ -582,7 +712,7 @@ export class UI {
 
     const startY = y + 36;
     const rowGap = 8;
-    const rowH = Math.max(62, Math.min(82, (height - 42 - rowGap * (systems.length - 1)) / systems.length));
+    const rowH = Math.max(mobile ? 76 : 78, Math.min(mobile ? 86 : 92, (height - 42 - rowGap * (systems.length - 1)) / systems.length));
     systems.forEach(([key, label, , accent], index) => {
       const rowY = startY + index * (rowH + rowGap);
       this.panel(x, rowY, width, rowH, C.panel2, 7);
@@ -590,9 +720,27 @@ export class UI {
       ctx.fillStyle = accent;
       ctx.font = this.font(mobile ? 21 : 25);
       ctx.fillText(label, x + 16, rowY + 31);
+      const assigned = this.assignments[key] ?? 0;
       ctx.fillStyle = C.text;
       ctx.font = this.dataFont(12, 850);
-      ctx.fillText(`${this.assignments[key] ?? 0} ASSIGNED`, x + 16, rowY + 54);
+      ctx.fillText(`${assigned} ASSIGNED`, x + 16, rowY + 51);
+      ctx.fillStyle = C.muted;
+      ctx.font = this.dataFont(mobile ? 9 : 10, 800);
+      let effectText = "";
+      if (key === "hellfire") {
+        const mounts = assigned <= 0 ? 0 : assigned < 5 ? 1 : assigned < 10 ? 2 : 3;
+        const interval = assigned <= 0 ? 0 : assigned < 5 ? 7 : assigned < 10 ? 6 : assigned < 15 ? 5 : assigned < 20 ? 4 : assigned < 25 ? 3.3 : assigned < 30 ? 2.7 : 2.2;
+        effectText = assigned > 0 ? `${mounts} CROSSBOW${mounts === 1 ? "" : "S"} • ${interval.toFixed(1)}s RELOAD` : "NO DEFENCE ACTIVE";
+      } else if (key === "demolition") {
+        const produced = Math.min(CONFIG.defence.bombMaxCharges, Math.floor(assigned / 5));
+        effectText = produced > 0 ? `+${produced} HELL BOMB${produced === 1 ? "" : "S"} AFTER EACH WAVE` : "5 BOUND SOULS NEEDED PER BOMB";
+      } else if (key === "undercroft") {
+        effectText = `+${assigned * 8} MANOR HEALTH AFTER EACH WAVE`;
+      } else if (key === "occult") {
+        const interval = assigned <= 0 ? 0 : Math.max(6.5, 17 - assigned * 0.55);
+        effectText = assigned > 0 ? `AUTO STRIKE ABOUT EVERY ${interval.toFixed(1)}s` : "NO OCCULT STRIKES";
+      }
+      ctx.fillText(effectText, x + 16, rowY + 68);
 
       const buttonSize = mobile ? 46 : 50;
       const plusX = x + width - buttonSize - 12;

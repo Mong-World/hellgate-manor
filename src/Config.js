@@ -64,8 +64,8 @@ function makeWave(wave) {
   const brute = wave >= 12
     ? Math.min(10, Math.max(1, Math.floor((wave - 10) * 0.21)))
     : 0;
-  const siege = wave >= 18
-    ? Math.min(5, 1 + Math.floor((wave - 18) / 9) + (wave >= 44 ? 1 : 0))
+  const siege = wave >= 25
+    ? Math.min(4, 1 + Math.floor((wave - 25) / 9) + (wave >= 46 ? 1 : 0))
     : 0;
 
   return {
@@ -130,7 +130,7 @@ export const CONFIG = Object.freeze({
   buildings: {
     extraction: { cost: 830, label: "SOUL EXTRACTION" },
     hellfire: { cost: 1330, label: "HELLFIRE BATTERY" },
-    demolition: { cost: 2500, label: "DEMOLITION CRYPT" },
+    demolition: { cost: 2500, label: "HELL BOMB FORGE" },
     undercroft: { cost: 4200, label: "UNDERCROFT" },
     occult: { cost: 6700, label: "OCCULT TOWER" }
   },
@@ -204,15 +204,15 @@ export const CONFIG = Object.freeze({
     },
     siege: {
       asset: "siege",
-      height: 6.2,
+      height: 11.6,
       rotationY: Math.PI / 2,
       speed: [1.95, 2.3],
       animationSpeed: [0.8, 1.0],
       reward: 50,
       attackDamage: 90,
       attackInterval: 6.8,
-      grabBox: [3.2, 5.4, 4.5],
-      grabY: 2.2,
+      grabBox: [4.8, 9.8, 6.2],
+      grabY: 4.2,
       throwScale: 0,
       durability: 5,
       convertible: false,

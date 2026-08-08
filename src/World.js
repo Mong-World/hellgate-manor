@@ -194,6 +194,7 @@ export class World {
     this.riftEmberBase = null;
     this.extractionGroup = null;
     this.extractionCentre = new THREE.Vector3();
+    this.extractionBeams = [];
     this.upgradeGroups = {};
     this.fortifyGroups = [];
     this.occultPulseTimer = 0;
@@ -899,76 +900,132 @@ export class World {
   }
 
   createUpgradeVisuals() {
-    // Soul extraction: one glowing fire/rune area, with room for two simultaneous conversions.
+    // Soul Extraction: the whole manor roof becomes the target. A captured
+    // demon disappears immediately and a wide column of light remains active
+    // for a short conversion cycle. This makes the mechanic readable even on
+    // mobile without requiring a tiny drop target.
     const extraction = new THREE.Group();
-    const extractionY = Math.min(this.manorBounds.max.y * 0.68, 8.4);
-    extraction.position.set(this.manorBarrierX + 2.15, extractionY, -0.35);
+    const extractionY = Math.min(this.manorBounds.max.y * 0.69, 8.55);
+    extraction.position.set(this.manorBarrierX + 2.25, extractionY, -0.35);
     extraction.visible = false;
     this.scene.add(extraction);
     this.extractionGroup = extraction;
     this.extractionCentre.copy(extraction.position);
 
-    const discGeometry = new THREE.CircleGeometry(1.65, 48);
-    discGeometry.rotateX(-Math.PI / 2);
-    const discMaterial = new THREE.MeshBasicMaterial({
-      color: 0xff4a10,
+    const roofGlowGeometry = new THREE.CircleGeometry(4.35, 64);
+    roofGlowGeometry.rotateX(-Math.PI / 2);
+    const roofGlowMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffb96e,
       transparent: true,
-      opacity: 0.32,
+      opacity: 0.18,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
       side: THREE.DoubleSide
     });
-    const disc = new THREE.Mesh(discGeometry, discMaterial);
-    extraction.add(disc);
+    const roofGlow = new THREE.Mesh(roofGlowGeometry, roofGlowMaterial);
+    roofGlow.scale.set(1.55, 1, 1.08);
+    roofGlow.position.y = 0.08;
+    extraction.add(roofGlow);
 
-    const ringGeometry = new THREE.TorusGeometry(1.45, 0.08, 8, 48);
-    ringGeometry.rotateX(Math.PI / 2);
-    const ringMaterial = new THREE.MeshBasicMaterial({
-      color: 0xffb35d,
+    const roofHaloGeometry = new THREE.RingGeometry(2.5, 4.25, 64);
+    roofHaloGeometry.rotateX(-Math.PI / 2);
+    const roofHaloMaterial = new THREE.MeshBasicMaterial({
+      color: 0xff6b27,
       transparent: true,
-      opacity: 0.86,
+      opacity: 0.20,
       blending: THREE.AdditiveBlending,
-      depthWrite: false
+      depthWrite: false,
+      side: THREE.DoubleSide
     });
-    const ring = new THREE.Mesh(ringGeometry, ringMaterial);
-    ring.position.y = 0.04;
-    extraction.add(ring);
+    const roofHalo = new THREE.Mesh(roofHaloGeometry, roofHaloMaterial);
+    roofHalo.scale.set(1.5, 1, 1.06);
+    roofHalo.position.y = 0.11;
+    extraction.add(roofHalo);
 
-    const innerRingGeometry = new THREE.TorusGeometry(0.92, 0.04, 7, 40);
-    innerRingGeometry.rotateX(Math.PI / 2);
-    const innerRingMaterial = ringMaterial.clone();
-    innerRingMaterial.color.setHex(0xff6324);
-    const innerRing = new THREE.Mesh(innerRingGeometry, innerRingMaterial);
-    innerRing.position.y = 0.045;
-    extraction.add(innerRing);
+    const extractionLight = new THREE.PointLight(0xffb36a, 34, 17, 1.8);
+    extractionLight.position.y = 1.7;
+    extraction.add(extractionLight);
 
-    const extractionFlames = [];
-    for (let i = 0; i < 8; i += 1) {
-      const angle = (i / 8) * Math.PI * 2;
-      const geometry = new THREE.ConeGeometry(0.11, 0.42, 7);
-      const material = new THREE.MeshBasicMaterial({
-        color: i % 2 ? 0xffa449 : 0xff4b12,
+    this.extractionBeams = [];
+    for (let slot = 0; slot < CONFIG.extraction.maxConcurrent; slot += 1) {
+      const beamGroup = new THREE.Group();
+      beamGroup.position.copy(
+        this.extractionCentre.clone().add(new THREE.Vector3(slot === 0 ? -0.85 : 0.85, 0, 0))
+      );
+      beamGroup.visible = false;
+      this.scene.add(beamGroup);
+
+      const beamGeometry = new THREE.CylinderGeometry(0.42, 2.0, 11.5, 28, 1, true);
+      const beamMaterial = new THREE.MeshBasicMaterial({
+        color: 0xfff1c9,
         transparent: true,
-        opacity: 0.82,
+        opacity: 0,
         blending: THREE.AdditiveBlending,
-        depthWrite: false
+        depthWrite: false,
+        side: THREE.DoubleSide
       });
-      const flame = new THREE.Mesh(geometry, material);
-      flame.position.set(Math.cos(angle) * 1.38, 0.30, Math.sin(angle) * 1.38);
-      extraction.add(flame);
-      extractionFlames.push({ flame, phase: i * 0.8 });
-      this.disposables.push(geometry, material);
+      const beam = new THREE.Mesh(beamGeometry, beamMaterial);
+      beam.position.y = 5.7;
+      beamGroup.add(beam);
+
+      const innerGeometry = new THREE.CylinderGeometry(0.16, 0.8, 12.2, 20, 1, true);
+      const innerMaterial = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide
+      });
+      const inner = new THREE.Mesh(innerGeometry, innerMaterial);
+      inner.position.y = 6.0;
+      beamGroup.add(inner);
+
+      const particleCount = 20;
+      const positions = new Float32Array(particleCount * 3);
+      for (let i = 0; i < particleCount; i += 1) {
+        const idx = i * 3;
+        const angle = Math.random() * Math.PI * 2;
+        const radius = Math.random() * 1.3;
+        positions[idx] = Math.cos(angle) * radius;
+        positions[idx + 1] = Math.random() * 10;
+        positions[idx + 2] = Math.sin(angle) * radius;
+      }
+      const particleGeometry = new THREE.BufferGeometry();
+      particleGeometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+      const particleMaterial = new THREE.PointsMaterial({
+        color: 0xffe0a8,
+        size: 0.13,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending
+      });
+      const particles = new THREE.Points(particleGeometry, particleMaterial);
+      beamGroup.add(particles);
+
+      const beamLight = new THREE.PointLight(0xffd69b, 0, 12, 1.8);
+      beamLight.position.y = 2.8;
+      beamGroup.add(beamLight);
+
+      this.extractionBeams.push({
+        group: beamGroup,
+        beam,
+        inner,
+        particles,
+        light: beamLight,
+        timer: 0,
+        duration: CONFIG.extraction.duration,
+        active: false,
+        phase: slot * 1.8
+      });
+      this.disposables.push(beamGeometry, beamMaterial, innerGeometry, innerMaterial, particleGeometry, particleMaterial);
     }
 
-    const extractionLight = new THREE.PointLight(0xff5b19, 22, 10, 2);
-    extractionLight.position.y = 1.0;
-    extraction.add(extractionLight);
     this.upgradeGroups.extraction = {
       group: extraction,
-      disc,
-      ring,
-      innerRing,
-      flames: extractionFlames,
+      roofGlow,
+      roofHalo,
       light: extractionLight
     };
 
@@ -1088,7 +1145,7 @@ export class World {
     this.fortifyGroups = [fortifyStage1, fortifyStage2, fortifyStage3];
 
     this.disposables.push(
-      discGeometry, discMaterial, ringGeometry, ringMaterial, innerRingGeometry, innerRingMaterial,
+      roofGlowGeometry, roofGlowMaterial, roofHaloGeometry, roofHaloMaterial,
       demoBaseGeometry, demoBaseMaterial, demoCoreGeometry, demoCoreMaterial,
       braceGeometry, braceMaterial, occultOrbGeometry, occultOrbMaterial,
       occultRingGeometry, occultRingMaterial, occultRingB.material,
@@ -1098,6 +1155,13 @@ export class World {
 
   setUpgradeState({ extraction = false, demolition = false, undercroft = false, occult = false, fortifyLevel = 0 } = {}) {
     if (this.upgradeGroups.extraction) this.upgradeGroups.extraction.group.visible = extraction;
+    if (!extraction) {
+      this.extractionBeams.forEach((slot) => {
+        slot.active = false;
+        slot.timer = 0;
+        slot.group.visible = false;
+      });
+    }
     if (this.upgradeGroups.demolition) this.upgradeGroups.demolition.group.visible = demolition;
     if (this.upgradeGroups.undercroft) this.upgradeGroups.undercroft.group.visible = undercroft;
     if (this.upgradeGroups.occult) this.upgradeGroups.occult.group.visible = occult;
@@ -1108,18 +1172,33 @@ export class World {
 
   isInsideExtractionZone(position) {
     if (!this.extractionGroup?.visible) return false;
-    // Conversion is intentionally depth-independent: if the player releases a
-    // convertible demon over the manor roof area, it snaps into the extractor
-    // regardless of how close/far along the battlefield Z axis it was dragged.
-    const dx = position.x - this.extractionCentre.x;
-    const dy = position.y - this.extractionCentre.y;
-    return dx >= -3.4 && dx <= 3.2 && dy >= -3.0 && dy <= 4.8;
+    // Depth-independent roof target: only screen-like horizontal/vertical
+    // placement matters, so foreground/background Z never prevents capture.
+    return (
+      position.x >= this.manorBarrierX - 1.0 &&
+      position.x <= this.manorBounds.max.x + 1.8 &&
+      position.y >= this.manorBounds.max.y * 0.36 &&
+      position.y <= this.manorBounds.max.y + 5.2
+    );
   }
 
-  getExtractionPosition(slotIndex = 0) {
-    return this.extractionCentre.clone().add(
-      new THREE.Vector3(slotIndex === 0 ? -0.34 : 0.34, 0.25, slotIndex === 0 ? -0.30 : 0.30)
-    );
+  getAvailableExtractionSlot() {
+    return this.extractionBeams.findIndex((slot) => !slot.active);
+  }
+
+  startExtractionBeam() {
+    if (!this.extractionGroup?.visible) return -1;
+    const slotIndex = this.getAvailableExtractionSlot();
+    if (slotIndex < 0) return -1;
+    const slot = this.extractionBeams[slotIndex];
+    slot.active = true;
+    slot.timer = slot.duration;
+    slot.group.visible = true;
+    slot.beam.material.opacity = 0.02;
+    slot.inner.material.opacity = 0.02;
+    slot.particles.material.opacity = 0.02;
+    slot.light.intensity = 5;
+    return slotIndex;
   }
 
   pulseOccultEffect() {
@@ -1329,16 +1408,39 @@ export class World {
 
     if (this.upgradeGroups.extraction?.group.visible) {
       const extraction = this.upgradeGroups.extraction;
-      const pulse = 1 + Math.sin(elapsed * 3.4) * 0.06;
-      extraction.ring.rotation.z += dt * 0.22;
-      extraction.innerRing.rotation.z -= dt * 0.35;
-      extraction.disc.material.opacity = 0.18 + Math.sin(elapsed * 2.1) * 0.045;
-      extraction.light.intensity = 18 + pulse * 6;
-      extraction.flames.forEach(({ flame, phase }) => {
-        const fp = 0.9 + Math.sin(elapsed * 9 + phase) * 0.18;
-        flame.scale.set(0.9, fp, 0.9);
-      });
+      const pulse = 1 + Math.sin(elapsed * 2.8) * 0.08;
+      extraction.roofGlow.material.opacity = 0.16 + Math.sin(elapsed * 2.1) * 0.035;
+      extraction.roofHalo.material.opacity = 0.14 + Math.sin(elapsed * 2.6 + 1.1) * 0.045;
+      extraction.roofHalo.rotation.z += dt * 0.07;
+      extraction.light.intensity = 27 + pulse * 8;
     }
+
+    this.extractionBeams.forEach((slot, slotIndex) => {
+      if (!slot.active) return;
+      slot.timer -= dt;
+      const progress = THREE.MathUtils.clamp(1 - slot.timer / slot.duration, 0, 1);
+      const envelope = Math.sin(Math.min(1, progress * 3.2) * Math.PI * 0.5) *
+        Math.sin(Math.min(1, (1 - progress) * 5.0) * Math.PI * 0.5);
+      const flicker = 0.92 + Math.sin(elapsed * 8 + slot.phase) * 0.08;
+      slot.beam.material.opacity = 0.24 * envelope * flicker;
+      slot.inner.material.opacity = 0.32 * envelope;
+      slot.particles.material.opacity = 0.72 * envelope;
+      slot.light.intensity = 28 * envelope;
+      slot.beam.scale.set(1 + Math.sin(elapsed * 3 + slotIndex) * 0.04, 1, 1 + Math.cos(elapsed * 2.4 + slotIndex) * 0.04);
+
+      const attr = slot.particles.geometry.attributes.position;
+      const arr = attr.array;
+      for (let i = 0; i < attr.count; i += 1) {
+        const idx = i * 3 + 1;
+        arr[idx] = (arr[idx] + dt * (1.1 + (i % 5) * 0.16)) % 10.5;
+      }
+      attr.needsUpdate = true;
+
+      if (slot.timer <= 0) {
+        slot.active = false;
+        slot.group.visible = false;
+      }
+    });
 
     if (this.upgradeGroups.demolition?.group.visible) {
       this.upgradeGroups.demolition.core.scale.setScalar(0.92 + Math.sin(elapsed * 5.5) * 0.12);

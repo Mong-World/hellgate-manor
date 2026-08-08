@@ -17,6 +17,7 @@ export class Game {
     this.clock = new THREE.Clock();
     this.running = false;
     this.gameplayActive = false;
+    this.paused = false;
     this.startingGame = false;
     this.cameraShake = 0;
     this.cameraBase = new THREE.Vector3(...CONFIG.camera.position);
@@ -58,6 +59,7 @@ export class Game {
       onNewGame: () => this.beginNewGame(),
       onContinueSave: () => this.continueSavedGame(),
       onBomb: () => this.useBomb(),
+      onPause: () => this.togglePause(),
       onPurchase: (type) => this.purchase(type),
       onAssign: (system, delta) => this.assignBoundSoul(system, delta),
       onDeniedPurchase: () => this.playDeniedPurchase(),
@@ -70,8 +72,10 @@ export class Game {
 
     this.resetState();
     this.onResize = this.onResize.bind(this);
+    this.onKeyDown = this.onKeyDown.bind(this);
     this.animate = this.animate.bind(this);
     window.addEventListener("resize", this.onResize);
+    window.addEventListener("keydown", this.onKeyDown);
   }
 
   resetState() {
@@ -98,6 +102,7 @@ export class Game {
       occult: 0
     };
     this.waveStartSnapshot = null;
+    this.paused = false;
   }
 
   async start() {
@@ -362,6 +367,7 @@ export class Game {
 
   startCurrentWave() {
     this.gameplayActive = true;
+    this.paused = false;
     this.grabSystem.setEnabled(true);
     this.waveStartSnapshot = this.snapshotState();
     this.waveManager.startWave(this.waveIndex);
@@ -383,18 +389,16 @@ export class Game {
     if (
       this.buildings.extraction &&
       enemy.convertible &&
-      this.world.isInsideExtractionZone(enemy.position) &&
-      this.waveManager.getExtractionCount() < CONFIG.extraction.maxConcurrent
+      this.world.isInsideExtractionZone(enemy.position)
     ) {
-      const slot = this.waveManager.getExtractionCount();
-      enemy.position.copy(this.world.getExtractionPosition(slot));
-      const started = this.waveManager.startExtraction(
-        enemy,
-        CONFIG.extraction.duration,
-        0
-      );
-      if (started) {
-        this.audio.play("ash", { volume: 0.28, pitchMin: 0.75, pitchMax: 0.9 });
+      const slot = this.world.startExtractionBeam();
+      if (slot >= 0 && this.waveManager.captureEnemy(enemy)) {
+        this.boundSouls += 1;
+        this.ui.pulseBound();
+        this.audio.play("soulCollect", { volume: 0.60, pitchMin: 0.94, pitchMax: 1.08 });
+        this.normaliseAssignments();
+        this.applyUpgradeState();
+        this.syncUI();
         return true;
       }
     }
@@ -403,28 +407,17 @@ export class Game {
     return false;
   }
 
-  handleEnemyExtracted(enemy) {
-    const start = enemy?.position?.clone?.() ?? this.world.extractionCentre.clone().add(new THREE.Vector3(0, 2.8, 0));
-    const target = new THREE.Vector3(this.world.manorBarrierX + 1.3, 4.3, 0);
-    this.effectPool.ash(start, true);
-    this.effectPool.soul(start, target, () => {
-      this.boundSouls += 1;
-      if (this.buildings.hellfire) this.assignments.hellfire += 1;
-      this.audio.play("soulCollect", { volume: 0.62, pitchMin: 0.92, pitchMax: 1.1 });
-      this.normaliseAssignments();
-      this.applyUpgradeState();
-      this.syncUI();
-    });
+  handleEnemyExtracted() {
+    // Legacy callback retained for old saves/build compatibility. New captures
+    // resolve instantly and use the roof beam managed by World.
   }
 
   handleEnemyDeath({ enemy, position, impactStrength = 9, reason }) {
     if (!enemy) return;
     this.souls += enemy.soulValue;
     this.demonDeaths += 1;
-    this.ui.pulseSouls();
-
-    const target = new THREE.Vector3(this.world.manorBarrierX + 1.2, 4.2, 0);
-    this.effectPool.soul(position, target, () => {
+    const screen = this.projectWorldToScreen(position);
+    this.ui.addSoulFlight(screen.x, screen.y, () => {
       this.audio.play("soulCollect", { volume: 0.58, pitchMin: 0.9, pitchMax: 1.12 });
     });
     this.effectPool.ash(position, reason === "bomb" || reason === "occult");
@@ -493,11 +486,14 @@ export class Game {
     }
 
     if (this.buildings.demolition && this.assignments.demolition > 0) {
-      this.demolitionProgress += this.assignments.demolition / 8;
-      while (this.demolitionProgress >= 1 && this.bombs < CONFIG.defence.bombMaxCharges) {
-        this.demolitionProgress -= 1;
-        this.bombs += 1;
+      const produced = Math.min(
+        CONFIG.defence.bombMaxCharges,
+        Math.floor(this.assignments.demolition / 5)
+      );
+      if (produced > 0) {
+        this.bombs = Math.min(CONFIG.defence.bombMaxCharges, this.bombs + produced);
       }
+      this.demolitionProgress = 0;
     }
 
     this.syncUI();
@@ -574,10 +570,6 @@ export class Game {
       this.fortifyLevel += 10;
     } else if (type in this.buildings) {
       this.buildings[type] = true;
-      if (type === "hellfire") {
-        const unassigned = this.getUnassignedSouls();
-        this.assignments.hellfire += unassigned;
-      }
     }
 
     this.audio.play("purchase", { volume: 0.68, pitchMin: 0.96, pitchMax: 1.05 });
@@ -645,7 +637,7 @@ export class Game {
   }
 
   useBomb() {
-    if (!this.gameplayActive || this.bombs <= 0) return;
+    if (!this.gameplayActive || this.paused || this.bombs <= 0) return;
     const targets = [...this.waveManager.getActiveCombatEnemies()];
     if (targets.length === 0) return;
     this.bombs -= 1;
@@ -660,6 +652,7 @@ export class Game {
 
   failWave() {
     if (!this.gameplayActive) return;
+    this.paused = false;
     this.gameplayActive = false;
     this.grabSystem.setEnabled(false);
     this.waveManager.stop();
@@ -741,6 +734,35 @@ export class Game {
     // Husk cannot stop a crowd and create an artificial pile-up.
   }
 
+  projectWorldToScreen(position) {
+    const projected = position.clone().project(this.camera);
+    return {
+      x: (projected.x * 0.5 + 0.5) * window.innerWidth,
+      y: (-projected.y * 0.5 + 0.5) * window.innerHeight
+    };
+  }
+
+  onKeyDown(event) {
+    if (event.key !== "Escape") return;
+    if (this.ui.mode !== "playing" && this.ui.mode !== "paused") return;
+    event.preventDefault();
+    this.togglePause();
+  }
+
+  togglePause() {
+    if (!this.gameplayActive) return;
+    this.paused = !this.paused;
+    if (this.paused) {
+      this.grabSystem?.setEnabled(false);
+      this.audio.setMusicLevel(0.12, 0.18);
+      this.ui.setMode("paused");
+    } else {
+      this.grabSystem?.setEnabled(true);
+      this.audio.setMusicLevel(0.34, 0.22);
+      this.ui.setMode("playing");
+    }
+  }
+
   syncUI() {
     this.ui.setHUD({
       wave: Math.min(this.waveIndex + 1, CONFIG.waves.length),
@@ -779,25 +801,26 @@ export class Game {
     const elapsed = this.clock.elapsedTime;
     this.ui.update(dt);
 
+    const simulationActive = this.gameplayActive && !this.paused;
     if (this.waveManager) {
-      this.waveManager.update(this.gameplayActive ? dt : 0);
+      this.waveManager.update(simulationActive ? dt : 0);
       for (const enemy of this.waveManager.getAliveEnemies()) {
         enemy.update(
-          this.gameplayActive ? dt : 0,
+          simulationActive ? dt : 0,
           elapsed,
           this.grabSystem?.isHolding(enemy) ?? false,
           this.world.manorBarrierX
         );
       }
-      if (this.gameplayActive) {
+      if (simulationActive) {
         this.checkWorldCollisions();
       }
     }
 
-    this.grabSystem?.update(this.gameplayActive ? dt : 0);
-    this.defence?.update(dt, this.gameplayActive);
-    this.effectPool?.update(dt);
-    this.world?.update(elapsed, dt);
+    this.grabSystem?.update(simulationActive ? dt : 0);
+    this.defence?.update(simulationActive ? dt : 0, simulationActive);
+    this.effectPool?.update(this.paused ? 0 : dt);
+    this.world?.update(elapsed, this.paused ? 0 : dt);
     this.updateCamera(dt);
     this.syncUI();
     this.ui.draw();
@@ -813,6 +836,7 @@ export class Game {
   dispose() {
     this.running = false;
     window.removeEventListener("resize", this.onResize);
+    window.removeEventListener("keydown", this.onKeyDown);
     this.ui.dispose();
     this.grabSystem?.dispose();
     this.waveManager?.dispose();
