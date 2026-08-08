@@ -11,6 +11,7 @@ import { EffectPool } from "./EffectPool.js";
 
 const SAVE_KEY = "hellgate-manor-save-v3";
 const META_KEY = "hellgate-manor-meta-v1";
+const DEV_ACCESS_HASH = "b9520238793370c7fb9cb3bd76eaf0ffa8442359343c64b9c4082a662d2f62e7";
 
 export class Game {
   constructor(container) {
@@ -24,9 +25,13 @@ export class Game {
     this.cameraBase = new THREE.Vector3(...CONFIG.camera.position);
     this.cameraTarget = new THREE.Vector3(...CONFIG.camera.target);
     const params = new URLSearchParams(window.location.search);
-    this.developerMode = params.get("dev") === "1";
+    // Developer mode is deliberately not exposed by a public URL flag anymore.
+    // The wave query remains useful after private developer access is unlocked.
+    this.developerMode = false;
+    this.developerAccessGranted = false;
+    this.developerAccessPending = false;
     this.developerWave = THREE.MathUtils.clamp(Math.floor(Number(params.get("wave")) || 1), 1, CONFIG.waves.length);
-    this.developerShop = params.get("shop") === "1";
+    this.developerShop = false;
     this.developerPanelOpen = false;
     this.developerPanelPreviousMode = "start";
     this.developerPanelPreviousPaused = false;
@@ -34,6 +39,7 @@ export class Game {
     this.endingActive = false;
     this.endingTimer = 0;
     this.endingDawnMusicStarted = false;
+    this.endingDawnMusicDelay = 4.15;
     this.runtimePrimed = false;
     this.mobileOptimized = (window.matchMedia?.("(pointer: coarse)")?.matches || navigator.maxTouchPoints > 0) && Math.min(window.innerWidth, window.innerHeight) <= 900;
 
@@ -134,17 +140,13 @@ export class Game {
     this.endingActive = false;
     this.endingTimer = 0;
     this.endingDawnMusicStarted = false;
+    this.endingDawnMusicDelay = 4.15;
     this.paused = false;
   }
 
   async start() {
     this.setLoadingProgress(3);
-    const uiAssetsReady = await this.ui.preloadVisualAssets();
-    if (!uiAssetsReady) {
-      const error = new Error("UI ASSET FAILED: demon-image.png");
-      error.assetFilename = "demon-image.png";
-      throw error;
-    }
+    await this.ui.preloadVisualAssets();
     this.setLoadingProgress(5);
     try {
       await document.fonts?.load('32px "Lansbury"');
@@ -752,7 +754,17 @@ export class Game {
     this.endingDawnMusicStarted = false;
     this.grabSystem?.setEnabled(false);
     this.audio.stopLoop("soul-binding", 0.35);
-    this.audio.stopMusic(1.0);
+    this.audio.stopMusic(0.45);
+    this.audio.play("endgameBang", {
+      volume: 0.96,
+      rate: 1,
+      cooldown: 0,
+      maxInstances: 1
+    });
+    const endingBangDuration = this.audio.getDuration?.("endgameBang") ?? 0;
+    // Let the bang/wind sting finish before the dawn score enters. The old
+    // 4.15 second transition remains the minimum if the clip is unavailable.
+    this.endingDawnMusicDelay = Math.max(4.15, endingBangDuration + 0.18);
     this.defence.clearForDawn?.();
     this.world.startVictorySequence?.();
     this.ui.startEndingSequence(result);
@@ -1046,10 +1058,12 @@ export class Game {
   }
 
   onKeyDown(event) {
-    if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "d") {
+    if (event.ctrlKey && event.shiftKey && event.altKey && event.key.toLowerCase() === "d") {
       event.preventDefault();
+      if (event.repeat || this.developerAccessPending) return;
       if (this.developerPanelOpen) this.closeDeveloperPanel();
-      else this.openDeveloperPanel();
+      else if (this.developerAccessGranted) this.openDeveloperPanel();
+      else void this.requestDeveloperAccess();
       return;
     }
 
@@ -1062,6 +1076,31 @@ export class Game {
     if (this.ui.mode !== "playing" && this.ui.mode !== "paused") return;
     event.preventDefault();
     this.togglePause();
+  }
+
+  async hashDeveloperPassword(value) {
+    const bytes = new TextEncoder().encode(value);
+    const digest = await crypto.subtle.digest("SHA-256", bytes);
+    return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  }
+
+  async requestDeveloperAccess() {
+    this.developerAccessPending = true;
+    try {
+      const entered = window.prompt("Developer access password:");
+      if (entered == null) return;
+      const hash = await this.hashDeveloperPassword(entered);
+      if (hash !== DEV_ACCESS_HASH) {
+        this.audio.play("deniedPurchase", { volume: 0.42, cooldown: 0 });
+        return;
+      }
+      this.developerAccessGranted = true;
+      this.openDeveloperPanel();
+    } catch (error) {
+      console.warn("Developer access check failed.", error);
+    } finally {
+      this.developerAccessPending = false;
+    }
   }
 
   openDeveloperPanel() {
@@ -1293,7 +1332,7 @@ export class Game {
 
     if (this.endingActive) {
       this.endingTimer += dt;
-      if (!this.endingDawnMusicStarted && this.endingTimer >= 4.15) {
+      if (!this.endingDawnMusicStarted && this.endingTimer >= this.endingDawnMusicDelay) {
         this.endingDawnMusicStarted = true;
         this.audio.playMusic("newDawn", 1.4, false);
       }

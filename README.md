@@ -20,6 +20,10 @@ assets/manor.glb
 assets/running-crawl.glb
 assets/slow-walk.glb
 assets/skinny-monster.glb
+assets/shed.glb
+assets/demon-image.png
+assets/moofstudiogame.png
+assets/endgamebang.mp3
 ```
 
 Expected sound filenames:
@@ -278,7 +282,7 @@ The GitHub Action builds `main`, copies `assets/`, `fonts/`, and `sounds/` into 
 - Landscape phones use a compact HUD and mobile-only scrollable upgrade shop.
 - Touch controls use larger invisible hit areas and swipe scrolling inside shop content.
 - Mobile rendering caps DPR and reduces cosmetic particle/shadow load; desktop rendering/layout remains unchanged.
-- Developer tools remain enabled (`Ctrl + Shift + D` on desktop).
+- Developer tools remain in the build but are no longer exposed by the old public shortcut.
 
 
 ## v1.7.2 mobile framing
@@ -293,3 +297,13 @@ The GitHub Action builds `main`, copies `assets/`, `fonts/`, and `sounds/` into 
 - On landscape phones wider than the reference aspect ratio, relaxes the v1.7.2 adaptive crop by 25%.
 - Retains 75% of the side-crop protection that keeps demon spawn edges and the far manor edge hidden, while restoring a little more of the manor roof and left Hell Gate/fire area on extra-wide phones.
 - Desktop camera and desktop UI remain unchanged.
+
+
+## v1.8.0 final branding / ending-audio pass
+
+- Added `assets/moofstudiogame.png` branding to the loading screen, title screen and pause menu.
+- Loading now leads with the Moof Studios branding and shows HELLGATE MANOR as the smaller game title beneath it.
+- Added `assets/endgamebang.mp3` at the instant Wave 50 is completed. The dawn music waits for the ending sting to finish (with the existing transition time as a minimum).
+- The developer panel remains fully available but the old `Ctrl + Shift + D` shortcut and public `?dev=1` activation have been removed.
+- Developer access now requires a private multi-key shortcut plus password verification. Only a SHA-256 hash is stored in the client source, not the password text itself.
+- Mobile responsive framing/UI and all v1.7.3 gameplay behaviour are otherwise unchanged.

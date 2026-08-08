@@ -80,11 +80,21 @@ canvas {
   );
 }
 
+.loading-studio-logo {
+  display: block;
+  width: min(360px, 82vw);
+  height: 112px;
+  margin: -4px auto 0;
+  object-fit: cover;
+  object-position: center 50%;
+}
+
 .loading-title {
-  margin-bottom: 16px;
+  margin: 4px 0 14px;
   color: #f4ebe3;
-  font: 48px/1 "Lansbury", Georgia, serif;
-  text-shadow: 0 0 13px rgba(255, 78, 22, 0.55);
+  font: 26px/1 "Lansbury", Georgia, serif;
+  letter-spacing: .02em;
+  text-shadow: 0 0 11px rgba(255, 78, 22, 0.48);
 }
 
 .loading-track {
@@ -114,8 +124,9 @@ canvas {
 }
 
 @media (max-width: 700px) {
-  .loading-panel { padding: 24px 24px 22px; }
-  .loading-title { font-size: 38px; }
+  .loading-panel { padding: 20px 22px 20px; }
+  .loading-studio-logo { width: min(300px, 78vw); height: 94px; }
+  .loading-title { font-size: 22px; }
 }
 
 

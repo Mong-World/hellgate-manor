@@ -102,6 +102,7 @@ export const CONFIG = Object.freeze({
     click: "./assets/click-sound.mp3",
     deniedPurchase: "./sounds/denied-purchase-sound.mp3",
     gameOver: "./sounds/game-over-sound.mp3",
+    endgameBang: "./assets/endgamebang.mp3",
     newDawn: "./assets/newdawnmusic.mp3",
     purchase: "./sounds/purchasesound.mp3",
     soulBinding: "./assets/soulmusic.mp3",

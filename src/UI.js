@@ -73,6 +73,10 @@ export class UI {
     this.tutorialDemonImage.decoding = "async";
     this.tutorialDemonImage.src = "./assets/demon-image.png";
     this.tutorialDemonReady = false;
+    this.studioLogoImage = new Image();
+    this.studioLogoImage.decoding = "async";
+    this.studioLogoImage.src = "./assets/moofstudiogame.png";
+    this.studioLogoReady = false;
 
     this.onPointerDown = this.onPointerDown.bind(this);
     this.onPointerMove = this.onPointerMove.bind(this);
@@ -103,31 +107,37 @@ export class UI {
     return !!this.touchDevice && window.innerWidth > window.innerHeight && window.innerHeight <= 700;
   }
 
-  async preloadVisualAssets() {
-    if (this.tutorialDemonReady) return true;
+  async preloadImageAsset(image, filename) {
     try {
-      if (this.tutorialDemonImage.complete && this.tutorialDemonImage.naturalWidth > 0) {
-        await this.tutorialDemonImage.decode?.().catch(() => {});
-        this.tutorialDemonReady = true;
-        return true;
+      if (!(image.complete && image.naturalWidth > 0)) {
+        await new Promise((resolve, reject) => {
+          const onLoad = () => { cleanup(); resolve(); };
+          const onError = () => { cleanup(); reject(new Error(`${filename} failed to load`)); };
+          const cleanup = () => {
+            image.removeEventListener("load", onLoad);
+            image.removeEventListener("error", onError);
+          };
+          image.addEventListener("load", onLoad, { once: true });
+          image.addEventListener("error", onError, { once: true });
+        });
       }
-      await new Promise((resolve, reject) => {
-        const onLoad = () => { cleanup(); resolve(); };
-        const onError = () => { cleanup(); reject(new Error("demon-image.png failed to load")); };
-        const cleanup = () => {
-          this.tutorialDemonImage.removeEventListener("load", onLoad);
-          this.tutorialDemonImage.removeEventListener("error", onError);
-        };
-        this.tutorialDemonImage.addEventListener("load", onLoad, { once: true });
-        this.tutorialDemonImage.addEventListener("error", onError, { once: true });
-      });
-      await this.tutorialDemonImage.decode?.().catch(() => {});
-      this.tutorialDemonReady = true;
+      await image.decode?.().catch(() => {});
+      if (!(image.naturalWidth > 0 && image.naturalHeight > 0)) {
+        throw new Error(`${filename} has no usable image data`);
+      }
       return true;
     } catch (error) {
-      console.warn("Tutorial demon image could not be preloaded.", error);
-      return false;
+      error.assetFilename = filename;
+      throw error;
     }
+  }
+
+  async preloadVisualAssets() {
+    await this.preloadImageAsset(this.tutorialDemonImage, "demon-image.png");
+    this.tutorialDemonReady = true;
+    await this.preloadImageAsset(this.studioLogoImage, "moofstudiogame.png");
+    this.studioLogoReady = true;
+    return true;
   }
 
   setMode(mode) {
@@ -417,14 +427,34 @@ export class UI {
     this.buttons.push({ ...hit, onClick, disabled, onDenied });
   }
 
+  drawStudioLogo(centerX, centerY, maxWidth, maxHeight, alpha = 1) {
+    if (!this.studioLogoReady || !this.studioLogoImage.naturalWidth) return;
+    const image = this.studioLogoImage;
+    // The source PNG intentionally has generous transparent space. Crop to the
+    // actual logo artwork so it remains readable at menu/UI sizes.
+    const sx = image.naturalWidth * (23 / 1200);
+    const sy = image.naturalHeight * (415 / 1200);
+    const sw = image.naturalWidth * ((1186 - 23) / 1200);
+    const sh = image.naturalHeight * ((784 - 415) / 1200);
+    const scale = Math.min(maxWidth / sw, maxHeight / sh);
+    const dw = sw * scale;
+    const dh = sh * scale;
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.globalAlpha *= alpha;
+    ctx.drawImage(image, sx, sy, sw, sh, centerX - dw / 2, centerY - dh / 2, dw, dh);
+    ctx.restore();
+  }
+
   drawStart(width, height) {
     const mobileLandscape = this.isMobileLandscape();
     const mobile = mobileLandscape || width < 700 || height < 620;
     const buttonCount = 1 + (this.hasSave && !this.developerMode ? 1 : 0) + (this.ngPlusUnlocked && !this.developerMode ? 1 : 0);
     const panelWidth = Math.min(mobileLandscape ? 500 : 560, width - (mobileLandscape ? 18 : 32));
+    const brandExtra = mobileLandscape ? 32 : (mobile ? 46 : 54);
     const panelHeight = mobileLandscape
-      ? 120 + buttonCount * 46 + (this.bestRank && !this.developerMode ? 18 : 0) + (this.developerMode ? 30 : 0)
-      : (mobile ? 214 : 232) + buttonCount * (mobile ? 58 : 60) + (this.bestRank && !this.developerMode ? 24 : 0) + (this.developerMode ? 48 : 0);
+      ? 120 + brandExtra + buttonCount * 46 + (this.bestRank && !this.developerMode ? 18 : 0) + (this.developerMode ? 30 : 0)
+      : (mobile ? 214 : 232) + brandExtra + buttonCount * (mobile ? 58 : 60) + (this.bestRank && !this.developerMode ? 24 : 0) + (this.developerMode ? 48 : 0);
     const x = (width - panelWidth) / 2;
     const y = (height - panelHeight) / 2;
     this.panel(x, y, panelWidth, panelHeight, C.panel, 14);
@@ -435,22 +465,33 @@ export class UI {
     ctx.font = this.font(mobileLandscape ? 34 : (mobile ? 39 : 54));
     ctx.shadowColor = "rgba(255,80,24,.7)";
     ctx.shadowBlur = 12;
-    ctx.fillText("HELLGATE MANOR", width / 2, y + (mobileLandscape ? 42 : (mobile ? 56 : 68)));
+    const titleY = y + (mobileLandscape ? 38 : (mobile ? 51 : 60));
+    ctx.fillText("HELLGATE MANOR", width / 2, titleY);
     ctx.shadowBlur = 0;
+
+    const logoCenterY = titleY + (mobileLandscape ? 24 : (mobile ? 31 : 38));
+    this.drawStudioLogo(
+      width / 2,
+      logoCenterY,
+      mobileLandscape ? 150 : (mobile ? 185 : 218),
+      mobileLandscape ? 42 : (mobile ? 50 : 58)
+    );
+
     ctx.fillStyle = C.muted;
     ctx.font = this.dataFont(mobileLandscape ? 9 : (mobile ? 11 : 14), 800);
-    ctx.fillText("DEFEND THE MANOR.", width / 2, y + (mobileLandscape ? 63 : (mobile ? 85 : 103)));
+    const taglineY = logoCenterY + (mobileLandscape ? 31 : (mobile ? 39 : 45));
+    ctx.fillText("DEFEND THE MANOR.", width / 2, taglineY);
 
     if (this.bestRank && !this.developerMode) {
       ctx.fillStyle = C.orangeLight;
       ctx.font = this.dataFont(mobileLandscape ? 8 : (mobile ? 10 : 12), 900);
-      ctx.fillText(`BEST RANK  ${this.bestRank}`, width / 2, y + (mobileLandscape ? 80 : (mobile ? 108 : 126)));
+      ctx.fillText(`BEST RANK  ${this.bestRank}`, width / 2, taglineY + (mobileLandscape ? 17 : 23));
     }
 
     const buttonHeight = mobileLandscape ? 38 : 50;
-    let buttonY = y + (this.bestRank && !this.developerMode
-      ? (mobileLandscape ? 91 : (mobile ? 126 : 148))
-      : (mobileLandscape ? 75 : (mobile ? 110 : 132)));
+    let buttonY = taglineY + (this.bestRank && !this.developerMode
+      ? (mobileLandscape ? 27 : (mobile ? 38 : 43))
+      : (mobileLandscape ? 14 : (mobile ? 22 : 27)));
     this.button("NEW GAME", width / 2 - 105, buttonY, 210, buttonHeight, () => this.callbacks.onNewGame?.());
     buttonY += buttonHeight + (mobileLandscape ? 7 : 10);
 
@@ -731,22 +772,47 @@ export class UI {
   }
 
   drawPaused(width, height) {
+    const mobileLandscape = this.isMobileLandscape();
+    const mobile = mobileLandscape || width < 700 || height < 620;
     const ctx = this.ctx;
     ctx.fillStyle = "rgba(0,0,0,.68)";
     ctx.fillRect(0, 0, width, height);
-    const panelWidth = Math.min(430, width - 30);
-    const panelHeight = 210;
+    const panelWidth = Math.min(mobileLandscape ? 390 : 430, width - (mobileLandscape ? 18 : 30));
+    const panelHeight = mobileLandscape ? Math.min(250, height - 18) : (mobile ? 260 : 285);
     const x = (width - panelWidth) / 2;
     const y = (height - panelHeight) / 2;
     this.panel(x, y, panelWidth, panelHeight, C.panel, 13);
+
     ctx.textAlign = "center";
     ctx.fillStyle = C.text;
-    ctx.font = this.font(Math.min(46, width * 0.08));
-    ctx.fillText("PAUSED", width / 2, y + 72);
+    ctx.font = this.font(mobileLandscape ? 27 : Math.min(40, width * 0.065));
+    ctx.shadowColor = "rgba(255,80,24,.55)";
+    ctx.shadowBlur = 9;
+    ctx.fillText("HELLGATE MANOR", width / 2, y + (mobileLandscape ? 36 : 48));
+    ctx.shadowBlur = 0;
+    this.drawStudioLogo(
+      width / 2,
+      y + (mobileLandscape ? 62 : 82),
+      mobileLandscape ? 145 : 185,
+      mobileLandscape ? 38 : 48
+    );
+
+    ctx.fillStyle = C.orangeLight;
+    ctx.font = this.font(mobileLandscape ? 25 : 32);
+    ctx.fillText("PAUSED", width / 2, y + (mobileLandscape ? 106 : 132));
     ctx.fillStyle = C.muted;
-    ctx.font = this.dataFont(11, 800);
-    ctx.fillText("ESC OR RESUME TO RETURN", width / 2, y + 102);
-    this.button("RESUME", width / 2 - 105, y + 126, 210, 50, () => this.callbacks.onPause?.());
+    ctx.font = this.dataFont(mobileLandscape ? 8 : 11, 800);
+    ctx.fillText(mobileLandscape ? "TAP RESUME TO RETURN" : "ESC OR RESUME TO RETURN", width / 2, y + (mobileLandscape ? 124 : 155));
+
+    const buttonHeight = mobileLandscape ? 40 : 50;
+    this.button(
+      "RESUME",
+      width / 2 - 105,
+      y + panelHeight - buttonHeight - (mobileLandscape ? 18 : 24),
+      210,
+      buttonHeight,
+      () => this.callbacks.onPause?.()
+    );
   }
 
   drawBanner(width, height) {
@@ -1427,7 +1493,7 @@ export class UI {
     ctx.fillText("DEVELOPER TEST", width / 2, y + 52);
     ctx.fillStyle = C.muted;
     ctx.font = this.dataFont(10, 850);
-    ctx.fillText("CTRL + SHIFT + D OR ESC TO CLOSE — TEST MODE DOES NOT SAVE", width / 2, y + 77);
+    ctx.fillText("ESC TO CLOSE — TEST MODE DOES NOT SAVE", width / 2, y + 77);
 
     const waveY = y + 100;
     ctx.fillStyle = C.text;

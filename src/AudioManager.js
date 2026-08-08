@@ -9,6 +9,7 @@ const DEFAULT_LIMITS = Object.freeze({
   click: 2,
   deniedPurchase: 1,
   gameOver: 1,
+  endgameBang: 1,
   purchase: 2,
   soulBling: 3,
   soulCollect: 5,
@@ -25,6 +26,7 @@ const DEFAULT_COOLDOWNS = Object.freeze({
   click: 0.025,
   deniedPurchase: 0.12,
   gameOver: 0.2,
+  endgameBang: 0.5,
   purchase: 0.08,
   soulBling: 0.08,
   soulCollect: 0.035,
@@ -131,6 +133,10 @@ export class AudioManager {
     for (const key of this.buffers.keys()) {
       this.prime(key, { music: musicKeys.has(key) });
     }
+  }
+
+  getDuration(key) {
+    return Math.max(0, this.buffers.get(key)?.duration ?? 0);
   }
 
   play(key, {
