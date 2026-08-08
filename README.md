@@ -265,3 +265,9 @@ The GitHub Action builds `main`, copies `assets/`, `fonts/`, and `sounds/` into 
 - NEW GAME+ resets the run but acts as hard mode: about 25% more enemies, earlier enemy-type introductions, up to 30 active demons, faster movement, stronger/faster manor attacks and a small Soul reward increase.
 - NEW GAME+ has a much stronger Hell Gate, dark red sky glow, and a large field of animated floating embers across the scene.
 - Developer panel can toggle NEW GAME+ visuals/difficulty and TEST ENDING now runs the complete ending/ranking sequence without touching the normal save.
+
+
+## v1.6.1 ranking / Hell Mode label polish
+
+- S rank now requires 14 total category stars rather than a rounded 4.67 average. This means 5 + 5 + 4 stars correctly earns S.
+- New Game+ is now labelled `NEW GAME+ (HELL MODE)` in the main/end menus, with the in-game NG+ HUD tag simplified to `HELL MODE`.

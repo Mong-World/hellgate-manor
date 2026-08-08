@@ -677,11 +677,14 @@ export class Game {
         : bindingRatio >= 0.60 ? 3
           : bindingRatio >= 0.40 ? 2 : 1;
 
-    const average = (survivalStars + defenceStars + bindingStars) / 3;
-    const finalRank = average >= 4.67 ? "S"
-      : average >= 4.0 ? "A"
-        : average >= 3.0 ? "B"
-          : average >= 2.0 ? "C" : "D";
+    const totalStars = survivalStars + defenceStars + bindingStars;
+    const average = totalStars / 3;
+    // 14/15 stars earns S, so two perfect categories plus one 4-star
+    // category still receives the top rank.
+    const finalRank = totalStars >= 14 ? "S"
+      : totalStars >= 12 ? "A"
+        : totalStars >= 9 ? "B"
+          : totalStars >= 6 ? "C" : "D";
 
     return {
       newGamePlus: this.newGamePlus,

@@ -331,11 +331,8 @@ export class UI {
     }
 
     if (this.ngPlusUnlocked && !this.developerMode) {
-      this.button("NEW GAME+", width / 2 - 105, buttonY, 210, buttonHeight, () => this.callbacks.onNewGamePlus?.(), false, null, C.red);
+      this.button("NEW GAME+ (HELL MODE)", width / 2 - 130, buttonY, 260, buttonHeight, () => this.callbacks.onNewGamePlus?.(), false, null, C.red);
       buttonY += buttonHeight + 10;
-      ctx.fillStyle = "rgba(239,81,78,.86)";
-      ctx.font = this.dataFont(mobile ? 9 : 10, 900);
-      ctx.fillText("HARD MODE", width / 2, buttonY + 3);
     }
 
     if (this.developerMode) {
@@ -367,7 +364,7 @@ export class UI {
     if (this.newGamePlus) {
       ctx.fillStyle = C.red;
       ctx.font = this.dataFont(compact ? 8 : 9, 900);
-      ctx.fillText("NEW GAME+", leftX + leftWidth - (compact ? 62 : 74), y + 18);
+      ctx.fillText("HELL MODE", leftX + leftWidth - (compact ? 58 : 68), y + 18);
     }
     ctx.fillStyle = C.text;
     ctx.font = this.dataFont(compact ? 10 : 11, 840);
@@ -1130,7 +1127,7 @@ export class UI {
     ctx.textAlign = "center";
     ctx.fillStyle = data.newGamePlus ? C.red : C.orangeLight;
     ctx.font = this.font(mobile ? 28 : 34);
-    ctx.fillText(data.newGamePlus ? "NEW GAME+ COMPLETE" : "FINAL REPORT", width / 2, y + 44);
+    ctx.fillText(data.newGamePlus ? "HELL MODE COMPLETE" : "FINAL REPORT", width / 2, y + 44);
 
     const rows = [
       ["SURVIVAL", data.survival, 14.1],
@@ -1178,11 +1175,11 @@ export class UI {
       const buttonY = y + panelHeight + 10;
       const availableBelow = height - buttonY;
       if (availableBelow >= 54) {
-        this.button("NEW GAME", width / 2 - 222, buttonY, 205, 46, () => this.callbacks.onRestart?.());
-        this.button("NEW GAME+", width / 2 + 17, buttonY, 205, 46, () => this.callbacks.onNewGamePlus?.(), false, null, C.red);
+        this.button("NEW GAME", width / 2 - 252, buttonY, 205, 46, () => this.callbacks.onRestart?.());
+        this.button("NEW GAME+ (HELL MODE)", width / 2 - 27, buttonY, 280, 46, () => this.callbacks.onNewGamePlus?.(), false, null, C.red);
       } else {
-        this.button("NEW GAME", width / 2 - 210, y + panelHeight - 46, 190, 40, () => this.callbacks.onRestart?.());
-        this.button("NEW GAME+", width / 2 + 20, y + panelHeight - 46, 190, 40, () => this.callbacks.onNewGamePlus?.(), false, null, C.red);
+        this.button("NEW GAME", width / 2 - 240, y + panelHeight - 46, 190, 40, () => this.callbacks.onRestart?.());
+        this.button("NEW GAME+ (HELL MODE)", width / 2 - 30, y + panelHeight - 46, 270, 40, () => this.callbacks.onNewGamePlus?.(), false, null, C.red);
       }
     }
   }
