@@ -450,11 +450,25 @@ export class UI {
     const mobileLandscape = this.isMobileLandscape();
     const mobile = mobileLandscape || width < 700 || height < 620;
     const buttonCount = 1 + (this.hasSave && !this.developerMode ? 1 : 0) + (this.ngPlusUnlocked && !this.developerMode ? 1 : 0);
-    const panelWidth = Math.min(mobileLandscape ? 500 : 560, width - (mobileLandscape ? 18 : 32));
-    const brandExtra = mobileLandscape ? 23 : (mobile ? 31 : 36);
-    const panelHeight = mobileLandscape
-      ? 120 + brandExtra + buttonCount * 46 + (this.bestRank && !this.developerMode ? 18 : 0) + (this.developerMode ? 30 : 0)
-      : (mobile ? 214 : 232) + brandExtra + buttonCount * (mobile ? 58 : 60) + (this.bestRank && !this.developerMode ? 24 : 0) + (this.developerMode ? 48 : 0);
+
+    // Keep the start menu tightly wrapped around its content. Earlier builds
+    // reserved far more vertical space than the branding/buttons actually
+    // needed, which made the whole lock-up look pinned to the top of a large
+    // empty panel on desktop.
+    const panelWidth = Math.min(
+      mobileLandscape ? 470 : (mobile ? 500 : 520),
+      width - (mobileLandscape ? 18 : 32)
+    );
+    const buttonHeight = mobileLandscape ? 38 : (mobile ? 46 : 50);
+    const buttonGap = mobileLandscape ? 7 : 10;
+    const topBlockHeight = mobileLandscape ? 103 : (mobile ? 128 : 137);
+    const bestRankExtra = this.bestRank && !this.developerMode ? (mobileLandscape ? 18 : 23) : 0;
+    const developerExtra = this.developerMode ? (mobileLandscape ? 27 : 36) : 0;
+    const bottomPadding = mobileLandscape ? 15 : 24;
+    const panelHeight = topBlockHeight + bestRankExtra +
+      buttonCount * buttonHeight + Math.max(0, buttonCount - 1) * buttonGap +
+      bottomPadding + developerExtra;
+
     const x = (width - panelWidth) / 2;
     const y = (height - panelHeight) / 2;
     this.panel(x, y, panelWidth, panelHeight, C.panel, 14);
@@ -462,56 +476,56 @@ export class UI {
     const ctx = this.ctx;
     ctx.textAlign = "center";
     ctx.fillStyle = C.text;
-    ctx.font = this.font(mobileLandscape ? 34 : (mobile ? 39 : 54));
+    ctx.font = this.font(mobileLandscape ? 32 : (mobile ? 38 : 50));
     ctx.shadowColor = "rgba(255,80,24,.7)";
     ctx.shadowBlur = 12;
-    const titleY = y + (mobileLandscape ? 38 : (mobile ? 51 : 60));
+    const titleY = y + (mobileLandscape ? 32 : (mobile ? 43 : 48));
     ctx.fillText("HELLGATE MANOR", width / 2, titleY);
     ctx.shadowBlur = 0;
 
-    // Keep the studio credit subordinate to the game title, like a production
-    // credit rather than a second logo lock-up.
-    const logoCenterY = titleY + (mobileLandscape ? 19 : (mobile ? 25 : 29));
+    // Small production credit immediately beneath the title.
+    const logoCenterY = titleY + (mobileLandscape ? 18 : (mobile ? 23 : 27));
     this.drawStudioLogo(
       width / 2,
       logoCenterY,
-      mobileLandscape ? 92 : (mobile ? 112 : 132),
-      mobileLandscape ? 25 : (mobile ? 31 : 36)
+      mobileLandscape ? 88 : (mobile ? 106 : 122),
+      mobileLandscape ? 24 : (mobile ? 29 : 33)
     );
 
     ctx.fillStyle = C.muted;
-    ctx.font = this.dataFont(mobileLandscape ? 9 : (mobile ? 11 : 14), 800);
-    const taglineY = logoCenterY + (mobileLandscape ? 21 : (mobile ? 27 : 31));
+    ctx.font = this.dataFont(mobileLandscape ? 9 : (mobile ? 11 : 13), 800);
+    const taglineY = logoCenterY + (mobileLandscape ? 20 : (mobile ? 25 : 28));
     ctx.fillText("DEFEND THE MANOR.", width / 2, taglineY);
 
+    let contentY = taglineY;
     if (this.bestRank && !this.developerMode) {
       ctx.fillStyle = C.orangeLight;
       ctx.font = this.dataFont(mobileLandscape ? 8 : (mobile ? 10 : 12), 900);
-      ctx.fillText(`BEST RANK  ${this.bestRank}`, width / 2, taglineY + (mobileLandscape ? 17 : 23));
+      contentY += mobileLandscape ? 16 : 21;
+      ctx.fillText(`BEST RANK  ${this.bestRank}`, width / 2, contentY);
     }
 
-    const buttonHeight = mobileLandscape ? 38 : 50;
-    let buttonY = taglineY + (this.bestRank && !this.developerMode
-      ? (mobileLandscape ? 27 : (mobile ? 38 : 43))
-      : (mobileLandscape ? 14 : (mobile ? 22 : 27)));
+    // Start the buttons directly below the branding block instead of leaving
+    // a large dead area in the panel.
+    let buttonY = contentY + (mobileLandscape ? 12 : (mobile ? 18 : 21));
     this.button("NEW GAME", width / 2 - 105, buttonY, 210, buttonHeight, () => this.callbacks.onNewGame?.());
-    buttonY += buttonHeight + (mobileLandscape ? 7 : 10);
+    buttonY += buttonHeight + buttonGap;
 
     if (this.hasSave && !this.developerMode) {
       this.button("CONTINUE", width / 2 - 105, buttonY, 210, buttonHeight, () => this.callbacks.onContinueSave?.());
-      buttonY += buttonHeight + (mobileLandscape ? 7 : 10);
+      buttonY += buttonHeight + buttonGap;
     }
 
     if (this.ngPlusUnlocked && !this.developerMode) {
       this.button("NEW GAME+ (HELL MODE)", width / 2 - 130, buttonY, 260, buttonHeight, () => this.callbacks.onNewGamePlus?.(), false, null, C.red);
-      buttonY += buttonHeight + (mobileLandscape ? 7 : 10);
+      buttonY += buttonHeight + buttonGap;
     }
 
     if (this.developerMode) {
       ctx.fillStyle = C.purple;
       ctx.font = this.dataFont(mobile ? 10 : 12, 900);
       const modeText = this.developerShop ? "SHOP TEST" : "WAVE TEST";
-      ctx.fillText(`DEVELOPER TEST — ${modeText} ${this.developerWave}`, width / 2, y + panelHeight - 22);
+      ctx.fillText(`DEVELOPER TEST — ${modeText} ${this.developerWave}`, width / 2, y + panelHeight - (mobileLandscape ? 12 : 16));
     }
   }
 
@@ -779,38 +793,48 @@ export class UI {
     const ctx = this.ctx;
     ctx.fillStyle = "rgba(0,0,0,.68)";
     ctx.fillRect(0, 0, width, height);
-    const panelWidth = Math.min(mobileLandscape ? 390 : 430, width - (mobileLandscape ? 18 : 30));
-    const panelHeight = mobileLandscape ? Math.min(250, height - 18) : (mobile ? 260 : 285);
+
+    // Compact pause card: the branding, pause label and button are treated as
+    // one centred block so there is no oversized empty lower half.
+    const panelWidth = Math.min(mobileLandscape ? 360 : (mobile ? 390 : 405), width - (mobileLandscape ? 18 : 30));
+    const panelHeight = mobileLandscape ? Math.min(180, height - 18) : (mobile ? 205 : 215);
     const x = (width - panelWidth) / 2;
     const y = (height - panelHeight) / 2;
     this.panel(x, y, panelWidth, panelHeight, C.panel, 13);
 
     ctx.textAlign = "center";
     ctx.fillStyle = C.text;
-    ctx.font = this.font(mobileLandscape ? 27 : Math.min(40, width * 0.065));
+    ctx.font = this.font(mobileLandscape ? 25 : (mobile ? 31 : 36));
     ctx.shadowColor = "rgba(255,80,24,.55)";
     ctx.shadowBlur = 9;
-    ctx.fillText("HELLGATE MANOR", width / 2, y + (mobileLandscape ? 36 : 48));
+    const titleY = y + (mobileLandscape ? 31 : (mobile ? 38 : 41));
+    ctx.fillText("HELLGATE MANOR", width / 2, titleY);
     ctx.shadowBlur = 0;
+
+    const logoCenterY = titleY + (mobileLandscape ? 17 : 22);
     this.drawStudioLogo(
       width / 2,
-      y + (mobileLandscape ? 54 : 70),
-      mobileLandscape ? 86 : 112,
-      mobileLandscape ? 24 : 31
+      logoCenterY,
+      mobileLandscape ? 82 : (mobile ? 98 : 106),
+      mobileLandscape ? 23 : (mobile ? 27 : 29)
     );
 
     ctx.fillStyle = C.orangeLight;
-    ctx.font = this.font(mobileLandscape ? 25 : 32);
-    ctx.fillText("PAUSED", width / 2, y + (mobileLandscape ? 91 : 113));
-    ctx.fillStyle = C.muted;
-    ctx.font = this.dataFont(mobileLandscape ? 8 : 11, 800);
-    ctx.fillText(mobileLandscape ? "TAP RESUME TO RETURN" : "ESC OR RESUME TO RETURN", width / 2, y + (mobileLandscape ? 110 : 137));
+    ctx.font = this.font(mobileLandscape ? 23 : (mobile ? 27 : 30));
+    const pausedY = logoCenterY + (mobileLandscape ? 35 : 43);
+    ctx.fillText("PAUSED", width / 2, pausedY);
 
-    const buttonHeight = mobileLandscape ? 40 : 50;
+    ctx.fillStyle = C.muted;
+    ctx.font = this.dataFont(mobileLandscape ? 8 : 10, 800);
+    const helpY = pausedY + (mobileLandscape ? 18 : 22);
+    ctx.fillText(mobileLandscape ? "TAP RESUME TO RETURN" : "ESC OR RESUME TO RETURN", width / 2, helpY);
+
+    const buttonHeight = mobileLandscape ? 38 : (mobile ? 44 : 48);
+    const buttonY = y + panelHeight - buttonHeight - (mobileLandscape ? 14 : 18);
     this.button(
       "RESUME",
       width / 2 - 105,
-      y + panelHeight - buttonHeight - (mobileLandscape ? 18 : 24),
+      buttonY,
       210,
       buttonHeight,
       () => this.callbacks.onPause?.()

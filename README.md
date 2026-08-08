@@ -319,4 +319,9 @@ The GitHub Action builds `main`, copies `assets/`, `fonts/`, and `sounds/` into 
 - The upgrade screen now shows current **MANOR HP / MAX HP** alongside Souls, so repair purchases can be judged before spending Souls.
 - Manor HP is visible on desktop and in the compact landscape-mobile upgrade header.
 - The HP value changes colour as the manor becomes damaged, while the existing repair buttons still disable at full health.
-- Protected developer access is now opened with `Ctrl + Shift + J`; password verification remains required and the password itself is still not stored as plaintext in the source.
+- Protected developer access is now opened with `Ctrl + Shift + D`; password verification remains required and the password itself is still not stored as plaintext in the source.
+
+
+## v1.8.3
+- Tightened and vertically balanced the Start and Pause panels to remove excess empty space.
+- Developer access shortcut: Ctrl + Shift + D (password still required).
