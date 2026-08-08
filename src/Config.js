@@ -1,83 +1,81 @@
+function round10(value) {
+  return Math.max(10, Math.round(value / 10) * 10);
+}
+
 function makeWave(wave) {
-  if (wave === 1) {
-    return {
-      counts: { husk: 10, strong: 0, runner: 0, brute: 0, siege: 0 },
-      maxActive: 25,
-      initialDelay: 7,
-      spawnGap: 3.5,
-      burstChance: 0,
-      burstMax: 1
-    };
+  const early = {
+    1: { total: 12, initialDelay: 7.0, spawnGap: 3.25, burstChance: 0.00, burstMax: 1 },
+    2: { total: 18, initialDelay: 4.5, spawnGap: 2.45, burstChance: 0.20, burstMax: 2 },
+    3: { total: 24, initialDelay: 3.8, spawnGap: 1.95, burstChance: 0.32, burstMax: 2 },
+    4: { total: 30, initialDelay: 3.2, spawnGap: 1.55, burstChance: 0.45, burstMax: 2 },
+    5: { total: 36, initialDelay: 2.8, spawnGap: 1.30, burstChance: 0.56, burstMax: 3 }
+  }[wave];
+
+  let total;
+  if (early) total = early.total;
+  else if (wave <= 9) total = 40 + (wave - 6) * 5;
+  else if (wave <= 14) total = 58 + (wave - 10) * 5;
+  else if (wave <= 19) total = 82 + (wave - 15) * 6;
+  else if (wave <= 24) total = 112 + (wave - 20) * 8;
+  else if (wave <= 29) total = 150 + (wave - 25) * 9;
+  else if (wave <= 34) total = 195 + (wave - 30) * 10;
+  else if (wave <= 39) total = 245 + (wave - 35) * 11;
+  else if (wave <= 44) total = 300 + (wave - 40) * 13;
+  else if (wave <= 49) total = 365 + (wave - 45) * 15;
+  else total = 480;
+
+  let runner = 0;
+  let strong = 0;
+  let brute = 0;
+  let siege = 0;
+
+  // Enemy reveals are intentionally spread across the whole campaign.
+  if (wave >= 10) {
+    const ratio = Math.min(0.28, 0.08 + (wave - 10) * 0.008);
+    runner = Math.max(3, Math.round(total * ratio));
+  }
+  if (wave >= 15) {
+    const ratio = Math.min(0.24, 0.07 + (wave - 15) * 0.007);
+    strong = Math.max(3, Math.round(total * ratio));
+  }
+  if (wave >= 25) {
+    const ratio = Math.min(0.12, 0.035 + (wave - 25) * 0.0035);
+    brute = Math.max(2, Math.round(total * ratio));
+  }
+  if (wave >= 35) {
+    const ratio = Math.min(0.032, 0.008 + (wave - 35) * 0.0015);
+    siege = Math.max(1, Math.round(total * ratio));
   }
 
-  if (wave === 2) {
-    return {
-      counts: { husk: 16, strong: 0, runner: 0, brute: 0, siege: 0 },
-      maxActive: 25,
-      initialDelay: 4.2,
-      spawnGap: 2.65,
-      burstChance: 0.18,
-      burstMax: 2
-    };
-  }
+  const husk = Math.max(8, total - runner - strong - brute - siege);
 
-  if (wave === 3) {
-    return {
-      counts: { husk: 20, strong: 0, runner: 0, brute: 0, siege: 0 },
-      maxActive: 25,
-      initialDelay: 3.5,
-      spawnGap: 2.05,
-      burstChance: 0.28,
-      burstMax: 2
-    };
-  }
-
-  if (wave === 4) {
-    return {
-      counts: { husk: 22, strong: 0, runner: 4, brute: 0, siege: 0 },
-      maxActive: 25,
-      initialDelay: 3.0,
-      spawnGap: 1.65,
-      burstChance: 0.38,
-      burstMax: 2
-    };
-  }
-
-  if (wave === 5) {
-    return {
-      counts: { husk: 28, strong: 0, runner: 6, brute: 0, siege: 0 },
-      maxActive: 25,
-      initialDelay: 2.7,
-      spawnGap: 1.30,
-      burstChance: 0.50,
-      burstMax: 3
-    };
-  }
-
-  const husk = Math.round(20 + wave * 1.18);
-  const runner = wave >= 4
-    ? Math.min(22, Math.max(3, Math.floor((wave - 1) * 0.48)))
-    : 0;
-  const strong = wave >= 8
-    ? Math.min(19, Math.max(1, Math.floor((wave - 6) * 0.42)))
-    : 0;
-  const brute = wave >= 12
-    ? Math.min(10, Math.max(1, Math.floor((wave - 10) * 0.21)))
-    : 0;
-  const siege = wave >= 25
-    ? Math.min(4, 1 + Math.floor((wave - 25) / 9) + (wave >= 46 ? 1 : 0))
-    : 0;
+  const pacing = early ?? {
+    initialDelay: wave < 10 ? 2.4 : wave < 20 ? 2.0 : 1.55,
+    spawnGap:
+      wave < 10 ? Math.max(0.95, 1.25 - (wave - 6) * 0.05) :
+      wave < 20 ? 0.90 :
+      wave < 30 ? 0.84 :
+      wave < 40 ? 0.78 : 0.72,
+    burstChance:
+      wave < 10 ? 0.58 :
+      wave < 20 ? 0.66 :
+      wave < 30 ? 0.72 : 0.78,
+    burstMax:
+      wave < 10 ? 3 :
+      wave < 20 ? 4 :
+      wave < 30 ? 5 :
+      wave < 40 ? 6 : 7
+  };
 
   return {
     counts: { husk, strong, runner, brute, siege },
+    total,
     maxActive: 25,
-    initialDelay: wave <= 8 ? 2.4 : 1.8,
-    spawnGap: Math.max(0.58, 1.25 - (wave - 6) * 0.014),
-    burstChance: Math.min(0.78, 0.50 + (wave - 6) * 0.007),
-    burstMax:
-      wave < 10 ? 3 :
-      wave < 18 ? 4 :
-      wave < 30 ? 5 : 6
+    initialDelay: pacing.initialDelay,
+    spawnGap: pacing.spawnGap,
+    burstChance: pacing.burstChance,
+    burstMax: pacing.burstMax,
+    huskPaceVariation: wave >= 4
   };
 }
 
@@ -89,7 +87,8 @@ export const CONFIG = Object.freeze({
     runner: "./assets/running-crawl.glb",
     brute: "./assets/slow-walk.glb",
     siege: "./assets/skinny-monster.glb",
-    manor: "./assets/manor.glb"
+    manor: "./assets/manor.glb",
+    shed: "./assets/shed.glb"
   },
 
   sounds: {
@@ -103,7 +102,10 @@ export const CONFIG = Object.freeze({
     click: "./assets/click-sound.mp3",
     deniedPurchase: "./sounds/denied-purchase-sound.mp3",
     gameOver: "./sounds/game-over-sound.mp3",
+    newDawn: "./assets/newdawnmusic.mp3",
     purchase: "./sounds/purchasesound.mp3",
+    soulBinding: "./assets/soulmusic.mp3",
+    soulBling: "./assets/soulbling.mp3",
     soulCollect: "./sounds/soulcollectsound.mp3",
     waveStart: "./sounds/wave-start-sound.MP3",
     whoosh: "./sounds/whoosh.mp3"
@@ -118,27 +120,38 @@ export const CONFIG = Object.freeze({
   manor: {
     startHealth: 1000,
     maxHealth: 1000,
+    maxFortifyLevel: 40,
     repairs: {
       minor: { cost: 20, amount: 50 },
       major: { cost: 80, amount: 250 },
       full: { cost: 330, amount: 1000 }
     },
-    fortify: { cost: 130, amount: 100 },
-    majorFortify: { cost: 1250, amount: 1000 }
+    fortify: { baseCost: 130, amount: 100 },
+    majorFortify: { baseCost: 2500, amount: 1000, levels: 10 }
   },
 
   buildings: {
-    extraction: { cost: 830, label: "SOUL EXTRACTION" },
-    hellfire: { cost: 1330, label: "HELLFIRE BATTERY" },
-    demolition: { cost: 2500, label: "HELL BOMB FORGE" },
-    undercroft: { cost: 4200, label: "UNDERCROFT" },
-    occult: { cost: 6700, label: "OCCULT TOWER" }
+    extraction: { cost: 900, label: "SOUL EXTRACTION", unlockWave: 4 },
+    extractionUpgrade2: { cost: 2600, label: "SOUL EXTRACTION II" },
+    extractionUpgrade3: { cost: 6500, label: "SOUL EXTRACTION III" },
+    hellfire: { cost: 1800, label: "HELLFIRE BATTERY", unlockWave: 8 },
+    demolition: { cost: 4800, label: "HELL BOMB FORGE", unlockWave: 18 },
+    undercroft: { cost: 9000, label: "UNDERCROFT", unlockWave: 28 },
+    occult: { cost: 18000, label: "OCCULT TOWER", unlockWave: 40 }
   },
 
   extraction: {
     duration: 14,
-    maxConcurrent: 2,
+    maxConcurrent: 3,
+    maxLevel: 3,
     radius: 2.35
+  },
+
+  boundCaps: {
+    hellfire: 45,
+    demolition: 45,
+    undercroft: 30,
+    occult: 30
   },
 
   enemyTypes: {
@@ -204,15 +217,15 @@ export const CONFIG = Object.freeze({
     },
     siege: {
       asset: "siege",
-      height: 11.6,
+      height: 14.8,
       rotationY: Math.PI / 2,
-      speed: [1.95, 2.3],
-      animationSpeed: [0.8, 1.0],
+      speed: [1.82, 2.08],
+      animationSpeed: [0.72, 0.9],
       reward: 50,
       attackDamage: 90,
       attackInterval: 6.8,
-      grabBox: [4.8, 9.8, 6.2],
-      grabY: 4.2,
+      grabBox: [5.4, 12.4, 7.0],
+      grabY: 5.3,
       throwScale: 0,
       durability: 5,
       convertible: false,
@@ -231,19 +244,22 @@ export const CONFIG = Object.freeze({
 
   defence: {
     turretMaxLevel: 3,
-    baseFireInterval: 5,
     fireStagger: 1,
-    bombMaxCharges: 3
+    bombMaxCharges: 3,
+    bombSoulsPerCharge: 15,
+    hellfireMaxSouls: 45,
+    occultMaxSouls: 30
   },
 
   pool: {
     husk: 25,
     strong: 19,
     runner: 22,
-    brute: 10,
-    siege: 5,
-    effects: 36
+    brute: 12,
+    siege: 6,
+    effects: 40
   },
 
+  helpers: { round10 },
   waves
 });

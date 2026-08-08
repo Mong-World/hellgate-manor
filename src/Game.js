@@ -9,7 +9,7 @@ import { UI } from "./UI.js";
 import { AudioManager } from "./AudioManager.js";
 import { EffectPool } from "./EffectPool.js";
 
-const SAVE_KEY = "hellgate-manor-save-v2";
+const SAVE_KEY = "hellgate-manor-save-v3";
 
 export class Game {
   constructor(container) {
@@ -87,7 +87,7 @@ export class Game {
     this.boundSouls = 0;
     this.bombs = 0;
     this.fortifyLevel = 0;
-    this.demolitionProgress = 0;
+    this.extractionLevel = 0;
     this.buildings = {
       extraction: false,
       hellfire: false,
@@ -195,8 +195,9 @@ export class Game {
     const allEnemies = this.waveManager.getAllPooledEnemies();
     this.effectPool.preWarm();
     this.defence.preWarm();
-    this.world.setUpgradeState({ extraction: true, demolition: true, undercroft: true, occult: true, fortifyLevel: 10 });
+    this.world.setUpgradeState({ extraction: true, extractionLevel: 3, demolition: true, undercroft: true, occult: true, fortifyLevel: 10 });
     this.world.setTurretLevel(3);
+    this.world.triggerOccultStrike?.(new THREE.Vector3(-3, 0, 0));
 
     // Warm every pooled enemy clone in small visible batches. This is slower at
     // startup by design, but avoids first-spawn GLB/skinning/animation hitches.
@@ -311,7 +312,7 @@ export class Game {
       boundSouls: this.boundSouls,
       bombs: this.bombs,
       fortifyLevel: this.fortifyLevel,
-      demolitionProgress: this.demolitionProgress,
+      extractionLevel: this.extractionLevel,
       buildings: { ...this.buildings },
       assignments: { ...this.assignments }
     };
@@ -321,12 +322,22 @@ export class Game {
     this.waveIndex = THREE.MathUtils.clamp(Number(data.waveIndex) || 0, 0, CONFIG.waves.length - 1);
     this.souls = Math.max(0, Number(data.souls) || 0);
     this.manorHealth = Math.max(1, Number(data.manorHealth) || CONFIG.manor.startHealth);
-    this.manorMaxHealth = Math.max(CONFIG.manor.maxHealth, Number(data.manorMaxHealth) || CONFIG.manor.maxHealth);
+    const absoluteMaxHealth = CONFIG.manor.maxHealth + CONFIG.manor.maxFortifyLevel * CONFIG.manor.fortify.amount;
+    this.manorMaxHealth = THREE.MathUtils.clamp(
+      Number(data.manorMaxHealth) || CONFIG.manor.maxHealth,
+      CONFIG.manor.maxHealth,
+      absoluteMaxHealth
+    );
+    this.manorHealth = Math.min(this.manorHealth, this.manorMaxHealth);
     this.demonDeaths = Math.max(0, Number(data.demonDeaths) || 0);
     this.boundSouls = Math.max(0, Number(data.boundSouls) || 0);
     this.bombs = THREE.MathUtils.clamp(Number(data.bombs) || 0, 0, CONFIG.defence.bombMaxCharges);
-    this.fortifyLevel = Math.max(0, Number(data.fortifyLevel) || 0);
-    this.demolitionProgress = Math.max(0, Number(data.demolitionProgress) || 0);
+    this.fortifyLevel = THREE.MathUtils.clamp(Number(data.fortifyLevel) || 0, 0, CONFIG.manor.maxFortifyLevel);
+    this.extractionLevel = THREE.MathUtils.clamp(
+      Number(data.extractionLevel) || (data.buildings?.extraction ? 1 : 0),
+      0,
+      CONFIG.extraction.maxLevel
+    );
     this.buildings = { ...this.buildings, ...(data.buildings ?? {}) };
     this.assignments = { ...this.assignments, ...(data.assignments ?? {}) };
     this.normaliseAssignments();
@@ -371,6 +382,17 @@ export class Game {
     this.gameplayActive = true;
     this.paused = false;
     this.grabSystem.setEnabled(true);
+
+    // Hell Bombs are wave ammunition, not a stockpile. Every wave starts with
+    // exactly the capacity purchased through Bound Soul assignment. Unused
+    // charges from the previous wave are deliberately discarded.
+    this.bombs = this.buildings.demolition
+      ? Math.min(
+          CONFIG.defence.bombMaxCharges,
+          Math.floor((this.assignments.demolition ?? 0) / CONFIG.defence.bombSoulsPerCharge)
+        )
+      : 0;
+
     this.waveStartSnapshot = this.snapshotState();
     this.waveManager.startWave(this.waveIndex);
     this.defence.resetCooldown();
@@ -390,14 +412,16 @@ export class Game {
   handleRelease({ enemy, velocity }) {
     if (
       this.buildings.extraction &&
+      this.extractionLevel > 0 &&
       enemy.convertible &&
       this.world.isInsideExtractionZone(enemy.position)
     ) {
-      const slot = this.world.startExtractionBeam();
+      const slot = this.world.startExtractionBeam(this.extractionLevel);
       if (slot >= 0 && this.waveManager.captureEnemy(enemy)) {
         this.boundSouls += 1;
         this.ui.pulseBound();
-        this.audio.play("soulCollect", { volume: 0.60, pitchMin: 0.94, pitchMax: 1.08 });
+        this.audio.play("soulBling", { volume: 0.62, pitchMin: 0.98, pitchMax: 1.03 });
+        this.audio.playLoop("soulBinding", "soul-binding", { volume: 0.34, fadeSeconds: 0.25 });
         this.normaliseAssignments();
         this.applyUpgradeState();
         this.syncUI();
@@ -418,23 +442,33 @@ export class Game {
     if (!enemy) return;
     this.souls += enemy.soulValue;
     this.demonDeaths += 1;
+
+    const effectScale = enemy.type === "siege" ? 2.15 : enemy.type === "brute" ? 1.45 : 1;
     const screen = this.projectWorldToScreen(position);
     this.ui.addSoulFlight(screen.x, screen.y, () => {
       this.audio.play("soulCollect", { volume: 0.58, pitchMin: 0.9, pitchMax: 1.12 });
-    });
-    this.effectPool.ash(position, reason === "bomb" || reason === "occult");
+    }, effectScale);
+
+    this.effectPool.ash(
+      position,
+      reason === "bomb" || reason === "occult" || enemy.type === "siege",
+      effectScale
+    );
     this.effectPool.ring(
       position.clone().setY(0.04),
-      impactStrength,
-      reason === "occult" ? 0xa16cff : reason === "bomb" ? 0xff3b12 : 0xff7a34
+      impactStrength * Math.min(effectScale, 1.7),
+      reason === "occult" ? 0xb57cff : reason === "bomb" ? 0xff3b12 : 0xff7a34
     );
 
     this.audio.play("ash", {
-      volume: reason === "bomb" ? 0.42 : 0.58,
-      pitchMin: 0.84,
-      pitchMax: 1.16
+      volume: reason === "bomb" ? 0.42 : enemy.type === "siege" ? 0.70 : 0.58,
+      pitchMin: enemy.type === "siege" ? 0.72 : 0.84,
+      pitchMax: enemy.type === "siege" ? 0.90 : 1.16
     });
-    this.cameraShake = Math.max(this.cameraShake, reason === "bomb" ? 0.3 : 0.18);
+    this.cameraShake = Math.max(
+      this.cameraShake,
+      enemy.type === "siege" ? 0.34 : reason === "bomb" ? 0.3 : 0.18
+    );
     this.syncUI();
   }
 
@@ -481,27 +515,20 @@ export class Game {
     const waveDeaths = Math.max(0, this.demonDeaths - (snapshot.demonDeaths ?? 0));
     const waveDamage = Math.max(0, (snapshot.manorHealth ?? this.manorHealth) - this.manorHealth);
 
-    // Bound-soul systems do their between-wave work before the save/shop opens.
+    // Undercroft is deliberately capped so it remains useful without turning
+    // the manor into an effectively infinite-health economy.
     if (this.buildings.undercroft && this.assignments.undercroft > 0) {
-      const repair = this.assignments.undercroft * 8;
+      const repair = this.assignments.undercroft * 6;
       this.manorHealth = Math.min(this.manorMaxHealth, this.manorHealth + repair);
-    }
-
-    if (this.buildings.demolition && this.assignments.demolition > 0) {
-      const produced = Math.min(
-        CONFIG.defence.bombMaxCharges,
-        Math.floor(this.assignments.demolition / 5)
-      );
-      if (produced > 0) {
-        this.bombs = Math.min(CONFIG.defence.bombMaxCharges, this.bombs + produced);
-      }
-      this.demolitionProgress = 0;
     }
 
     this.syncUI();
     if (this.waveIndex >= CONFIG.waves.length - 1) {
       this.clearSave();
-      this.audio.stopMusic(2.2);
+      this.audio.stopLoop("soul-binding", 0.4);
+      this.audio.stopMusic(1.4);
+      this.audio.playMusic("newDawn", 1.5, false);
+      this.defence.clearForDawn?.();
       this.world.startDawn?.();
       this.ui.setMode("complete");
       return;
@@ -531,20 +558,43 @@ export class Game {
     this.ui.showSaveNotice(saved);
   }
 
+  getFortifyCost() {
+    return CONFIG.helpers.round10(
+      CONFIG.manor.fortify.baseCost * Math.pow(1.18, this.fortifyLevel)
+    );
+  }
+
+  getMajorFortifyCost() {
+    const stages = Math.floor(this.fortifyLevel / CONFIG.manor.majorFortify.levels);
+    return CONFIG.helpers.round10(
+      CONFIG.manor.majorFortify.baseCost * Math.pow(2.15, stages)
+    );
+  }
+
   getPurchaseDefinition(type) {
     const repairs = CONFIG.manor.repairs;
-    return {
+    const definitions = {
       repairMinor: repairs.minor.cost,
       repairMajor: repairs.major.cost,
       repairFull: repairs.full.cost,
-      fortify: CONFIG.manor.fortify.cost,
-      majorFortify: CONFIG.manor.majorFortify.cost,
+      fortify: this.getFortifyCost(),
+      majorFortify: this.getMajorFortifyCost(),
       extraction: CONFIG.buildings.extraction.cost,
+      extractionUpgrade: this.extractionLevel === 1
+        ? CONFIG.buildings.extractionUpgrade2.cost
+        : this.extractionLevel === 2
+          ? CONFIG.buildings.extractionUpgrade3.cost
+          : null,
       hellfire: CONFIG.buildings.hellfire.cost,
       demolition: CONFIG.buildings.demolition.cost,
       undercroft: CONFIG.buildings.undercroft.cost,
       occult: CONFIG.buildings.occult.cost
-    }[type];
+    };
+    return definitions[type];
+  }
+
+  getUnlockWave(type) {
+    return CONFIG.buildings[type]?.unlockWave ?? 1;
   }
 
   purchase(type) {
@@ -553,10 +603,24 @@ export class Game {
     if (cost == null || this.souls < cost) return this.playDeniedPurchase();
 
     if (type.startsWith("repair") && this.manorHealth >= this.manorMaxHealth) return this.playDeniedPurchase();
+    if ((type === "fortify" || type === "majorFortify") && this.fortifyLevel >= CONFIG.manor.maxFortifyLevel) {
+      return this.playDeniedPurchase();
+    }
+    if (type === "majorFortify" && this.fortifyLevel + CONFIG.manor.majorFortify.levels > CONFIG.manor.maxFortifyLevel) {
+      return this.playDeniedPurchase();
+    }
+
+    const buildingType = type === "extractionUpgrade" ? "extraction" : type;
+    if (CONFIG.buildings[buildingType]?.unlockWave && this.waveIndex + 1 < this.getUnlockWave(buildingType)) {
+      return this.playDeniedPurchase();
+    }
     if (["hellfire", "demolition", "undercroft", "occult"].includes(type) && !this.buildings.extraction) {
       return this.playDeniedPurchase();
     }
-    if (this.buildings[type]) return this.playDeniedPurchase();
+    if (type !== "extractionUpgrade" && this.buildings[type]) return this.playDeniedPurchase();
+    if (type === "extractionUpgrade" && (!this.buildings.extraction || this.extractionLevel >= CONFIG.extraction.maxLevel)) {
+      return this.playDeniedPurchase();
+    }
 
     this.souls -= cost;
     if (type === "repairMinor") this.manorHealth = Math.min(this.manorMaxHealth, this.manorHealth + CONFIG.manor.repairs.minor.amount);
@@ -569,7 +633,12 @@ export class Game {
     } else if (type === "majorFortify") {
       this.manorMaxHealth += CONFIG.manor.majorFortify.amount;
       this.manorHealth += CONFIG.manor.majorFortify.amount;
-      this.fortifyLevel += 10;
+      this.fortifyLevel += CONFIG.manor.majorFortify.levels;
+    } else if (type === "extraction") {
+      this.buildings.extraction = true;
+      this.extractionLevel = 1;
+    } else if (type === "extractionUpgrade") {
+      this.extractionLevel = Math.min(CONFIG.extraction.maxLevel, this.extractionLevel + 1);
     } else if (type in this.buildings) {
       this.buildings[type] = true;
     }
@@ -592,7 +661,11 @@ export class Game {
   normaliseAssignments() {
     const keys = Object.keys(this.assignments);
     keys.forEach((key) => {
-      this.assignments[key] = Math.max(0, Math.floor(Number(this.assignments[key]) || 0));
+      const cap = CONFIG.boundCaps[key] ?? Infinity;
+      this.assignments[key] = Math.min(
+        cap,
+        Math.max(0, Math.floor(Number(this.assignments[key]) || 0))
+      );
       if (!this.buildings[key]) this.assignments[key] = 0;
     });
     let assigned = Object.values(this.assignments).reduce((sum, value) => sum + value, 0);
@@ -607,6 +680,8 @@ export class Game {
   assignBoundSoul(system, delta) {
     if (this.ui.mode !== "intermission" || !this.buildings[system]) return;
     if (delta > 0) {
+      const cap = CONFIG.boundCaps[system] ?? Infinity;
+      if ((this.assignments[system] ?? 0) >= cap) return this.playDeniedPurchase();
       if (this.getUnassignedSouls() <= 0) return this.playDeniedPurchase();
       this.assignments[system] += 1;
     } else if (delta < 0) {
@@ -623,6 +698,7 @@ export class Game {
     if (!this.world || !this.defence) return;
     this.world.setUpgradeState({
       extraction: this.buildings.extraction,
+      extractionLevel: this.extractionLevel,
       demolition: this.buildings.demolition,
       undercroft: this.buildings.undercroft,
       occult: this.buildings.occult,
@@ -645,7 +721,12 @@ export class Game {
     this.bombs -= 1;
     this.audio.play("bombExplosion", { volume: 0.78, pitchMin: 0.96, pitchMax: 1.04 });
     targets.forEach((enemy) => {
-      const amount = enemy.type === "siege" ? 2 : enemy.durability;
+      // Bombs erase ordinary crowds, but heavy demons still need the player or
+      // long-term defences. Brutes lose one durability stage; Siege Demons are
+      // merely interrupted/damaged once.
+      const amount = (enemy.type === "brute" || enemy.type === "siege")
+        ? 1
+        : enemy.durability;
       enemy.applyDamage(amount, "bomb", 15);
     });
     this.cameraShake = Math.max(this.cameraShake, 0.42);
@@ -776,8 +857,19 @@ export class Game {
       unassignedSouls: this.getUnassignedSouls(),
       bombs: this.bombs,
       fortifyLevel: this.fortifyLevel,
+      extractionLevel: this.extractionLevel,
       buildings: { ...this.buildings },
-      assignments: { ...this.assignments }
+      assignments: { ...this.assignments },
+      purchaseCosts: {
+        fortify: this.getFortifyCost(),
+        majorFortify: this.getMajorFortifyCost(),
+        extractionUpgrade: this.getPurchaseDefinition("extractionUpgrade")
+      },
+      unlockWaves: Object.fromEntries(
+        Object.entries(CONFIG.buildings)
+          .filter(([, value]) => value.unlockWave)
+          .map(([key, value]) => [key, value.unlockWave])
+      )
     });
   }
 
@@ -823,6 +915,15 @@ export class Game {
     this.defence?.update(simulationActive ? dt : 0, simulationActive);
     this.effectPool?.update(this.paused ? 0 : dt);
     this.world?.update(elapsed, this.paused ? 0 : dt);
+
+    const completedBindings = this.world?.consumeExtractionCompletions?.() ?? 0;
+    for (let i = 0; i < completedBindings; i += 1) {
+      this.audio.play("soulBling", { volume: 0.68, pitchMin: 1.00, pitchMax: 1.05 });
+    }
+
+    if ((this.world?.getActiveExtractionCount?.() ?? 0) <= 0) {
+      this.audio.stopLoop("soul-binding", 0.35);
+    }
     this.updateCamera(dt);
     this.syncUI();
     this.ui.draw();

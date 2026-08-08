@@ -196,9 +196,12 @@ export class World {
     this.extractionGroup = null;
     this.extractionCentre = new THREE.Vector3();
     this.extractionBeams = [];
+    this.extractionCapacity = 0;
+    this.extractionCompletions = 0;
     this.upgradeGroups = {};
     this.fortifyGroups = [];
     this.occultPulseTimer = 0;
+    this.occultStrikes = [];
     this.dawnActive = false;
     this.dawnProgress = 0;
     this.dawnSun = null;
@@ -776,14 +779,15 @@ export class World {
   }
 
   createTurretMounts() {
-    const baseY = Math.min(this.manorBounds.max.y * 0.34, 4.6);
-    const zPositions = [-3.1, -0.25, 2.6];
+    const baseY = Math.min(this.manorBounds.max.y * 0.31, 4.2);
+    const zPositions = [-4.35, -0.15, 4.05];
+    const yOffsets = [0.0, 1.45, 0.45];
 
     for (let i = 0; i < 3; i += 1) {
       const mount = new THREE.Group();
       mount.position.set(
-        this.manorBarrierX + 0.28,
-        baseY + (i === 1 ? 0.05 : 0),
+        this.manorBarrierX + 0.24,
+        baseY + yOffsets[i],
         zPositions[i]
       );
       mount.rotation.y = -Math.PI / 2;
@@ -918,7 +922,7 @@ export class World {
     const roofGlowMaterial = new THREE.MeshBasicMaterial({
       color: 0xffb96e,
       transparent: true,
-      opacity: 0.18,
+      opacity: 0.34,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
       side: THREE.DoubleSide
@@ -933,7 +937,7 @@ export class World {
     const roofHaloMaterial = new THREE.MeshBasicMaterial({
       color: 0xff6b27,
       transparent: true,
-      opacity: 0.20,
+      opacity: 0.30,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
       side: THREE.DoubleSide
@@ -943,15 +947,31 @@ export class World {
     roofHalo.position.y = 0.11;
     extraction.add(roofHalo);
 
-    const extractionLight = new THREE.PointLight(0xffb36a, 34, 17, 1.8);
+    const extractionLight = new THREE.PointLight(0xffb36a, 58, 22, 1.65);
     extractionLight.position.y = 1.7;
     extraction.add(extractionLight);
+
+    // A permanent soft beacon makes the whole roof read as the drop target
+    // even before a binding is active.
+    const idleBeamGeometry = new THREE.CylinderGeometry(1.1, 3.8, 6.8, 32, 1, true);
+    const idleBeamMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffc985,
+      transparent: true,
+      opacity: 0.055,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide
+    });
+    const idleBeam = new THREE.Mesh(idleBeamGeometry, idleBeamMaterial);
+    idleBeam.position.y = 3.5;
+    extraction.add(idleBeam);
 
     this.extractionBeams = [];
     for (let slot = 0; slot < CONFIG.extraction.maxConcurrent; slot += 1) {
       const beamGroup = new THREE.Group();
+      const slotOffsets = [-1.25, 0, 1.25];
       beamGroup.position.copy(
-        this.extractionCentre.clone().add(new THREE.Vector3(slot === 0 ? -0.85 : 0.85, 0, 0))
+        this.extractionCentre.clone().add(new THREE.Vector3(slotOffsets[slot] ?? 0, 0, 0))
       );
       beamGroup.visible = false;
       this.scene.add(beamGroup);
@@ -1027,37 +1047,27 @@ export class World {
       group: extraction,
       roofGlow,
       roofHalo,
+      idleBeam,
       light: extractionLight
     };
 
-    // Demolition: a compact infernal storage/furnace accent beside the manor.
+    // Hell Bomb Forge: user-supplied shed model in the same position as the
+    // old placeholder box, rotated 90 degrees clockwise from a camera-facing
+    // source orientation.
     const demolition = new THREE.Group();
     demolition.position.set(this.manorBarrierX + 0.4, 0, 4.8);
     demolition.visible = false;
     this.scene.add(demolition);
-    const demoBaseGeometry = new THREE.BoxGeometry(1.5, 0.8, 1.0);
-    const demoBaseMaterial = new THREE.MeshStandardMaterial({
-      color: 0x231417,
-      roughness: 0.72,
-      metalness: 0.35,
-      emissive: 0x4a0505,
-      emissiveIntensity: 0.7
-    });
-    const demoBase = new THREE.Mesh(demoBaseGeometry, demoBaseMaterial);
-    demoBase.position.y = 0.4;
-    demolition.add(demoBase);
-    const demoCoreGeometry = new THREE.IcosahedronGeometry(0.25, 1);
-    const demoCoreMaterial = new THREE.MeshBasicMaterial({
-      color: 0xff3131,
-      blending: THREE.AdditiveBlending,
-      transparent: true,
-      opacity: 0.8,
-      depthWrite: false
-    });
-    const demoCore = new THREE.Mesh(demoCoreGeometry, demoCoreMaterial);
-    demoCore.position.set(-0.25, 1.02, 0);
-    demolition.add(demoCore);
-    this.upgradeGroups.demolition = { group: demolition, core: demoCore };
+
+    const shed = this.assets.createShedClone();
+    AssetLibrary.prepareModel(shed);
+    AssetLibrary.fitModelToHeight(shed, 2.45, -Math.PI / 2);
+    demolition.add(shed);
+
+    const shedGlow = new THREE.PointLight(0xff3e26, 9, 5.5, 2);
+    shedGlow.position.set(0, 1.15, 0);
+    demolition.add(shedGlow);
+    this.upgradeGroups.demolition = { group: demolition, shed, light: shedGlow };
 
     // Undercroft: visible amber braces and repair framework around the manor base.
     const undercroft = new THREE.Group();
@@ -1103,6 +1113,36 @@ export class World {
     occult.add(occultRingB);
     this.upgradeGroups.occult = { group: occult, orb: occultOrb, ringA: occultRingA, ringB: occultRingB };
 
+    // Pooled purple ground-fire strikes. These are deliberately flames rather
+    // than circles so the Occult system is obvious in motion.
+    this.occultStrikes = [];
+    for (let strikeIndex = 0; strikeIndex < 8; strikeIndex += 1) {
+      const group = new THREE.Group();
+      group.visible = false;
+      this.scene.add(group);
+      const flames = [];
+      for (let i = 0; i < 6; i += 1) {
+        const geometry = new THREE.ConeGeometry(0.22 + (i % 3) * 0.05, 0.9 + (i % 2) * 0.45, 8);
+        const material = new THREE.MeshBasicMaterial({
+          color: i % 2 ? 0xd4a6ff : 0x9c5cff,
+          transparent: true,
+          opacity: 0,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false
+        });
+        const flame = new THREE.Mesh(geometry, material);
+        const angle = (i / 6) * Math.PI * 2;
+        flame.position.set(Math.cos(angle) * 0.42, 0.45, Math.sin(angle) * 0.42);
+        group.add(flame);
+        flames.push(flame);
+        this.disposables.push(geometry, material);
+      }
+      const light = new THREE.PointLight(0xb16cff, 0, 7, 1.8);
+      light.position.y = 0.9;
+      group.add(light);
+      this.occultStrikes.push({ group, flames, light, timer: 0, active: false, phase: strikeIndex * 0.9 });
+    }
+
     // Fortification stages: simple readable additions that accumulate around the manor.
     const fortifyStage1 = new THREE.Group();
     const stakeGeometry = new THREE.ConeGeometry(0.12, 0.75, 6);
@@ -1147,14 +1187,15 @@ export class World {
 
     this.disposables.push(
       roofGlowGeometry, roofGlowMaterial, roofHaloGeometry, roofHaloMaterial,
-      demoBaseGeometry, demoBaseMaterial, demoCoreGeometry, demoCoreMaterial,
+      idleBeamGeometry, idleBeamMaterial,
       braceGeometry, braceMaterial, occultOrbGeometry, occultOrbMaterial,
       occultRingGeometry, occultRingMaterial, occultRingB.material,
       stakeGeometry, beamGeometry, wardGeometry, wardMaterial
     );
   }
 
-  setUpgradeState({ extraction = false, demolition = false, undercroft = false, occult = false, fortifyLevel = 0 } = {}) {
+  setUpgradeState({ extraction = false, extractionLevel = 0, demolition = false, undercroft = false, occult = false, fortifyLevel = 0 } = {}) {
+    this.extractionCapacity = extraction ? THREE.MathUtils.clamp(extractionLevel || 1, 1, CONFIG.extraction.maxLevel) : 0;
     if (this.upgradeGroups.extraction) this.upgradeGroups.extraction.group.visible = extraction;
     if (!extraction) {
       this.extractionBeams.forEach((slot) => {
@@ -1183,13 +1224,14 @@ export class World {
     );
   }
 
-  getAvailableExtractionSlot() {
-    return this.extractionBeams.findIndex((slot) => !slot.active);
+  getAvailableExtractionSlot(capacity = this.extractionCapacity) {
+    const limit = THREE.MathUtils.clamp(capacity || 1, 1, CONFIG.extraction.maxLevel);
+    return this.extractionBeams.slice(0, limit).findIndex((slot) => !slot.active);
   }
 
-  startExtractionBeam() {
+  startExtractionBeam(capacity = this.extractionCapacity) {
     if (!this.extractionGroup?.visible) return -1;
-    const slotIndex = this.getAvailableExtractionSlot();
+    const slotIndex = this.getAvailableExtractionSlot(capacity);
     if (slotIndex < 0) return -1;
     const slot = this.extractionBeams[slotIndex];
     slot.active = true;
@@ -1200,6 +1242,30 @@ export class World {
     slot.particles.material.opacity = 0.02;
     slot.light.intensity = 5;
     return slotIndex;
+  }
+
+  getActiveExtractionCount() {
+    return this.extractionBeams.reduce((count, slot) => count + (slot.active ? 1 : 0), 0);
+  }
+
+  consumeExtractionCompletions() {
+    const count = this.extractionCompletions;
+    this.extractionCompletions = 0;
+    return count;
+  }
+
+  triggerOccultStrike(position) {
+    const strike = this.occultStrikes.find((item) => !item.active) ?? this.occultStrikes[0];
+    if (!strike) return;
+    strike.active = true;
+    strike.timer = 1.05;
+    strike.group.visible = true;
+    strike.group.position.copy(position).setY(0.04);
+    strike.flames.forEach((flame, index) => {
+      flame.material.opacity = 0.72;
+      flame.scale.setScalar(0.75 + index * 0.05);
+    });
+    strike.light.intensity = 15;
   }
 
   pulseOccultEffect() {
@@ -1268,6 +1334,22 @@ export class World {
     if (this.dawnActive) return;
     this.dawnActive = true;
     this.dawnProgress = 0;
+
+    // All night-time fortifications and supernatural systems fade with the
+    // victory state so the manor is visually clean at sunrise.
+    this.turretMounts.forEach((mount) => { mount.group.visible = false; });
+    Object.values(this.upgradeGroups).forEach((upgrade) => {
+      if (upgrade?.group) upgrade.group.visible = false;
+    });
+    this.fortifyGroups.forEach((group) => { group.visible = false; });
+    this.extractionBeams.forEach((slot) => {
+      slot.active = false;
+      slot.group.visible = false;
+    });
+    this.occultStrikes.forEach((strike) => {
+      strike.active = false;
+      strike.group.visible = false;
+    });
 
     // Hell closes immediately when the final siege is won.
     if (this.riftGroup) this.riftGroup.visible = false;
@@ -1410,10 +1492,13 @@ export class World {
     if (this.upgradeGroups.extraction?.group.visible) {
       const extraction = this.upgradeGroups.extraction;
       const pulse = 1 + Math.sin(elapsed * 2.8) * 0.08;
-      extraction.roofGlow.material.opacity = 0.16 + Math.sin(elapsed * 2.1) * 0.035;
-      extraction.roofHalo.material.opacity = 0.14 + Math.sin(elapsed * 2.6 + 1.1) * 0.045;
+      extraction.roofGlow.material.opacity = 0.30 + Math.sin(elapsed * 2.1) * 0.06;
+      extraction.roofHalo.material.opacity = 0.24 + Math.sin(elapsed * 2.6 + 1.1) * 0.07;
       extraction.roofHalo.rotation.z += dt * 0.07;
-      extraction.light.intensity = 27 + pulse * 8;
+      extraction.idleBeam.material.opacity = 0.045 + Math.sin(elapsed * 2.0) * 0.012;
+      extraction.idleBeam.scale.x = 1 + Math.sin(elapsed * 1.5) * 0.04;
+      extraction.idleBeam.scale.z = 1 + Math.cos(elapsed * 1.7) * 0.04;
+      extraction.light.intensity = 48 + pulse * 12;
     }
 
     this.extractionBeams.forEach((slot, slotIndex) => {
@@ -1440,12 +1525,30 @@ export class World {
       if (slot.timer <= 0) {
         slot.active = false;
         slot.group.visible = false;
+        this.extractionCompletions += 1;
       }
     });
 
     if (this.upgradeGroups.demolition?.group.visible) {
-      this.upgradeGroups.demolition.core.scale.setScalar(0.92 + Math.sin(elapsed * 5.5) * 0.12);
+      this.upgradeGroups.demolition.light.intensity = 7.5 + Math.sin(elapsed * 4.2) * 1.8;
     }
+
+    this.occultStrikes.forEach((strike) => {
+      if (!strike.active) return;
+      strike.timer -= dt;
+      const t = THREE.MathUtils.clamp(1 - strike.timer / 1.05, 0, 1);
+      const fade = Math.sin(Math.min(1, t * 2.2) * Math.PI * 0.5) * (1 - t);
+      strike.flames.forEach((flame, index) => {
+        const pulse = 0.9 + Math.sin(elapsed * (10 + index) + strike.phase) * 0.15;
+        flame.scale.set(0.8 * pulse, 1.1 + pulse * 0.45, 0.8 * pulse);
+        flame.material.opacity = 0.9 * fade;
+      });
+      strike.light.intensity = 20 * fade;
+      if (strike.timer <= 0) {
+        strike.active = false;
+        strike.group.visible = false;
+      }
+    });
 
     if (this.upgradeGroups.occult?.group.visible) {
       const occult = this.upgradeGroups.occult;

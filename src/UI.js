@@ -32,8 +32,11 @@ export class UI {
     this.unassignedSouls = 0;
     this.bombs = 0;
     this.fortifyLevel = 0;
+    this.extractionLevel = 0;
     this.buildings = {};
     this.assignments = {};
+    this.purchaseCosts = {};
+    this.unlockWaves = {};
     this.hasSave = false;
     this.bannerTitle = "";
     this.bannerSubtitle = "";
@@ -104,13 +107,14 @@ export class UI {
     this.boundPulse = 0.55;
   }
 
-  addSoulFlight(x, y, onArrive = null) {
+  addSoulFlight(x, y, onArrive = null, scale = 1) {
     this.soulFlights.push({
       x,
       y,
       age: 0,
       duration: 0.72 + Math.random() * 0.16,
-      onArrive
+      onArrive,
+      scale
     });
   }
 
@@ -399,7 +403,7 @@ export class UI {
       const inv = 1 - eased;
       const x = inv * inv * flight.x + 2 * inv * eased * controlX + eased * eased * target.x;
       const y = inv * inv * flight.y + 2 * inv * eased * controlY + eased * eased * target.y;
-      const size = 5 + (1 - t) * 4;
+      const size = (5 + (1 - t) * 4) * (flight.scale ?? 1);
       ctx.save();
       ctx.globalAlpha = 0.45 + (1 - t) * 0.55;
       ctx.shadowColor = "rgba(255,111,38,.95)";
@@ -631,24 +635,71 @@ export class UI {
   }
 
   drawManorShop(x, y, width, height, mobile) {
+    const fortifyMax = this.fortifyLevel >= CONFIG.manor.maxFortifyLevel;
+    const majorMax = fortifyMax ||
+      this.fortifyLevel + CONFIG.manor.majorFortify.levels > CONFIG.manor.maxFortifyLevel;
     const items = [
       ["PATCH DAMAGE", "+50 HEALTH", CONFIG.manor.repairs.minor.cost, "repairMinor", this.health >= this.maxHealth],
       ["MAJOR REPAIR", "+250 HEALTH", CONFIG.manor.repairs.major.cost, "repairMajor", this.health >= this.maxHealth],
       ["RESTORE MANOR", "+1000 HEALTH", CONFIG.manor.repairs.full.cost, "repairFull", this.health >= this.maxHealth],
-      ["FORTIFY", "+100 MAX HEALTH", CONFIG.manor.fortify.cost, "fortify", false],
-      ["MAJOR FORTIFY", "+1000 MAX HEALTH", CONFIG.manor.majorFortify.cost, "majorFortify", false]
+      ["FORTIFY", "+100 MAX HEALTH — COST RISES EACH TIME", this.purchaseCosts.fortify ?? CONFIG.manor.fortify.baseCost, "fortify", fortifyMax, false, fortifyMax ? "MAX" : null],
+      ["MAJOR FORTIFY", "+1000 MAX HEALTH — COST RISES SHARPLY", this.purchaseCosts.majorFortify ?? CONFIG.manor.majorFortify.baseCost, "majorFortify", majorMax, false, majorMax ? "MAX" : null]
     ];
     this.drawShopRows(items, x, y, width, height, mobile);
   }
 
   drawSystemsShop(x, y, width, height, mobile) {
     const b = CONFIG.buildings;
+    const extractionUnlock = this.wave < (b.extraction.unlockWave ?? 1);
+    let extractionItem;
+    if (!this.buildings.extraction || this.extractionLevel <= 0) {
+      extractionItem = [
+        "SOUL EXTRACTION",
+        extractionUnlock ? `UNLOCKS WAVE ${b.extraction.unlockWave}` : "1 BINDING SLOT — DROP A DEMON OVER THE GLOWING ROOF",
+        b.extraction.cost,
+        "extraction",
+        false,
+        extractionUnlock
+      ];
+    } else if (this.extractionLevel < CONFIG.extraction.maxLevel) {
+      const next = this.extractionLevel + 1;
+      extractionItem = [
+        `SOUL EXTRACTION — ${this.extractionLevel} SLOT${this.extractionLevel === 1 ? "" : "S"}`,
+        `UPGRADE TO ${next} SIMULTANEOUS BINDING SLOTS`,
+        this.purchaseCosts.extractionUpgrade ?? (next === 2 ? b.extractionUpgrade2.cost : b.extractionUpgrade3.cost),
+        "extractionUpgrade",
+        false,
+        false
+      ];
+    } else {
+      extractionItem = [
+        "SOUL EXTRACTION — 3 SLOTS",
+        "MAXIMUM BINDING CAPACITY",
+        0,
+        "extractionUpgrade",
+        true,
+        false,
+        "MAX"
+      ];
+    }
+
+    const makeSystem = (key, title, description) => {
+      const def = b[key];
+      const waveLocked = this.wave < (def.unlockWave ?? 1);
+      const extractionLocked = !this.buildings.extraction;
+      const locked = waveLocked || extractionLocked;
+      let text = description;
+      if (waveLocked) text = `UNLOCKS WAVE ${def.unlockWave}`;
+      else if (extractionLocked) text = "REQUIRES SOUL EXTRACTION";
+      return [title, text, def.cost, key, this.buildings[key], locked];
+    };
+
     const items = [
-      ["SOUL EXTRACTION", "DROP DEMONS OVER THE GLOWING ROOF EXTRACTOR", b.extraction.cost, "extraction", this.buildings.extraction, false],
-      ["HELLFIRE BATTERY", "BOUND SOULS POWER AUTOMATIC DEFENCES", b.hellfire.cost, "hellfire", this.buildings.hellfire, !this.buildings.extraction],
-      ["HELL BOMB FORGE", "5 BOUND SOULS = +1 BOMB EACH WAVE", b.demolition.cost, "demolition", this.buildings.demolition, !this.buildings.extraction],
-      ["UNDERCROFT", "BOUND SOULS REPAIR BETWEEN WAVES", b.undercroft.cost, "undercroft", this.buildings.undercroft, !this.buildings.extraction],
-      ["OCCULT TOWER", "BOUND SOULS TRIGGER OCCULT STRIKES", b.occult.cost, "occult", this.buildings.occult, !this.buildings.extraction]
+      extractionItem,
+      makeSystem("hellfire", "HELLFIRE BATTERY", "BOUND SOULS BUILD AND SPEED UP CROSSBOW DEFENCES"),
+      makeSystem("demolition", "HELL BOMB FORGE", "15 BOUND SOULS = 1 BOMB AT WAVE START — MAX 3"),
+      makeSystem("undercroft", "UNDERCROFT", "BOUND SOULS REPAIR THE MANOR BETWEEN WAVES"),
+      makeSystem("occult", "OCCULT TOWER", "LIGHT-PURPLE GROUND FIRE STRIKES ACTIVE DEMONS")
     ];
     this.drawShopRows(items, x, y, width, height, mobile, true);
   }
@@ -657,7 +708,7 @@ export class UI {
     const rowGap = mobile ? 5 : 8;
     const rowH = Math.max(mobile ? 48 : 54, Math.min(mobile ? 62 : 76, (height - rowGap * (items.length - 1)) / items.length));
     items.forEach((item, index) => {
-      const [title, description, cost, type, ownedOrFull = false, locked = false] = item;
+      const [title, description, cost, type, ownedOrFull = false, locked = false, labelOverride = null] = item;
       const rowY = y + index * (rowH + rowGap);
       this.panel(x, rowY, width, rowH, C.panel2, 7);
       const ctx = this.ctx;
@@ -673,9 +724,10 @@ export class UI {
       const buttonH = mobile ? 42 : 46;
       const bx = x + width - buttonW - 10;
       const by = rowY + (rowH - buttonH) / 2;
-      const purchased = buildings && ownedOrFull;
-      const disabled = locked || purchased || (!buildings && ownedOrFull) || this.souls < cost;
-      const label = locked ? "LOCKED" : purchased ? "OWNED" : `${cost}`;
+      const purchased = buildings && ownedOrFull && labelOverride !== "MAX";
+      const maxed = labelOverride === "MAX";
+      const disabled = locked || purchased || maxed || (!buildings && ownedOrFull) || this.souls < cost;
+      const label = labelOverride ?? (locked ? "LOCKED" : purchased ? "OWNED" : `${cost}`);
       this.button(
         label,
         bx,
@@ -720,25 +772,49 @@ export class UI {
       ctx.fillStyle = accent;
       ctx.font = this.font(mobile ? 21 : 25);
       ctx.fillText(label, x + 16, rowY + 31);
+
       const assigned = this.assignments[key] ?? 0;
+      const cap = CONFIG.boundCaps[key] ?? Infinity;
+      const maxed = assigned >= cap;
       ctx.fillStyle = C.text;
       ctx.font = this.dataFont(12, 850);
-      ctx.fillText(`${assigned} ASSIGNED`, x + 16, rowY + 51);
+      ctx.fillText(maxed ? `${assigned} ASSIGNED — MAX` : `${assigned} ASSIGNED`, x + 16, rowY + 51);
+
       ctx.fillStyle = C.muted;
       ctx.font = this.dataFont(mobile ? 9 : 10, 800);
       let effectText = "";
       if (key === "hellfire") {
-        const mounts = assigned <= 0 ? 0 : assigned < 5 ? 1 : assigned < 10 ? 2 : 3;
-        const interval = assigned <= 0 ? 0 : assigned < 5 ? 7 : assigned < 10 ? 6 : assigned < 15 ? 5 : assigned < 20 ? 4 : assigned < 25 ? 3.3 : assigned < 30 ? 2.7 : 2.2;
-        effectText = assigned > 0 ? `${mounts} CROSSBOW${mounts === 1 ? "" : "S"} • ${interval.toFixed(1)}s RELOAD` : "NO DEFENCE ACTIVE";
+        let mounts = 0;
+        let interval = 0;
+        let next = "";
+        if (assigned > 0 && assigned < 10) {
+          mounts = 1;
+          interval = 7 - Math.min(1, (assigned - 1) / 8) * 3.2;
+          next = ` • 2ND CROSSBOW AT 10`;
+        } else if (assigned >= 10 && assigned < 25) {
+          mounts = 2;
+          interval = 7 - Math.min(1, (assigned - 10) / 14) * 3.4;
+          next = ` • 3RD CROSSBOW AT 25`;
+        } else if (assigned >= 25) {
+          mounts = 3;
+          interval = 7 - Math.min(1, (assigned - 25) / 20) * 4.6;
+        }
+        effectText = assigned > 0
+          ? `${mounts} CROSSBOW${mounts === 1 ? "" : "S"} • ${interval.toFixed(1)}s RELOAD${next}`
+          : "NO DEFENCE ACTIVE";
       } else if (key === "demolition") {
-        const produced = Math.min(CONFIG.defence.bombMaxCharges, Math.floor(assigned / 5));
-        effectText = produced > 0 ? `+${produced} HELL BOMB${produced === 1 ? "" : "S"} AFTER EACH WAVE` : "5 BOUND SOULS NEEDED PER BOMB";
+        const bombs = Math.min(CONFIG.defence.bombMaxCharges, Math.floor(assigned / CONFIG.defence.bombSoulsPerCharge));
+        effectText = bombs > 0
+          ? `${bombs} HELL BOMB${bombs === 1 ? "" : "S"} AT THE START OF EACH WAVE`
+          : `${CONFIG.defence.bombSoulsPerCharge} BOUND SOULS NEEDED FOR 1 WAVE BOMB`;
       } else if (key === "undercroft") {
-        effectText = `+${assigned * 8} MANOR HEALTH AFTER EACH WAVE`;
+        effectText = `+${assigned * 6} MANOR HEALTH AFTER EACH WAVE`;
       } else if (key === "occult") {
-        const interval = assigned <= 0 ? 0 : Math.max(6.5, 17 - assigned * 0.55);
-        effectText = assigned > 0 ? `AUTO STRIKE ABOUT EVERY ${interval.toFixed(1)}s` : "NO OCCULT STRIKES";
+        const interval = assigned <= 0 ? 0 : 13.5 - Math.min(1, (assigned - 1) / 29) * 7.5;
+        const strikes = assigned >= 20 ? 3 : assigned >= 10 ? 2 : assigned > 0 ? 1 : 0;
+        effectText = assigned > 0
+          ? `${strikes} PURPLE FIRE STRIKE${strikes === 1 ? "" : "S"} ABOUT EVERY ${interval.toFixed(1)}s`
+          : "NO OCCULT STRIKES";
       }
       ctx.fillText(effectText, x + 16, rowY + 68);
 
@@ -746,8 +822,8 @@ export class UI {
       const plusX = x + width - buttonSize - 12;
       const minusX = plusX - buttonSize - 10;
       const by = rowY + (rowH - buttonSize) / 2;
-      this.button("−", minusX, by, buttonSize, buttonSize, () => this.callbacks.onAssign?.(key, -1), (this.assignments[key] ?? 0) <= 0, () => this.callbacks.onDeniedPurchase?.(), accent);
-      this.button("+", plusX, by, buttonSize, buttonSize, () => this.callbacks.onAssign?.(key, 1), this.unassignedSouls <= 0, () => this.callbacks.onDeniedPurchase?.(), accent);
+      this.button("−", minusX, by, buttonSize, buttonSize, () => this.callbacks.onAssign?.(key, -1), assigned <= 0, () => this.callbacks.onDeniedPurchase?.(), accent);
+      this.button(maxed ? "MAX" : "+", plusX, by, buttonSize, buttonSize, () => this.callbacks.onAssign?.(key, 1), maxed || this.unassignedSouls <= 0, () => this.callbacks.onDeniedPurchase?.(), accent);
     });
   }
 

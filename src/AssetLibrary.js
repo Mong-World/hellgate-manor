@@ -15,7 +15,7 @@ export class AssetLibrary {
     // Loading several multi-megabyte GLBs simultaneously inside Portals can
     // occasionally fail even when every file exists, so this deliberately
     // uses a controlled sequential loader with retries.
-    const orderedKeys = ["husk", "manor", "runner", "brute", "siege"];
+    const orderedKeys = ["husk", "manor", "runner", "brute", "siege", "shed"];
     let completed = 0;
 
     for (const key of orderedKeys) {
@@ -117,10 +117,10 @@ export class AssetLibrary {
         clone.emissiveIntensity = 0.18;
       }
     } else if (type === "siege") {
-      if (clone.color) clone.color.multiply(new THREE.Color(0.68, 0.74, 0.82));
+      if (clone.color) clone.color.multiply(new THREE.Color(0.42, 0.46, 0.54));
       if ("emissive" in clone) {
         clone.emissive = new THREE.Color(0x25142e);
-        clone.emissiveIntensity = 0.34;
+        clone.emissiveIntensity = 0.12;
       }
     } else if ("emissive" in clone) {
       clone.emissive = new THREE.Color(0x142237);
@@ -133,6 +133,10 @@ export class AssetLibrary {
 
   createManorClone() {
     return this.getAsset("manor").scene.clone(true);
+  }
+
+  createShedClone() {
+    return this.getAsset("shed").scene.clone(true);
   }
 
   static prepareModel(model) {

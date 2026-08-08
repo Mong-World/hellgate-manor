@@ -131,27 +131,37 @@ export class DefenceSystem {
   }
 
   getMountCount() {
-    if (this.hellfireSouls <= 0) return 0;
-    if (this.hellfireSouls < 5) return 1;
-    if (this.hellfireSouls < 10) return 2;
+    const souls = Math.min(this.hellfireSouls, CONFIG.defence.hellfireMaxSouls);
+    if (souls <= 0) return 0;
+    if (souls < 10) return 1;
+    if (souls < 25) return 2;
     return 3;
   }
 
   getFireInterval() {
-    const souls = this.hellfireSouls;
+    const souls = Math.min(this.hellfireSouls, CONFIG.defence.hellfireMaxSouls);
     if (souls <= 0) return Infinity;
-    if (souls < 5) return 7.0;
-    if (souls < 10) return 6.0;
-    if (souls < 15) return 5.0;
-    if (souls < 20) return 4.0;
-    if (souls < 25) return 3.3;
-    if (souls < 30) return 2.7;
-    return 2.2;
+
+    // Each new crossbow resets the reload curve, then additional Bound Souls
+    // train the active battery back down again. This makes unlocking a second
+    // or third emplacement feel like a real milestone rather than a flat DPS
+    // increase hidden inside one number.
+    if (souls < 10) {
+      const t = THREE.MathUtils.clamp((souls - 1) / 8, 0, 1);
+      return THREE.MathUtils.lerp(7.0, 3.8, t);
+    }
+    if (souls < 25) {
+      const t = THREE.MathUtils.clamp((souls - 10) / 14, 0, 1);
+      return THREE.MathUtils.lerp(7.0, 3.6, t);
+    }
+    const t = THREE.MathUtils.clamp((souls - 25) / 20, 0, 1);
+    return THREE.MathUtils.lerp(7.0, 2.4, t);
   }
 
   getOccultInterval() {
-    if (this.occultSouls <= 0) return Infinity;
-    return THREE.MathUtils.clamp(17 - this.occultSouls * 0.55, 6.5, 17);
+    const souls = Math.min(this.occultSouls, CONFIG.defence.occultMaxSouls);
+    if (souls <= 0) return Infinity;
+    return THREE.MathUtils.lerp(13.5, 6.0, THREE.MathUtils.clamp((souls - 1) / 29, 0, 1));
   }
 
   update(dt, active) {
@@ -300,13 +310,25 @@ export class DefenceSystem {
   }
 
   fireOccultPulse() {
-    const targets = this.getEnemies()
-      .filter((enemy) => !enemy.dead && !enemy.removed && enemy.state !== "extracting")
-      .sort((a, b) => b.position.x - a.position.x)
-      .slice(0, Math.min(4, 1 + Math.floor(this.occultSouls / 5)));
-    if (targets.length === 0) return;
+    const candidates = this.getEnemies().filter(
+      (enemy) => !enemy.dead && !enemy.removed && enemy.state !== "extracting"
+    );
+    if (candidates.length === 0) return;
+
+    // Shuffle so the purple ground-fire reads as strikes across the field, not
+    // a hidden damage calculation always hitting the same front-most target.
+    for (let i = candidates.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+    }
+
+    const strikeCount = this.occultSouls >= 20 ? 3 : this.occultSouls >= 10 ? 2 : 1;
+    const targets = candidates.slice(0, Math.min(strikeCount, candidates.length));
     this.world.pulseOccultEffect?.();
-    targets.forEach((target) => this.onDamageEnemy?.(target, "occult", target.type === "siege" ? 1 : 2));
+    targets.forEach((target) => {
+      this.world.triggerOccultStrike?.(target.position.clone());
+      this.onDamageEnemy?.(target, "occult", 1);
+    });
     this.onOccultPulse?.(targets.length);
   }
 
@@ -320,6 +342,18 @@ export class DefenceSystem {
 
   resetCooldown() {
     this.mountTimers = [1.2, 1.2 + CONFIG.defence.fireStagger, 1.2 + CONFIG.defence.fireStagger * 2];
+  }
+
+  clearForDawn() {
+    this.hellfireSouls = 0;
+    this.occultSouls = 0;
+    this.world.setTurretLevel(0);
+    this.projectiles.slice().forEach((projectile) => this.releaseArrow(projectile));
+    this.impacts.slice().forEach((impact) => {
+      impact.active = false;
+      impact.mesh.visible = false;
+    });
+    this.impacts = [];
   }
 
   dispose() {

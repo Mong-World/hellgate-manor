@@ -71,7 +71,7 @@ export class Husk {
           if (clone.color) {
             clone.color.multiply(
               this.type === "siege"
-                ? new THREE.Color(0.24, 0.27, 0.33)
+                ? new THREE.Color(0.10, 0.12, 0.16)
                 : new THREE.Color(0.72, 0.42, 0.34)
             );
           }
@@ -79,7 +79,7 @@ export class Husk {
             clone.emissive = new THREE.Color(
               this.type === "siege" ? 0x050812 : 0x351208
             );
-            clone.emissiveIntensity = this.type === "siege" ? 0.18 : 0.45;
+            clone.emissiveIntensity = this.type === "siege" ? 0.06 : 0.45;
           }
           return clone;
         };
@@ -248,6 +248,29 @@ export class Husk {
 
   applyDamage(amount = 1, reason = "impact", impactStrength = 10) {
     if (this.dead || this.removed || this.state === "extracting") return false;
+
+    if (this.type === "siege") {
+      this.durability -= amount;
+      if (this.durability <= 0) {
+        this.onDeath?.({
+          enemy: this,
+          reason,
+          position: this.position.clone().add(new THREE.Vector3(0, this.definition.height * 0.28, 0)),
+          impactStrength
+        });
+        return true;
+      }
+
+      // The tall Siege Demon never falls over. It freezes in place and shudders
+      // briefly, which suits the wiry model much better than a knock-down pose.
+      this.state = "siegeStunned";
+      this.siegeStunTimer = 1.15;
+      this.siegeResumeCharging = this.position.x >= (this.lastManorBarrierX ?? 13) - (this.definition.siegeStopOffset ?? 0) - 0.2;
+      this.velocity.set(0, 0, 0);
+      if (this.currentAction) this.currentAction.paused = true;
+      return false;
+    }
+
     this.durability -= amount;
     if (this.durability <= 0) {
       this.onDeath?.({
@@ -259,7 +282,7 @@ export class Husk {
       return true;
     }
 
-    this.stumble(this.type === "siege" ? 1.15 : this.type === "brute" ? 1.05 : 0.86);
+    this.stumble(this.type === "brute" ? 1.05 : 0.86);
     return false;
   }
 
@@ -284,7 +307,7 @@ export class Husk {
   }
 
   staggerSiege(amount = 1) {
-    if (this.type !== "siege" || this.dead || this.removed || this.state === "fallen" || this.state === "gettingUp") {
+    if (this.type !== "siege" || this.dead || this.removed || this.state === "siegeStunned") {
       return false;
     }
     this.applyDamage(amount, "siege-stagger", 12);
@@ -309,6 +332,7 @@ export class Husk {
 
   update(dt, elapsed, held, manorBarrierX = 13) {
     if (this.dead || this.removed) return;
+    this.lastManorBarrierX = manorBarrierX;
     this.collisionCooldown = Math.max(0, this.collisionCooldown - dt);
     this.mixer?.update(dt);
 
@@ -388,6 +412,26 @@ export class Husk {
       return;
     }
 
+    if (this.state === "siegeStunned") {
+      this.siegeStunTimer -= dt;
+      const shake = Math.sin(elapsed * 34 + this.id) * 0.035;
+      this.modelRoot.position.x = shake;
+      this.modelRoot.position.z = Math.cos(elapsed * 29 + this.id) * 0.025;
+      if (this.siegeStunTimer <= 0) {
+        this.modelRoot.position.set(0, 0, 0);
+        this.state = this.siegeResumeCharging ? "siegeCharging" : "walking";
+        if (this.currentAction) this.currentAction.paused = false;
+        if (this.state === "siegeCharging") {
+          this.attackTimer = Math.max(this.attackTimer, 2.2);
+          this.playAction(this.actions.attack ? "attack" : "walk", 0.12);
+        } else {
+          this.playAction("walk", 0.12);
+          if (this.actions.walk) this.actions.walk.timeScale = this.walkAnimationSpeed;
+        }
+      }
+      return;
+    }
+
     if (this.state === "attacking") {
       this.attackTimer -= dt;
       if (this.attackTimer <= 0) {
@@ -430,6 +474,7 @@ export class Husk {
     this.group.position.copy(position);
     this.group.rotation.set(0, 0, 0);
     this.modelRoot.rotation.set(0, 0, 0);
+    this.modelRoot.position.set(0, 0, 0);
     this.modelRoot.scale.set(1, 1, 1);
     this.velocity.set(0, 0, 0);
     this.state = "walking";
@@ -438,6 +483,9 @@ export class Husk {
     this.getUpTimer = 0;
     this.extractionTimer = 0;
     this.extractionDuration = 0;
+    this.siegeStunTimer = 0;
+    this.siegeResumeCharging = false;
+    this.modelRoot.position.set(0, 0, 0);
     this.extractionBase = this.extractionBase ?? new THREE.Vector3();
     this.collisionCooldown = 0;
     this.peakScreenY = 1;
@@ -456,6 +504,7 @@ export class Husk {
     this.group.visible = false;
     this.group.rotation.set(0, 0, 0);
     this.modelRoot.rotation.set(0, 0, 0);
+    this.modelRoot.position.set(0, 0, 0);
     this.modelRoot.scale.set(1, 1, 1);
     this.mixer?.stopAllAction();
     this.currentAction = null;

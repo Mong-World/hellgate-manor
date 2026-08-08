@@ -10,6 +10,7 @@ const DEFAULT_LIMITS = Object.freeze({
   deniedPurchase: 1,
   gameOver: 1,
   purchase: 2,
+  soulBling: 3,
   soulCollect: 5,
   waveStart: 1,
   whoosh: 3
@@ -25,6 +26,7 @@ const DEFAULT_COOLDOWNS = Object.freeze({
   deniedPurchase: 0.12,
   gameOver: 0.2,
   purchase: 0.08,
+  soulBling: 0.08,
   soulCollect: 0.035,
   waveStart: 0.2,
   whoosh: 0.025
@@ -41,6 +43,7 @@ export class AudioManager {
     this.music = null;
     this.musicKey = null;
     this.musicGeneration = 0;
+    this.loops = new Map();
 
     if (!this.context) return;
 
@@ -160,7 +163,7 @@ export class AudioManager {
     });
   }
 
-  playMusic(key, fadeSeconds = 0.8) {
+  playMusic(key, fadeSeconds = 0.8, loop = true) {
     if (!this.context || this.context.state !== "running") return;
     const buffer = this.buffers.get(key);
     if (!buffer || this.musicKey === key) return;
@@ -172,7 +175,7 @@ export class AudioManager {
     const source = this.context.createBufferSource();
     const gain = this.context.createGain();
     source.buffer = buffer;
-    source.loop = true;
+    source.loop = loop;
     gain.gain.setValueAtTime(0.0001, now);
     gain.gain.exponentialRampToValueAtTime(1, now + Math.max(fadeSeconds, 0.05));
     source.connect(gain);
@@ -181,6 +184,15 @@ export class AudioManager {
 
     this.music = { source, gain, generation };
     this.musicKey = key;
+
+    source.addEventListener("ended", () => {
+      if (this.music?.generation === generation) {
+        this.music = null;
+        this.musicKey = null;
+      }
+      try { source.disconnect(); } catch {}
+      try { gain.disconnect(); } catch {}
+    }, { once: true });
 
     if (oldMusic) {
       const oldValue = Math.max(oldMusic.gain.gain.value, 0.0001);
@@ -200,6 +212,43 @@ export class AudioManager {
         oldMusic.gain.disconnect();
       }, Math.ceil((fadeSeconds + 0.1) * 1000));
     }
+  }
+
+  playLoop(key, tag = key, { volume = 0.5, fadeSeconds = 0.2 } = {}) {
+    if (!this.context || this.context.state !== "running") return null;
+    if (this.loops.has(tag)) return this.loops.get(tag);
+    const buffer = this.buffers.get(key);
+    if (!buffer) return null;
+
+    const now = this.context.currentTime;
+    const source = this.context.createBufferSource();
+    const gain = this.context.createGain();
+    source.buffer = buffer;
+    source.loop = true;
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, volume), now + Math.max(0.05, fadeSeconds));
+    source.connect(gain);
+    gain.connect(this.sfxGain);
+    source.start(now);
+    const loop = { source, gain, key, tag };
+    this.loops.set(tag, loop);
+    return loop;
+  }
+
+  stopLoop(tag, fadeSeconds = 0.25) {
+    if (!this.context) return;
+    const loop = this.loops.get(tag);
+    if (!loop) return;
+    this.loops.delete(tag);
+    const now = this.context.currentTime;
+    loop.gain.gain.cancelScheduledValues(now);
+    loop.gain.gain.setValueAtTime(Math.max(loop.gain.gain.value, 0.0001), now);
+    loop.gain.gain.exponentialRampToValueAtTime(0.0001, now + Math.max(0.05, fadeSeconds));
+    window.setTimeout(() => {
+      try { loop.source.stop(); } catch {}
+      try { loop.source.disconnect(); } catch {}
+      try { loop.gain.disconnect(); } catch {}
+    }, Math.ceil((fadeSeconds + 0.08) * 1000));
   }
 
   setMusicLevel(level, seconds = 0.35) {
@@ -240,6 +289,7 @@ export class AudioManager {
   }
 
   dispose() {
+    for (const tag of [...this.loops.keys()]) this.stopLoop(tag, 0.05);
     this.stopMusic(0.05);
     if (this.context && this.context.state !== "closed") {
       this.context.close().catch(() => {});

@@ -38,7 +38,7 @@ class PooledSoul {
     this.group.add(this.halo);
   }
 
-  startEffect(start, target, onComplete = null) {
+  startEffect(start, target, onComplete = null, scale = 1) {
     this.active = true;
     this.finished = false;
     this.age = 0;
@@ -47,7 +47,7 @@ class PooledSoul {
     this.onComplete = onComplete;
     this.group.position.copy(start);
     this.group.visible = true;
-    this.group.scale.setScalar(1);
+    this.group.scale.setScalar(scale);
     return this;
   }
 
@@ -107,21 +107,21 @@ class PooledAsh {
     this.scene.add(this.points);
   }
 
-  startEffect(position, warm = false) {
+  startEffect(position, warm = false, scale = 1) {
     this.active = true;
     this.finished = false;
     this.age = 0;
     this.material.color.setHex(warm ? 0x7a2a12 : 0x211a18);
-    this.material.size = warm ? 0.38 : 0.32;
+    this.material.size = (warm ? 0.38 : 0.32) * scale;
     this.material.opacity = 0.92;
     for (let i = 0; i < this.count; i += 1) {
       const idx = i * 3;
       this.positions[idx] = position.x;
       this.positions[idx + 1] = position.y;
       this.positions[idx + 2] = position.z;
-      this.velocities[idx] = THREE.MathUtils.randFloatSpread(warm ? 7.5 : 5.2);
-      this.velocities[idx + 1] = THREE.MathUtils.randFloat(1.1, warm ? 8.2 : 6.6);
-      this.velocities[idx + 2] = THREE.MathUtils.randFloatSpread(warm ? 5.8 : 4.2);
+      this.velocities[idx] = THREE.MathUtils.randFloatSpread((warm ? 7.5 : 5.2) * scale);
+      this.velocities[idx + 1] = THREE.MathUtils.randFloat(1.1 * scale, (warm ? 8.2 : 6.6) * scale);
+      this.velocities[idx + 2] = THREE.MathUtils.randFloatSpread((warm ? 5.8 : 4.2) * scale);
     }
     this.geometry.attributes.position.needsUpdate = true;
     this.points.visible = true;
@@ -226,12 +226,12 @@ export class EffectPool {
     return list.find((effect) => !effect.active) ?? list[0];
   }
 
-  soul(start, target, onComplete = null) {
-    return this.getFree(this.souls).startEffect(start, target, onComplete);
+  soul(start, target, onComplete = null, scale = 1) {
+    return this.getFree(this.souls).startEffect(start, target, onComplete, scale);
   }
 
-  ash(position, warm = false) {
-    return this.getFree(this.ashes).startEffect(position, warm);
+  ash(position, warm = false, scale = 1) {
+    return this.getFree(this.ashes).startEffect(position, warm, scale);
   }
 
   ring(position, strength = 8, color = 0xff7a34) {

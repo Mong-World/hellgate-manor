@@ -187,6 +187,17 @@ export class WaveManager {
         z
       )
     );
+
+    // From Wave 4 onward the basic Husk population includes slower walkers and
+    // slightly quicker walkers without introducing the true Running Husk early.
+    if (type === "husk" && this.config.huskPaceVariation) {
+      const roll = Math.random();
+      const multiplier = roll < 0.24 ? 0.78 : roll > 0.72 ? 1.18 : 1.0;
+      enemy.walkSpeed *= multiplier;
+      enemy.walkAnimationSpeed *= THREE.MathUtils.lerp(0.88, 1.12, (multiplier - 0.78) / 0.40);
+      if (enemy.actions.walk) enemy.actions.walk.timeScale = enemy.walkAnimationSpeed;
+    }
+
     this.enemies.push(enemy);
     this.spawned += 1;
   }

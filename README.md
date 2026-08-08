@@ -200,7 +200,7 @@ The GitHub Action builds `main`, copies `assets/`, `fonts/`, and `sounds/` into 
 - Required Husk/Manor failures now display the exact asset error on the loading screen.
 
 
-## v1.4.3 strict asset loading
+## v1.5.1.0 strict asset loading
 
 - Removed all enemy-model fallbacks.
 - Every configured GLB is treated as required.
@@ -208,6 +208,37 @@ The GitHub Action builds `main`, copies `assets/`, `fonts/`, and `sounds/` into 
 - If any GLB fails, startup stops and the loading screen explicitly displays the failed asset filename.
 
 
-## v1.4.3 hotfix
+## v1.5.1.0 hotfix
 - Fixed startup crash `CONFIG is not defined` by importing CONFIG in World.js.
 - Exact required-asset failure reporting remains enabled; no enemy model fallbacks are used.
+
+
+## v1.5.1.0 progression / late-game rebalance
+
+- Hell Bombs are now wave ammunition: 15 Bound Souls = 1 bomb at wave start, max 3; unused bombs do not carry.
+- Hell Bombs no longer instantly remove Brutes or Siege Demons.
+- Soul Extraction starts with one binding slot and can be upgraded manually to two and then three.
+- Added `assets/soulmusic.mp3` during active bindings.
+- Added `assets/newdawnmusic.mp3` for the final sunrise.
+- Replaced the Hell Bomb Forge placeholder cube with `assets/shed.glb`, rotated 90 degrees clockwise and kept in the same manor-side position.
+- Hellfire now grows in three clear stages: one crossbow, then two at 10 Bound Souls, then three at 25; reload speed improves within each stage and caps at 45 Bound Souls.
+- Crossbow positions are spread farther across the manor.
+- Bound Soul assignments now have hard caps and show MAX in the assignment screen.
+- Occult is locked until Wave 40 and now creates visible light-purple ground-fire strikes.
+- Enemy reveals are stretched out: Running Husk Wave 10, Strong Husk Wave 15, Brute Wave 25, Siege Demon Wave 35.
+- Basic Husks gain slow/quick pace variation from Wave 4 without using the Runner model.
+- Siege Demons are darker/larger and stagger by stopping/shaking rather than falling over.
+- Brute and Siege Demon deaths use larger ash and soul-flight effects.
+- Wave counts grow much more aggressively after Wave 20 and Wave 50 is a long final siege.
+- Manor fortification is capped at 5000 max health and repeated fortification costs rise sharply.
+- Major systems are staged later and cost more so the player keeps meaningful goals deeper into the run.
+- Final dawn hides manor upgrade visuals and plays the new dawn music.
+- Save schema bumped to v3 because the economy/progression model changed substantially.
+
+
+## v1.5.1 Soul Binding audio
+
+- Added `assets/soulbling.mp3`.
+- Plays once when a Husk is accepted into Soul Binding.
+- Plays again when that binding cycle completes.
+- `assets/soulmusic.mp3` loops only while at least one binding beam is active and fades out when the final active binding finishes.
