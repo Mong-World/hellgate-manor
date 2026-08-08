@@ -25,6 +25,9 @@ export class Game {
     this.developerMode = params.get("dev") === "1";
     this.developerWave = THREE.MathUtils.clamp(Math.floor(Number(params.get("wave")) || 1), 1, CONFIG.waves.length);
     this.developerShop = params.get("shop") === "1";
+    this.developerPanelOpen = false;
+    this.developerPanelPreviousMode = "start";
+    this.developerPanelPreviousPaused = false;
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x050609);
@@ -71,7 +74,15 @@ export class Game {
       onSave: () => this.manualSave(),
       onContinue: () => this.continueAfterIntermission(),
       onRetry: () => this.retryWave(),
-      onRestart: () => this.beginNewGame()
+      onRestart: () => this.beginNewGame(),
+      onDevWaveChange: (delta) => this.changeDeveloperWave(delta),
+      onDevStartWave: () => this.startDeveloperWave(),
+      onDevOpenShop: () => this.openDeveloperShop(),
+      onDevAddSouls: (amount) => this.addDeveloperSouls(amount),
+      onDevAddBound: (amount) => this.addDeveloperBoundSouls(amount),
+      onDevUnlock: (system) => this.unlockDeveloperSystem(system),
+      onDevDawn: () => this.testDeveloperDawn(),
+      onDevClose: () => this.closeDeveloperPanel()
     });
 
     this.ui.setDeveloperMode(this.developerMode, this.developerWave, this.developerShop);
@@ -107,6 +118,7 @@ export class Game {
       occult: 0
     };
     this.waveStartSnapshot = null;
+    this.continuesUsed = 0;
     this.paused = false;
   }
 
@@ -336,6 +348,7 @@ export class Game {
       bombs: this.bombs,
       fortifyLevel: this.fortifyLevel,
       extractionLevel: this.extractionLevel,
+      continuesUsed: this.continuesUsed,
       buildings: { ...this.buildings },
       assignments: { ...this.assignments }
     };
@@ -361,6 +374,7 @@ export class Game {
       0,
       CONFIG.extraction.maxLevel
     );
+    this.continuesUsed = THREE.MathUtils.clamp(Number(data.continuesUsed) || 0, 0, 3);
     this.buildings = { ...this.buildings, ...(data.buildings ?? {}) };
     this.assignments = { ...this.assignments, ...(data.assignments ?? {}) };
     this.normaliseAssignments();
@@ -518,6 +532,7 @@ export class Game {
   handleManorAttack(enemy) {
     if (!this.gameplayActive || this.manorHealth <= 0 || !enemy || enemy.dead) return;
     this.manorHealth = Math.max(0, this.manorHealth - enemy.attackDamage);
+    this.world.triggerManorDamageDust?.(enemy.position, enemy.type);
     this.audio.play("attack", {
       volume: enemy.type === "siege" ? 0.78 : enemy.type === "brute" ? 0.7 : 0.58,
       pitchMin: enemy.type === "runner" ? 1.02 : 0.86,
@@ -768,13 +783,19 @@ export class Game {
     this.waveManager.stop();
     this.audio.stopMusic(0.45);
     this.audio.play("gameOver", { volume: 0.78 });
+    this.ui.setContinueState({
+      canRetry: this.continuesUsed < 3,
+      remaining: Math.max(0, 3 - this.continuesUsed)
+    });
     this.ui.setMode("gameOver");
   }
 
   retryWave() {
-    if (!this.waveStartSnapshot) return;
+    if (!this.waveStartSnapshot || this.continuesUsed >= 3) return;
+    const used = this.continuesUsed + 1;
     this.waveManager.clear();
     this.restoreState(this.waveStartSnapshot);
+    this.continuesUsed = used;
     this.applyUpgradeState();
     this.startCurrentWave();
   }
@@ -853,10 +874,123 @@ export class Game {
   }
 
   onKeyDown(event) {
+    if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "d") {
+      event.preventDefault();
+      if (this.developerPanelOpen) this.closeDeveloperPanel();
+      else this.openDeveloperPanel();
+      return;
+    }
+
     if (event.key !== "Escape") return;
+    if (this.developerPanelOpen) {
+      event.preventDefault();
+      this.closeDeveloperPanel();
+      return;
+    }
     if (this.ui.mode !== "playing" && this.ui.mode !== "paused") return;
     event.preventDefault();
     this.togglePause();
+  }
+
+  openDeveloperPanel() {
+    if (this.developerPanelOpen) return;
+    // Opening the desktop developer panel switches this browser session into
+    // test mode. Normal local save data is left untouched and no further
+    // autosaves are written until the page is refreshed.
+    this.developerMode = true;
+    this.developerPanelOpen = true;
+    this.developerPanelPreviousMode = this.ui.mode;
+    this.developerPanelPreviousPaused = this.paused;
+    this.developerWave = this.waveIndex + 1;
+    if (this.gameplayActive) {
+      this.paused = true;
+      this.grabSystem?.setEnabled(false);
+      this.audio.setMusicLevel(0.10, 0.15);
+    }
+    this.ui.setDeveloperMode(true, this.developerWave, false);
+    this.ui.setDeveloperPanel(true, this.developerWave);
+  }
+
+  closeDeveloperPanel() {
+    if (!this.developerPanelOpen) return;
+    this.developerPanelOpen = false;
+    this.ui.setDeveloperPanel(false, this.developerWave);
+    const previous = this.developerPanelPreviousMode;
+    if (this.gameplayActive && previous === "playing") {
+      this.paused = false;
+      this.grabSystem?.setEnabled(true);
+      this.audio.setMusicLevel(0.34, 0.2);
+      this.ui.setMode("playing");
+    } else if (this.gameplayActive && previous === "paused") {
+      this.paused = true;
+      this.ui.setMode("paused");
+    } else {
+      this.ui.setMode(previous);
+    }
+  }
+
+  changeDeveloperWave(delta) {
+    this.developerWave = THREE.MathUtils.clamp(
+      this.developerWave + delta,
+      1,
+      CONFIG.waves.length
+    );
+    this.ui.setDeveloperPanel(true, this.developerWave);
+  }
+
+  prepareDeveloperTransition() {
+    this.developerMode = true;
+    this.developerPanelOpen = false;
+    this.ui.setDeveloperPanel(false, this.developerWave);
+    this.paused = false;
+    this.gameplayActive = false;
+    this.grabSystem?.setEnabled(false);
+    this.waveManager?.clear();
+    this.waveIndex = this.developerWave - 1;
+  }
+
+  startDeveloperWave() {
+    this.prepareDeveloperTransition();
+    this.applyUpgradeState();
+    this.startCurrentWave();
+  }
+
+  openDeveloperShop() {
+    this.prepareDeveloperTransition();
+    this.developerShop = true;
+    this.applyUpgradeState();
+    this.syncUI();
+    this.ui.setMode("intermission");
+  }
+
+  addDeveloperSouls(amount) {
+    this.souls = Math.max(0, this.souls + amount);
+    this.syncUI();
+  }
+
+  addDeveloperBoundSouls(amount) {
+    this.boundSouls = Math.max(0, this.boundSouls + amount);
+    this.normaliseAssignments();
+    this.applyUpgradeState();
+    this.syncUI();
+  }
+
+  unlockDeveloperSystem(system) {
+    if (!(system in this.buildings)) return;
+    this.buildings[system] = true;
+    if (system === "extraction") this.extractionLevel = Math.max(1, this.extractionLevel);
+    this.applyUpgradeState();
+    this.syncUI();
+  }
+
+  testDeveloperDawn() {
+    this.prepareDeveloperTransition();
+    this.audio.stopLoop("soul-binding", 0.2);
+    this.audio.stopMusic(0.5);
+    this.audio.playMusic("newDawn", 0.7, false);
+    this.defence?.clearForDawn?.();
+    this.world?.startDawn?.();
+    this.ui.setMode("complete");
   }
 
   togglePause() {

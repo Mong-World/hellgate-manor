@@ -54,6 +54,9 @@ export class UI {
     this.developerMode = false;
     this.developerWave = 1;
     this.developerShop = false;
+    this.developerPanelOpen = false;
+    this.canRetry = true;
+    this.continuesRemaining = 3;
 
     this.onPointerDown = this.onPointerDown.bind(this);
     this.resize = this.resize.bind(this);
@@ -88,6 +91,16 @@ export class UI {
     this.developerMode = !!enabled;
     this.developerWave = Math.max(1, Math.floor(Number(wave) || 1));
     this.developerShop = !!shop;
+  }
+
+  setDeveloperPanel(open, wave = this.developerWave) {
+    this.developerPanelOpen = !!open;
+    this.developerWave = Math.max(1, Math.floor(Number(wave) || 1));
+  }
+
+  setContinueState({ canRetry = true, remaining = 3 } = {}) {
+    this.canRetry = !!canRetry;
+    this.continuesRemaining = Math.max(0, Math.floor(Number(remaining) || 0));
   }
 
   showExtractionTutorial() {
@@ -179,35 +192,29 @@ export class UI {
     ctx.clearRect(0, 0, width, height);
     this.buttons = [];
 
-    if (this.mode === "start") return this.drawStart(width, height);
-    if (this.mode === "playing") {
+    if (this.mode === "start") this.drawStart(width, height);
+    else if (this.mode === "playing") {
       this.drawHUD(width, height);
       this.drawPauseButton(width, height);
       if (this.bannerTimer > 0) this.drawBanner(width, height);
-      return;
-    }
-    if (this.mode === "paused") {
+    } else if (this.mode === "paused") {
       this.drawHUD(width, height);
       this.drawPaused(width, height);
-      return;
-    }
-    if (this.mode === "results") {
+    } else if (this.mode === "results") {
       this.drawHUD(width, height);
       this.drawResults(width, height);
-      return;
-    }
-    if (this.mode === "intermission") {
+    } else if (this.mode === "intermission") {
       this.drawHUD(width, height);
       this.drawIntermission(width, height);
       if (this.tutorial) this.drawTutorial(width, height);
-      return;
-    }
-    if (this.mode === "gameOver") {
+    } else if (this.mode === "gameOver") {
       this.drawHUD(width, height);
       this.drawGameOver(width, height);
-      return;
+    } else if (this.mode === "complete") {
+      this.drawComplete(width, height);
     }
-    if (this.mode === "complete") return this.drawComplete(width, height);
+
+    if (this.developerPanelOpen) this.drawDeveloperPanel(width, height);
   }
 
   font(size) {
@@ -918,7 +925,7 @@ export class UI {
     ctx.fillStyle = "rgba(0,0,0,.75)";
     ctx.fillRect(0, 0, width, height);
     const panelWidth = Math.min(550, width - 28);
-    const panelHeight = 280;
+    const panelHeight = this.canRetry ? 300 : 250;
     const x = (width - panelWidth) / 2;
     const y = (height - panelHeight) / 2;
     this.panel(x, y, panelWidth, panelHeight, C.panel, 14);
@@ -929,8 +936,85 @@ export class UI {
     ctx.fillStyle = C.muted;
     ctx.font = this.dataFont(12, 800);
     ctx.fillText(`WAVE ${this.wave} — ${this.deaths} DEMON DEATHS`, width / 2, y + 104);
-    this.button("RETRY WAVE", width / 2 - 110, y + 132, 220, 50, () => this.callbacks.onRetry?.());
-    this.button("NEW GAME", width / 2 - 110, y + 194, 220, 46, () => this.callbacks.onRestart?.());
+
+    if (this.canRetry) {
+      ctx.fillStyle = C.orangeLight;
+      ctx.font = this.dataFont(11, 900);
+      ctx.fillText(`CONTINUES LEFT: ${this.continuesRemaining}`, width / 2, y + 128);
+      this.button("RETRY WAVE", width / 2 - 110, y + 148, 220, 50, () => this.callbacks.onRetry?.());
+      this.button("NEW GAME", width / 2 - 110, y + 212, 220, 46, () => this.callbacks.onRestart?.());
+    } else {
+      ctx.fillStyle = C.red;
+      ctx.font = this.dataFont(11, 900);
+      ctx.fillText("NO CONTINUES REMAIN", width / 2, y + 132);
+      this.button("NEW GAME", width / 2 - 110, y + 158, 220, 50, () => this.callbacks.onRestart?.());
+    }
+  }
+
+  drawDeveloperPanel(width, height) {
+    // Modal developer controls for desktop testing. Opening this panel in Game
+    // disables persistence for the remainder of the browser session.
+    this.buttons = [];
+    const ctx = this.ctx;
+    ctx.fillStyle = "rgba(0,0,0,.84)";
+    ctx.fillRect(0, 0, width, height);
+
+    const panelWidth = Math.min(720, width - 48);
+    const panelHeight = Math.min(650, height - 36);
+    const x = (width - panelWidth) / 2;
+    const y = (height - panelHeight) / 2;
+    this.panel(x, y, panelWidth, panelHeight, "rgba(8,7,13,.98)", 14);
+
+    ctx.textAlign = "center";
+    ctx.fillStyle = C.purple;
+    ctx.font = this.font(38);
+    ctx.fillText("DEVELOPER TEST", width / 2, y + 52);
+    ctx.fillStyle = C.muted;
+    ctx.font = this.dataFont(10, 850);
+    ctx.fillText("CTRL + SHIFT + D OR ESC TO CLOSE — TEST MODE DOES NOT SAVE", width / 2, y + 77);
+
+    const waveY = y + 100;
+    ctx.fillStyle = C.text;
+    ctx.font = this.dataFont(14, 900);
+    ctx.fillText(`TEST WAVE  ${this.developerWave}`, width / 2, waveY + 25);
+    this.button("−5", x + 80, waveY, 72, 42, () => this.callbacks.onDevWaveChange?.(-5));
+    this.button("−", x + 162, waveY, 72, 42, () => this.callbacks.onDevWaveChange?.(-1));
+    this.button("+", x + panelWidth - 234, waveY, 72, 42, () => this.callbacks.onDevWaveChange?.(1));
+    this.button("+5", x + panelWidth - 152, waveY, 72, 42, () => this.callbacks.onDevWaveChange?.(5));
+
+    const row1 = waveY + 62;
+    this.button("START WAVE", x + 38, row1, 190, 46, () => this.callbacks.onDevStartWave?.(), false, null, C.purple);
+    this.button("OPEN UPGRADES", width / 2 - 95, row1, 190, 46, () => this.callbacks.onDevOpenShop?.(), false, null, C.purple);
+    this.button("TEST DAWN", x + panelWidth - 228, row1, 190, 46, () => this.callbacks.onDevDawn?.(), false, null, C.purple);
+
+    const row2 = row1 + 64;
+    this.button("+1000 SOULS", x + 100, row2, 210, 44, () => this.callbacks.onDevAddSouls?.(1000));
+    this.button("+10 BOUND SOULS", x + panelWidth - 310, row2, 210, 44, () => this.callbacks.onDevAddBound?.(10));
+
+    ctx.fillStyle = C.orangeLight;
+    ctx.font = this.dataFont(12, 900);
+    ctx.fillText("UNLOCK SYSTEMS", width / 2, row2 + 78);
+
+    const unlocks = [
+      ["EXTRACTION", "extraction"],
+      ["HELLFIRE", "hellfire"],
+      ["BOMB FORGE", "demolition"],
+      ["UNDERCROFT", "undercroft"],
+      ["OCCULT", "occult"]
+    ];
+    const buttonW = 118;
+    const gap = 8;
+    const totalW = unlocks.length * buttonW + (unlocks.length - 1) * gap;
+    const startX = width / 2 - totalW / 2;
+    unlocks.forEach(([label, key], index) => {
+      this.button(label, startX + index * (buttonW + gap), row2 + 92, buttonW, 42, () => this.callbacks.onDevUnlock?.(key), false, null, C.purple);
+    });
+
+    ctx.fillStyle = C.muted;
+    ctx.font = this.dataFont(10, 800);
+    ctx.fillText(`CURRENT: ${this.souls} SOULS • ${this.boundSouls} BOUND SOULS`, width / 2, row2 + 162);
+
+    this.button("CLOSE", width / 2 - 95, y + panelHeight - 62, 190, 44, () => this.callbacks.onDevClose?.());
   }
 
   drawComplete(width, height) {

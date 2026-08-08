@@ -210,6 +210,24 @@ function makeExtractionPortalTexture() {
   return texture;
 }
 
+function makeDamageDustTexture() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 192;
+  canvas.height = 192;
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, 192, 192);
+  const gradient = ctx.createRadialGradient(96, 96, 5, 96, 96, 92);
+  gradient.addColorStop(0, "rgba(205,190,168,.72)");
+  gradient.addColorStop(0.32, "rgba(150,137,122,.48)");
+  gradient.addColorStop(0.68, "rgba(92,85,80,.20)");
+  gradient.addColorStop(1, "rgba(70,67,66,0)");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, 192, 192);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
 export class World {
   constructor(scene, assets) {
     this.scene = scene;
@@ -234,6 +252,7 @@ export class World {
     this.fortifyGroups = [];
     this.occultPulseTimer = 0;
     this.occultStrikes = [];
+    this.manorDustBursts = [];
     this.dawnActive = false;
     this.dawnProgress = 0;
     this.dawnSun = null;
@@ -295,7 +314,7 @@ export class World {
       crater: new THREE.MeshBasicMaterial({
         color: 0x080404,
         transparent: true,
-        opacity: 0.94,
+        opacity: 0.52,
         depthWrite: false,
         side: THREE.DoubleSide
       })
@@ -713,6 +732,7 @@ export class World {
     this.createBraziers();
     this.createTurretMounts();
     this.createUpgradeVisuals();
+    this.createManorDamageDust();
   }
 
   createBraziers() {
@@ -808,6 +828,64 @@ export class World {
       this.flames.push({ flames, light, sparks, sparkBase, phase: Math.random() * Math.PI * 2 });
       this.disposables.push(legGeometry, bowlGeometry, rimGeometry, coalGeometry, coalMaterial, sparkGeometry, sparkMaterial);
     }
+  }
+
+  createManorDamageDust() {
+    const texture = makeDamageDustTexture();
+    this.disposables.push(texture);
+    this.manorDustBursts = [];
+
+    for (let burstIndex = 0; burstIndex < 12; burstIndex += 1) {
+      const group = new THREE.Group();
+      group.visible = false;
+      this.scene.add(group);
+      const puffs = [];
+      for (let i = 0; i < 5; i += 1) {
+        const material = new THREE.SpriteMaterial({
+          map: texture,
+          color: i % 2 ? 0xb8aa98 : 0x8f8780,
+          transparent: true,
+          opacity: 0,
+          depthWrite: false,
+          depthTest: true,
+          fog: true
+        });
+        const sprite = new THREE.Sprite(material);
+        sprite.position.set(0, 0, 0);
+        sprite.scale.set(0.8, 0.55, 1);
+        group.add(sprite);
+        puffs.push({
+          sprite,
+          material,
+          offsetX: THREE.MathUtils.randFloat(-0.22, 0.18),
+          offsetY: THREE.MathUtils.randFloat(0.05, 0.55),
+          offsetZ: THREE.MathUtils.randFloatSpread(0.65),
+          grow: THREE.MathUtils.randFloat(0.9, 1.35)
+        });
+        this.disposables.push(material);
+      }
+      this.manorDustBursts.push({ group, puffs, timer: 0, duration: 0.9, active: false });
+    }
+  }
+
+  triggerManorDamageDust(position, enemyType = "husk") {
+    if (!position || this.manorDustBursts.length === 0) return;
+    const burst = this.manorDustBursts.find((item) => !item.active) ?? this.manorDustBursts[0];
+    const heavy = enemyType === "brute" || enemyType === "siege";
+    burst.active = true;
+    burst.timer = burst.duration;
+    burst.group.visible = true;
+    burst.group.position.set(
+      this.manorBarrierX - 0.10,
+      heavy ? 0.95 : 0.55,
+      THREE.MathUtils.clamp(position.z, this.manorBounds.min.z + 0.5, this.manorBounds.max.z - 0.5)
+    );
+    burst.puffs.forEach(({ sprite, material, offsetX, offsetY, offsetZ }, index) => {
+      sprite.position.set(offsetX, offsetY, offsetZ);
+      const scale = (heavy ? 1.35 : 1) * (0.72 + index * 0.08);
+      sprite.scale.set(scale, scale * 0.66, 1);
+      material.opacity = heavy ? 0.62 : 0.48;
+    });
   }
 
   createTurretMounts() {
@@ -942,8 +1020,10 @@ export class World {
     // for a short conversion cycle. This makes the mechanic readable even on
     // mobile without requiring a tiny drop target.
     const extraction = new THREE.Group();
-    const extractionY = Math.min(this.manorBounds.max.y * 0.69, 8.55);
-    extraction.position.set(this.manorBarrierX + 2.25, extractionY, -0.35);
+    const extractionY = Math.min(this.manorBounds.max.y * 0.58, 7.45);
+    // Bring the target forward to the manor facade and stretch it across the
+    // roof/front edge so the intended drop zone reads immediately.
+    extraction.position.set(this.manorBarrierX + 0.48, extractionY, -0.15);
     extraction.visible = false;
     this.scene.add(extraction);
     this.extractionGroup = extraction;
@@ -961,15 +1041,15 @@ export class World {
       fog: false
     });
     const portal = new THREE.Sprite(portalMaterial);
-    portal.position.set(0, 0.72, 1.8);
-    portal.scale.set(5.8, 5.8, 1);
+    portal.position.set(0, 0.15, 0);
+    portal.scale.set(8.8, 3.25, 1);
     extraction.add(portal);
 
     const portalHaloMaterial = new THREE.SpriteMaterial({
       map: portalTexture,
       color: 0xff6b24,
       transparent: true,
-      opacity: 0.38,
+      opacity: 0.18,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
       depthTest: true,
@@ -977,11 +1057,11 @@ export class World {
     });
     const portalHalo = new THREE.Sprite(portalHaloMaterial);
     portalHalo.position.copy(portal.position);
-    portalHalo.scale.set(7.4, 7.4, 1);
+    portalHalo.scale.set(10.2, 4.2, 1);
     extraction.add(portalHalo);
 
-    const extractionLight = new THREE.PointLight(0xffa14f, 64, 24, 1.6);
-    extractionLight.position.set(0, 1.1, 1.2);
+    const extractionLight = new THREE.PointLight(0xffa14f, 26, 18, 1.8);
+    extractionLight.position.set(0, 0.6, 0);
     extraction.add(extractionLight);
 
     this.extractionBeams = [];
@@ -994,7 +1074,7 @@ export class World {
       beamGroup.visible = false;
       this.scene.add(beamGroup);
 
-      const beamGeometry = new THREE.CylinderGeometry(0.42, 2.0, 11.5, 28, 1, true);
+      const beamGeometry = new THREE.CylinderGeometry(0.48, 2.25, 13.5, 28, 1, true);
       const beamMaterial = new THREE.MeshBasicMaterial({
         color: 0xfff1c9,
         transparent: true,
@@ -1004,10 +1084,10 @@ export class World {
         side: THREE.DoubleSide
       });
       const beam = new THREE.Mesh(beamGeometry, beamMaterial);
-      beam.position.y = 5.7;
+      beam.position.y = 6.55;
       beamGroup.add(beam);
 
-      const innerGeometry = new THREE.CylinderGeometry(0.16, 0.8, 12.2, 20, 1, true);
+      const innerGeometry = new THREE.CylinderGeometry(0.18, 0.92, 14.0, 20, 1, true);
       const innerMaterial = new THREE.MeshBasicMaterial({
         color: 0xffffff,
         transparent: true,
@@ -1017,7 +1097,7 @@ export class World {
         side: THREE.DoubleSide
       });
       const inner = new THREE.Mesh(innerGeometry, innerMaterial);
-      inner.position.y = 6.0;
+      inner.position.y = 6.8;
       beamGroup.add(inner);
 
       const particleCount = 20;
@@ -1236,10 +1316,10 @@ export class World {
     // Depth-independent roof target: only screen-like horizontal/vertical
     // placement matters, so foreground/background Z never prevents capture.
     return (
-      position.x >= this.manorBarrierX - 1.0 &&
-      position.x <= this.manorBounds.max.x + 1.8 &&
-      position.y >= this.manorBounds.max.y * 0.36 &&
-      position.y <= this.manorBounds.max.y + 5.2
+      position.x >= this.manorBarrierX - 1.5 &&
+      position.x <= this.manorBounds.max.x + 1.2 &&
+      position.y >= this.manorBounds.max.y * 0.30 &&
+      position.y <= this.manorBounds.max.y + 5.5
     );
   }
 
@@ -1511,12 +1591,12 @@ export class World {
     if (this.upgradeGroups.extraction?.group.visible) {
       const extraction = this.upgradeGroups.extraction;
       const pulse = 1 + Math.sin(elapsed * 2.8) * 0.08;
-      extraction.portal.material.opacity = 0.82 + Math.sin(elapsed * 2.4) * 0.10;
-      extraction.portalHalo.material.opacity = 0.30 + Math.sin(elapsed * 1.9 + 1.1) * 0.08;
-      const portalScale = 1 + Math.sin(elapsed * 2.0) * 0.035;
-      extraction.portal.scale.set(5.8 * portalScale, 5.8 * portalScale, 1);
-      extraction.portalHalo.scale.set(7.4 / portalScale, 7.4 / portalScale, 1);
-      extraction.light.intensity = 52 + pulse * 14;
+      extraction.portal.material.opacity = 0.44 + Math.sin(elapsed * 2.4) * 0.07;
+      extraction.portalHalo.material.opacity = 0.14 + Math.sin(elapsed * 1.9 + 1.1) * 0.04;
+      const portalScale = 1 + Math.sin(elapsed * 2.0) * 0.025;
+      extraction.portal.scale.set(8.8 * portalScale, 3.25 * portalScale, 1);
+      extraction.portalHalo.scale.set(10.2 / portalScale, 4.2 / portalScale, 1);
+      extraction.light.intensity = 20 + pulse * 7;
     }
 
     this.extractionBeams.forEach((slot, slotIndex) => {
@@ -1526,10 +1606,12 @@ export class World {
       const envelope = Math.sin(Math.min(1, progress * 3.2) * Math.PI * 0.5) *
         Math.sin(Math.min(1, (1 - progress) * 5.0) * Math.PI * 0.5);
       const flicker = 0.92 + Math.sin(elapsed * 8 + slot.phase) * 0.08;
-      slot.beam.material.opacity = 0.24 * envelope * flicker;
-      slot.inner.material.opacity = 0.32 * envelope;
-      slot.particles.material.opacity = 0.72 * envelope;
-      slot.light.intensity = 28 * envelope;
+      // Active conversion beams are intentionally far brighter than the idle
+      // portal so the player can instantly see whether a binding is running.
+      slot.beam.material.opacity = 0.52 * envelope * flicker;
+      slot.inner.material.opacity = 0.76 * envelope;
+      slot.particles.material.opacity = 0.96 * envelope;
+      slot.light.intensity = 72 * envelope;
       slot.beam.scale.set(1 + Math.sin(elapsed * 3 + slotIndex) * 0.04, 1, 1 + Math.cos(elapsed * 2.4 + slotIndex) * 0.04);
 
       const attr = slot.particles.geometry.attributes.position;
@@ -1544,6 +1626,25 @@ export class World {
         slot.active = false;
         slot.group.visible = false;
         this.extractionCompletions += 1;
+      }
+    });
+
+    this.manorDustBursts.forEach((burst) => {
+      if (!burst.active) return;
+      burst.timer -= dt;
+      const t = THREE.MathUtils.clamp(1 - burst.timer / burst.duration, 0, 1);
+      const fade = Math.max(0, 1 - t);
+      burst.puffs.forEach(({ sprite, material, grow }, index) => {
+        sprite.position.x -= dt * (0.28 + index * 0.025);
+        sprite.position.y += dt * (0.32 + index * 0.035);
+        const base = 0.72 + index * 0.08;
+        const size = base + t * grow;
+        sprite.scale.set(size, size * 0.66, 1);
+        material.opacity = fade * (index % 2 ? 0.34 : 0.46);
+      });
+      if (burst.timer <= 0) {
+        burst.active = false;
+        burst.group.visible = false;
       }
     });
 

@@ -244,13 +244,11 @@ The GitHub Action builds `main`, copies `assets/`, `fonts/`, and `sounds/` into 
 - `assets/soulmusic.mp3` loops only while at least one binding beam is active and fades out when the final active binding finishes.
 
 
-## v1.5.2 progression / extraction polish
+## v1.5.3 gameplay / test pass
 
-- Soul Extraction and Hellfire Battery now become available together.
-- Hell Bomb Forge availability moved later; Undercroft and Occult availability also moved.
-- Locked systems no longer reveal the wave on which they become available.
-- Extraction slot upgrades cost 3000 and 6000 Souls.
-- Removed explanatory text about fortification costs increasing.
-- Replaced the roof rings / idle extraction cylinder with one bright pulsing portal hovering above/in front of the manor.
-- Purchasing Soul Extraction for the first time opens a short visual instruction card explaining how to drop a demon into the portal.
-- Added developer test mode. Use `?dev=1&wave=25` to start directly at a chosen wave with test resources. Add `&shop=1` to open the between-wave shop immediately at that progression point. Developer mode does not overwrite or delete the normal save.
+- Added pooled dust-cloud impacts when demons damage the manor.
+- Moved Soul Extraction forward on the manor and stretched the idle portal into a longer, clearer drop target.
+- Reduced idle portal brightness while substantially increasing active conversion-beam brightness.
+- Added a desktop-only developer panel opened with Ctrl+Shift+D. Test mode leaves the normal save untouched and disables saves for the rest of that browser session.
+- Developer controls include wave selection, direct wave start, upgrade-screen testing, resource grants, system unlocks and dawn testing.
+- Added a campaign-wide maximum of three Retry Wave continues. After three retries have been used, the next Game Over only offers New Game.
