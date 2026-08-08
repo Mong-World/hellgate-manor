@@ -1245,13 +1245,17 @@ export class UI {
     const extractionUnlock = this.wave < (b.extraction.unlockWave ?? 1);
     let extractionItem;
     if (!this.buildings.extraction || this.extractionLevel <= 0) {
+      const extractionWave = b.extraction.unlockWave ?? 1;
       extractionItem = [
         "SOUL EXTRACTION",
-        "1 BINDING SLOT — DROP A DEMON INTO THE GLOWING PORTAL",
+        extractionUnlock
+          ? `UNLOCKS WAVE ${extractionWave}`
+          : "1 BINDING SLOT — DROP A DEMON INTO THE GLOWING PORTAL",
         b.extraction.cost,
         "extraction",
         false,
-        extractionUnlock
+        extractionUnlock,
+        extractionUnlock ? `WAVE ${extractionWave}` : null
       ];
     } else if (this.extractionLevel < CONFIG.extraction.maxLevel) {
       const next = this.extractionLevel + 1;
@@ -1277,12 +1281,19 @@ export class UI {
 
     const makeSystem = (key, title, description) => {
       const def = b[key];
-      const waveLocked = this.wave < (def.unlockWave ?? 1);
+      const unlockWave = def.unlockWave ?? 1;
+      const waveLocked = this.wave < unlockWave;
       const extractionLocked = !this.buildings.extraction;
       const locked = waveLocked || extractionLocked;
       let text = description;
-      if (!waveLocked && extractionLocked) text = "REQUIRES SOUL EXTRACTION";
-      return [title, text, def.cost, key, this.buildings[key], locked];
+      let lockLabel = null;
+      if (waveLocked) {
+        text = `UNLOCKS WAVE ${unlockWave}`;
+        lockLabel = `WAVE ${unlockWave}`;
+      } else if (extractionLocked) {
+        text = "REQUIRES SOUL EXTRACTION";
+      }
+      return [title, text, def.cost, key, this.buildings[key], locked, lockLabel];
     };
 
     const items = [

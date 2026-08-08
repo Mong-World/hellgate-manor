@@ -11,8 +11,6 @@ import { EffectPool } from "./EffectPool.js";
 
 const SAVE_KEY = "hellgate-manor-save-v3";
 const META_KEY = "hellgate-manor-meta-v1";
-const DEV_ACCESS_HASH = "b9520238793370c7fb9cb3bd76eaf0ffa8442359343c64b9c4082a662d2f62e7";
-
 export class Game {
   constructor(container) {
     this.container = container;
@@ -25,11 +23,9 @@ export class Game {
     this.cameraBase = new THREE.Vector3(...CONFIG.camera.position);
     this.cameraTarget = new THREE.Vector3(...CONFIG.camera.target);
     const params = new URLSearchParams(window.location.search);
-    // Developer mode is deliberately not exposed by a public URL flag anymore.
-    // The wave query remains useful after private developer access is unlocked.
+    // Developer mode is deliberately not exposed by a public URL flag.
+    // Ctrl + Shift + D opens the temporary test panel during development.
     this.developerMode = false;
-    this.developerAccessGranted = false;
-    this.developerAccessPending = false;
     this.developerWave = THREE.MathUtils.clamp(Math.floor(Number(params.get("wave")) || 1), 1, CONFIG.waves.length);
     this.developerShop = false;
     this.developerPanelOpen = false;
@@ -111,11 +107,11 @@ export class Game {
     this.focusGameCanvas = this.focusGameCanvas.bind(this);
     this.animate = this.animate.bind(this);
     window.addEventListener("resize", this.onResize);
-    // Capture phase plus a keyup fallback makes the private shortcut more
+    // Capture phase plus a keyup fallback makes Ctrl + Shift + D more
     // reliable inside Portals/browser iframes.
     window.addEventListener("keydown", this.onKeyDown, true);
     window.addEventListener("keyup", this.onKeyUp, true);
-    this.renderer.domElement.addEventListener("pointerdown", this.focusGameCanvas);
+    document.addEventListener("pointerdown", this.focusGameCanvas, true);
   }
 
   resetState({ newGamePlus = false } = {}) {
@@ -1085,10 +1081,9 @@ export class Game {
   triggerDeveloperShortcut(event) {
     event.preventDefault();
     event.stopPropagation();
-    if (event.repeat || this.developerAccessPending) return;
+    if (event.repeat) return;
     if (this.developerPanelOpen) this.closeDeveloperPanel();
-    else if (this.developerAccessGranted) this.openDeveloperPanel();
-    else void this.requestDeveloperAccess();
+    else this.openDeveloperPanel();
   }
 
   onKeyDown(event) {
@@ -1121,31 +1116,6 @@ export class Game {
       return;
     }
     this.triggerDeveloperShortcut(event);
-  }
-
-  async hashDeveloperPassword(value) {
-    const bytes = new TextEncoder().encode(value);
-    const digest = await crypto.subtle.digest("SHA-256", bytes);
-    return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
-  }
-
-  async requestDeveloperAccess() {
-    this.developerAccessPending = true;
-    try {
-      const entered = window.prompt("Developer access password:");
-      if (entered == null) return;
-      const hash = await this.hashDeveloperPassword(entered);
-      if (hash !== DEV_ACCESS_HASH) {
-        this.audio.play("deniedPurchase", { volume: 0.42, cooldown: 0 });
-        return;
-      }
-      this.developerAccessGranted = true;
-      this.openDeveloperPanel();
-    } catch (error) {
-      console.warn("Developer access check failed.", error);
-    } finally {
-      this.developerAccessPending = false;
-    }
   }
 
   openDeveloperPanel() {
@@ -1431,7 +1401,7 @@ export class Game {
     window.removeEventListener("resize", this.onResize);
     window.removeEventListener("keydown", this.onKeyDown, true);
     window.removeEventListener("keyup", this.onKeyUp, true);
-    this.renderer?.domElement?.removeEventListener("pointerdown", this.focusGameCanvas);
+    document.removeEventListener("pointerdown", this.focusGameCanvas, true);
     this.ui.dispose();
     this.grabSystem?.dispose();
     this.waveManager?.dispose();

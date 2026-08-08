@@ -1,3 +1,9 @@
+# Hellgate Manor v1.8.5
+
+- Locked Systems upgrades now state the exact wave they unlock on, both in the row text and locked button.
+- Developer panel now opens directly with **Ctrl + Shift + D**; password protection has been removed for testing.
+- The game canvas is focused from any pointer interaction inside the game iframe to improve keyboard shortcut reliability in Portals.
+
 # Hellgate Manor — Full Game First Draft v1.0
 
 This is the first full-game draft built from the previous five-wave vertical slice.
@@ -299,14 +305,11 @@ The GitHub Action builds `main`, copies `assets/`, `fonts/`, and `sounds/` into 
 - Desktop camera and desktop UI remain unchanged.
 
 
-## v1.8.1 final branding / ending-audio pass
+## v1.8.0 final branding / ending-audio pass
 
-- Added `assets/moofstudiogame.png` branding to the loading screen, title screen and pause menu.
-- Loading now leads with the Moof Studios branding and shows HELLGATE MANOR as the smaller game title beneath it.
-- Added `assets/endgamebang.mp3` at the instant Wave 50 is completed. The dawn music waits for the ending sting to finish (with the existing transition time as a minimum).
-- The developer panel remains fully available but the old `Ctrl + Shift + D` shortcut and public `?dev=1` activation have been removed.
-- Developer access now requires a private multi-key shortcut plus password verification. Only a SHA-256 hash is stored in the client source, not the password text itself.
-- Mobile responsive framing/UI and all v1.7.3 gameplay behaviour are otherwise unchanged.
+- Added `assets/moofstudiogame.png` branding and `assets/endgamebang.mp3` for the Wave 50 transition.
+- Developer access was temporarily password protected in this release; this was removed again in v1.8.5 for testing reliability.
+- Mobile responsive framing/UI and all v1.7.3 gameplay behaviour were otherwise unchanged.
 
 ## v1.8.1 branding hierarchy
 
@@ -314,22 +317,28 @@ The GitHub Action builds `main`, copies `assets/`, `fonts/`, and `sounds/` into 
 - `assets/moofstudiogame.png` is presented as a compact production credit directly underneath the title.
 - Separate mobile/short-landscape sizes keep the credit subordinate without changing the gameplay HUD/camera work from v1.7.3.
 
-## v1.8.2 manor repair visibility / developer shortcut
+## v1.8.2 manor repair visibility
 
 - The upgrade screen now shows current **MANOR HP / MAX HP** alongside Souls, so repair purchases can be judged before spending Souls.
 - Manor HP is visible on desktop and in the compact landscape-mobile upgrade header.
 - The HP value changes colour as the manor becomes damaged, while the existing repair buttons still disable at full health.
-- Protected developer access is now opened with `Ctrl + Shift + D`; password verification remains required and the password itself is still not stored as plaintext in the source.
 
 
 ## v1.8.3
 - Tightened and vertically balanced the Start and Pause panels to remove excess empty space.
-- Developer access shortcut: Ctrl + Shift + D (password still required).
+- Developer shortcut returned to Ctrl + Shift + D.
 
 
-## v1.8.4 early-upgrade balance / Bound Soul reminder / dev shortcut reliability
+## v1.8.4 early-upgrade balance / Bound Soul reminder
 
 - Hellfire Battery purchase cost reduced from 1800 Souls to **1000 Souls**, keeping the first active defence realistically accessible before Wave 10 after buying Soul Extraction.
-- The first purchased Bound-Soul-powered system now opens a short reminder that Bound Souls must be explicitly allocated to power upgrades.
+- The first purchased Bound-Soul-powered system opens a short reminder that Bound Souls must be explicitly allocated to power upgrades.
 - Removed the Moof Studios production logo from the pause screen; start/loading branding is unchanged.
-- Protected developer access remains **Ctrl + Shift + D** with the existing password check. The shortcut now listens in capture phase, has a keyup fallback, and focuses the game canvas after interaction to improve reliability inside Portals/browser iframes.
+- Ctrl + Shift + D used capture-phase handling and a keyup fallback, but password prompting remained in this build.
+
+## v1.8.5 visible unlock timing / direct dev access
+
+- Locked Systems shop rows now show the exact wave at which they unlock.
+- Soul Extraction and Hellfire Battery show **WAVE 4** while locked; Hell Bomb Forge **WAVE 15**; Undercroft **WAVE 25**; Occult Tower **WAVE 35**.
+- Password protection has been removed from the developer panel for testing. **Ctrl + Shift + D** opens/closes the panel directly.
+- Any pointer interaction inside the game iframe focuses the game canvas to improve keyboard shortcut reliability in Portals.
