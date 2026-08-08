@@ -685,7 +685,7 @@ export class Game {
     // Undercroft is deliberately capped so it remains useful without turning
     // the manor into an effectively infinite-health economy.
     if (this.buildings.undercroft && this.assignments.undercroft > 0) {
-      const repair = this.assignments.undercroft * 6;
+      const repair = this.assignments.undercroft * 10;
       this.manorHealth = Math.min(this.manorMaxHealth, this.manorHealth + repair);
     }
 

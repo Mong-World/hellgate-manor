@@ -1,4 +1,4 @@
-# Hellgate Manor v1.8.6
+# Hellgate Manor v1.8.7
 
 - Locked Systems upgrades now state the exact wave they unlock on, both in the row text and locked button.
 - Developer panel now opens directly with **Ctrl + Shift + D**; password protection has been removed for testing.
@@ -341,10 +341,15 @@ The GitHub Action builds `main`, copies `assets/`, `fonts/`, and `sounds/` into 
 - Protected developer access remains **Ctrl + Shift + D** with the existing password check. The shortcut now listens in capture phase, has a keyup fallback, and focuses the game canvas after interaction to improve reliability inside Portals/browser iframes.
 
 
-## v1.8.6 shop clarity / system tutorials
+## v1.8.7 shop clarity / system tutorials
 
 - Shop purchase buttons now use three clear states: dark grey for wave/requirement locked, muted bronze-red for unlocked but unaffordable, and the existing bright orange/gold state when affordable.
 - Soul Extraction and Hellfire Battery tutorial behaviour is unchanged from v1.8.5.
 - Hell Bomb Forge, Undercroft and Occult Tower now show a short one-time tutorial the first time their unlocked shop button is clicked.
 - Later-system tutorial headings use the Lansbury game font; tutorial instructions use the same readable condensed UI font as Soul Extraction.
 - Tutorial acknowledgement is stored in the normal save so each help panel only appears once per save.
+
+## v1.8.7 balance update
+- Undercroft cost reduced to **8,000 Souls**.
+- Occult Tower cost reduced to **16,000 Souls**.
+- Undercroft now repairs **10 HP per assigned Bound Soul** after each completed wave.

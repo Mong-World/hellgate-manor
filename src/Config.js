@@ -137,8 +137,8 @@ export const CONFIG = Object.freeze({
     extractionUpgrade3: { cost: 6000, label: "SOUL EXTRACTION III" },
     hellfire: { cost: 1000, label: "HELLFIRE BATTERY", unlockWave: 4 },
     demolition: { cost: 4800, label: "HELL BOMB FORGE", unlockWave: 15 },
-    undercroft: { cost: 9000, label: "UNDERCROFT", unlockWave: 25 },
-    occult: { cost: 18000, label: "OCCULT TOWER", unlockWave: 35 }
+    undercroft: { cost: 8000, label: "UNDERCROFT", unlockWave: 25 },
+    occult: { cost: 16000, label: "OCCULT TOWER", unlockWave: 35 }
   },
 
   extraction: {
