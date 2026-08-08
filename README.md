@@ -279,3 +279,9 @@ The GitHub Action builds `main`, copies `assets/`, `fonts/`, and `sounds/` into 
 - Touch controls use larger invisible hit areas and swipe scrolling inside shop content.
 - Mobile rendering caps DPR and reduces cosmetic particle/shadow load; desktop rendering/layout remains unchanged.
 - Developer tools remain enabled (`Ctrl + Shift + D` on desktop).
+
+
+## v1.7.2 mobile framing
+- Landscape phones now preserve the same horizontal camera framing as the 844x390 Portals mobile reference viewport.
+- Extra-wide phones automatically tighten vertical FOV so they do not reveal additional world at the left/right edges.
+- Desktop camera and UI remain unchanged.

@@ -1223,10 +1223,26 @@ export class Game {
     if (!this.camera) return;
 
     if (this.isMobileLandscapeView()) {
-      // Wide phone screens expose much more horizontal world at the desktop
-      // vertical FOV. Bring the mobile camera closer so the battlefield fills
-      // the screen instead of reading like a smaller copy of desktop.
-      this.camera.fov = 38.5;
+      // Use the Portals 844x390 viewport as the framing reference. Phones with
+      // wider aspect ratios would otherwise reveal extra world at both sides,
+      // including the demon spawn edge and the far side of the manor. Holding
+      // horizontal FOV constant keeps that composition consistent across
+      // landscape phones while still allowing the viewport height to vary.
+      const referenceAspect = 844 / 390;
+      const referenceVerticalFov = THREE.MathUtils.degToRad(38.5);
+      const referenceHorizontalFov = 2 * Math.atan(
+        Math.tan(referenceVerticalFov / 2) * referenceAspect
+      );
+      const aspect = Math.max(1.35, window.innerWidth / Math.max(window.innerHeight, 1));
+      const adaptiveVerticalFov = 2 * Math.atan(
+        Math.tan(referenceHorizontalFov / 2) / aspect
+      );
+
+      this.camera.fov = THREE.MathUtils.clamp(
+        THREE.MathUtils.radToDeg(adaptiveVerticalFov),
+        31.5,
+        41.5
+      );
       this.cameraBase.set(0.2, 8.75, 24.4);
       this.cameraTarget.set(2.25, 3.0, 0);
     } else {
@@ -1306,6 +1322,7 @@ export class Game {
   }
 
   onResize() {
+    this.mobileOptimized = (window.matchMedia?.("(pointer: coarse)")?.matches || navigator.maxTouchPoints > 0) && Math.min(window.innerWidth, window.innerHeight) <= 900;
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.applyResponsiveCamera(true);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.mobileOptimized ? 1.35 : 2));
