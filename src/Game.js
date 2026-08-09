@@ -645,7 +645,7 @@ export class Game {
     this.waveManager.setNewGamePlus?.(this.newGamePlus);
     this.waveManager.startWave(this.waveIndex, openingDelay);
     this.defence.resetCooldown();
-    this.audio.setMusicLevel(0.34, 0.3);
+    this.audio.setMusicLevel(waveNumber === 50 ? 0.425 : 0.34, 0.3);
     this.audio.playMusic(
       waveNumber === 50 ? "level50" : (this.waveIndex % 2 === 0 ? "background1" : "background2"),
       waveNumber === 50 ? 1.15 : 0.7
@@ -873,10 +873,9 @@ export class Game {
       cooldown: 0,
       maxInstances: 1
     });
-    const endingBangDuration = this.audio.getDuration?.("endgameBang") ?? 0;
-    // Let the bang/wind sting finish before the dawn score enters. The old
-    // 4.15 second transition remains the minimum if the clip is unavailable.
-    this.endingDawnMusicDelay = Math.max(4.15, endingBangDuration + 0.18);
+    // THE NIGHT IS OVER begins fading in at 5 seconds on the ending UI.
+    // Start the dawn score at that exact moment so the music arrives with the title.
+    this.endingDawnMusicDelay = 5.0;
     this.defence.clearForDawn?.();
     this.world.startVictorySequence?.();
     this.ui.startEndingSequence(result);

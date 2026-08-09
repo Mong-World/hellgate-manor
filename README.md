@@ -362,7 +362,7 @@ The GitHub Action builds `main`, copies `assets/`, `fonts/`, and `sounds/` into 
 - Retry returns to upgrades with failed-wave earnings rolled back.
 - Fortify economy, ending defence score, click counter, occult area, dust/embers, crossbow/shed placement and preload paths polished.
 
-## v1.9.3 final polish
+## v1.9.4 final polish
 - Manor HUD now pulses when health reaches 10% or less on desktop and mobile.
 - Normal campaign transitions into the existing Hell/NG+ atmosphere visually at Wave 40 only, with a 4-second opening window and no gameplay modifier changes.
 - The late-game Hell atmosphere fades away during the Wave 50 victory sequence before dawn.

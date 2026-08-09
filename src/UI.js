@@ -652,7 +652,7 @@ export class UI {
     const ratio = Math.max(0, Math.min(1, this.health / this.maxHealth));
     ctx.fillStyle = "rgba(255,255,255,.07)";
     ctx.fillRect(barX, barY, barWidth, 14);
-    const criticalHealth = ratio > 0 && ratio <= 0.10;
+    const criticalHealth = ratio > 0 && ratio <= 0.20;
     const criticalPulse = criticalHealth ? 0.5 + 0.5 * Math.sin(this.uiTime * 7.5) : 0;
     ctx.save();
     ctx.fillStyle = this.healthFlash > 0 || ratio <= 0.35 ? C.red : C.orange;
@@ -785,7 +785,7 @@ export class UI {
     const ratio = Math.max(0, Math.min(1, this.health / this.maxHealth));
     ctx.fillStyle = "rgba(255,255,255,.07)";
     ctx.fillRect(barX, barY, barW, 8);
-    const criticalHealth = ratio > 0 && ratio <= 0.10;
+    const criticalHealth = ratio > 0 && ratio <= 0.20;
     const criticalPulse = criticalHealth ? 0.5 + 0.5 * Math.sin(this.uiTime * 7.5) : 0;
     ctx.save();
     ctx.fillStyle = this.healthFlash > 0 || ratio <= 0.35 ? C.red : C.orange;
