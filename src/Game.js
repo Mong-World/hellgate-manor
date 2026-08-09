@@ -144,7 +144,8 @@ export class Game {
     this.tutorialsSeen = {
       demolition: false,
       undercroft: false,
-      occult: false
+      occult: false,
+      overcharge: false
     };
     this.waveStartSnapshot = null;
     this.continuesUsed = 0;
@@ -865,6 +866,11 @@ export class Game {
     if (this.ui.mode !== "results") return;
     this.ui.setMode("intermission");
     this.syncUI();
+    const overchargeUnlockWave = CONFIG.overcharge?.unlockWave ?? 40;
+    if (this.waveIndex + 1 >= overchargeUnlockWave && !this.tutorialsSeen.overcharge) {
+      this.tutorialsSeen.overcharge = true;
+      this.ui.showOverchargeTutorial?.();
+    }
   }
 
   getIntermissionResumeWaveIndex() {

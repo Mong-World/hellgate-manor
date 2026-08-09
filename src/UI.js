@@ -241,6 +241,18 @@ export class UI {
     };
   }
 
+  showOverchargeTutorial() {
+    this.tutorial = {
+      simple: true,
+      title: "MANOR OVERCHARGE",
+      lines: [
+        "OVERCHARGE IS NOW AVAILABLE IN BOUND SOULS.",
+        "SPEND 50 UNASSIGNED BOUND SOULS TO CHARGE IT",
+        "FOR ONE WAVE OF EXTRA DEFENCE AND HELLFIRE POWER."
+      ]
+    };
+  }
+
   setWaveResults(results) {
     this.waveResults = { ...this.waveResults, ...results };
   }
@@ -1443,8 +1455,41 @@ export class UI {
     const showOvercharge = this.wave >= (CONFIG.overcharge?.unlockWave ?? 40);
     const totalRows = Math.max(1, systems.length + (showOvercharge ? 1 : 0));
     const rowH = Math.max(mobile ? 76 : 72, Math.min(mobile ? 86 : 92, (height - 42 - rowGap * (totalRows - 1)) / totalRows));
+
+    if (showOvercharge) {
+      const rowY = startY;
+      this.panel(x, rowY, width, rowH, "rgba(25,10,12,.96)", 7);
+      ctx.textAlign = "left";
+      ctx.fillStyle = C.red;
+      ctx.font = this.font(mobile ? 20 : 24);
+      ctx.fillText("MANOR OVERCHARGE", x + 16, rowY + 30);
+      ctx.fillStyle = C.text;
+      ctx.font = this.dataFont(mobile ? 9 : 10, 820);
+      ctx.fillText("ONE WAVE • 20% LESS MANOR DAMAGE • EXTRA HELLFIRE BOLTS", x + 16, rowY + 50);
+      ctx.fillStyle = C.muted;
+      ctx.font = this.dataFont(mobile ? 8 : 9, 800);
+      const status = this.overchargeReady ? "50 / 50 RESERVED — READY FOR NEXT WAVE" : "COST: 50 UNASSIGNED BOUND SOULS";
+      ctx.fillText(status, x + 16, rowY + 68);
+
+      const buttonW = mobile ? 118 : 146;
+      const buttonH = mobile ? 44 : 48;
+      const bx = x + width - buttonW - 12;
+      const by = rowY + (rowH - buttonH) / 2;
+      const cannotAfford = !this.overchargeReady && this.unassignedSouls < (CONFIG.overcharge?.cost ?? 50);
+      this.button(
+        this.overchargeReady ? "READY" : "CHARGE 50",
+        bx, by, buttonW, buttonH,
+        () => this.callbacks.onOvercharge?.(),
+        this.overchargeReady || cannotAfford,
+        () => this.callbacks.onDeniedPurchase?.(),
+        C.red,
+        this.overchargeReady ? "available" : (cannotAfford ? "unaffordable" : "available")
+      );
+    }
+
     systems.forEach(([key, label, , accent], index) => {
-      const rowY = startY + index * (rowH + rowGap);
+      const rowIndex = index + (showOvercharge ? 1 : 0);
+      const rowY = startY + rowIndex * (rowH + rowGap);
       this.panel(x, rowY, width, rowH, C.panel2, 7);
       ctx.textAlign = "left";
       ctx.fillStyle = accent;
@@ -1504,36 +1549,6 @@ export class UI {
       this.button(maxed ? "MAX" : "+", plusX, by, buttonSize, buttonSize, () => this.callbacks.onAssign?.(key, 1), maxed || this.unassignedSouls <= 0, () => this.callbacks.onDeniedPurchase?.(), accent);
     });
 
-    if (showOvercharge) {
-      const rowY = startY + systems.length * (rowH + rowGap);
-      this.panel(x, rowY, width, rowH, "rgba(25,10,12,.96)", 7);
-      ctx.textAlign = "left";
-      ctx.fillStyle = C.red;
-      ctx.font = this.font(mobile ? 20 : 24);
-      ctx.fillText("MANOR OVERCHARGE", x + 16, rowY + 30);
-      ctx.fillStyle = C.text;
-      ctx.font = this.dataFont(mobile ? 9 : 10, 820);
-      ctx.fillText("ONE WAVE • 20% LESS MANOR DAMAGE • EXTRA HELLFIRE BOLTS", x + 16, rowY + 50);
-      ctx.fillStyle = C.muted;
-      ctx.font = this.dataFont(mobile ? 8 : 9, 800);
-      const status = this.overchargeReady ? "50 / 50 RESERVED — READY FOR NEXT WAVE" : "COST: 50 UNASSIGNED BOUND SOULS";
-      ctx.fillText(status, x + 16, rowY + 68);
-
-      const buttonW = mobile ? 118 : 146;
-      const buttonH = mobile ? 44 : 48;
-      const bx = x + width - buttonW - 12;
-      const by = rowY + (rowH - buttonH) / 2;
-      const cannotAfford = !this.overchargeReady && this.unassignedSouls < (CONFIG.overcharge?.cost ?? 50);
-      this.button(
-        this.overchargeReady ? "READY" : "CHARGE 50",
-        bx, by, buttonW, buttonH,
-        () => this.callbacks.onOvercharge?.(),
-        this.overchargeReady || cannotAfford,
-        () => this.callbacks.onDeniedPurchase?.(),
-        C.red,
-        this.overchargeReady ? "available" : (cannotAfford ? "unaffordable" : "available")
-      );
-    }
   }
 
   drawTutorial(width, height) {
@@ -1794,10 +1809,10 @@ export class UI {
     if (panelA <= 0) return;
     const mobileLandscape = this.isMobileLandscape();
     const mobile = mobileLandscape || width < 760 || height < 650;
-    const panelWidth = Math.min(mobile ? width - 18 : 650, width - 18);
-    const panelHeight = mobileLandscape ? Math.min(368, height - 12) : (mobile ? 474 : 514);
+    const panelWidth = mobile ? Math.min(width - 18, 760) : Math.min(560, width - 120);
+    const panelHeight = mobileLandscape ? Math.min(368, height - 12) : (mobile ? 474 : 492);
     const x = (width - panelWidth) / 2;
-    const y = mobileLandscape ? 6 : Math.min(height - panelHeight - 18, height * 0.39);
+    const y = mobileLandscape ? 6 : Math.min(height - panelHeight - 22, height * 0.35);
     ctx.save();
     ctx.globalAlpha = panelA;
     this.panel(x, y, panelWidth, panelHeight, "rgba(7,8,11,.95)", 14);
