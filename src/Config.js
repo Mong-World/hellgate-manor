@@ -264,11 +264,14 @@ export const CONFIG = Object.freeze({
   },
 
   pool: {
-    husk: 30,
-    strong: 19,
-    runner: 22,
-    brute: 12,
-    siege: 6,
+    // Pools cover the absolute live-enemy cap (plus the 3 simultaneous
+    // extraction slots for convertible Husk-family types) so gameplay never
+    // has to clone a skinned GLB or create an AnimationMixer mid-wave.
+    husk: 33,
+    strong: 33,
+    runner: 33,
+    brute: 30,
+    siege: 26,
     effects: 44
   },
 

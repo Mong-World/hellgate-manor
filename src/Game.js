@@ -38,6 +38,23 @@ export class Game {
     this.endingDawnMusicStarted = false;
     this.endingDawnMusicDelay = 4.15;
     this.runtimePrimed = false;
+    this.lastUISyncState = null;
+    this.uiUnlockWaves = Object.fromEntries(
+      Object.entries(CONFIG.buildings)
+        .filter(([, value]) => value.unlockWave)
+        .map(([key, value]) => [key, value.unlockWave])
+    );
+    this.perfElapsed = 0;
+    this.perfFrames = 0;
+    this.performanceStats = {
+      fps: 0,
+      calls: 0,
+      triangles: 0,
+      geometries: 0,
+      textures: 0,
+      programs: 0,
+      poolMisses: { husk: 0, strong: 0, runner: 0, brute: 0, siege: 0 }
+    };
     this.mobileOptimized = (window.matchMedia?.("(pointer: coarse)")?.matches || navigator.maxTouchPoints > 0) && Math.min(window.innerWidth, window.innerHeight) <= 900;
 
     this.scene = new THREE.Scene();
@@ -162,6 +179,7 @@ export class Game {
     this.endingDawnMusicStarted = false;
     this.endingDawnMusicDelay = 4.15;
     this.paused = false;
+    this.lastUISyncState = null;
   }
 
   async start() {
@@ -215,7 +233,7 @@ export class Game {
     this.defence = new DefenceSystem(
       this.scene,
       this.world,
-      () => this.waveManager.getActiveCombatEnemies(),
+      () => this.waveManager.enemies,
       (enemy, reason, amount) => this.damageEnemy(enemy, reason, amount),
       (enemy) => this.grabSystem?.isHolding(enemy) ?? false,
       () => this.audio.play("crossbowFire", {
@@ -254,6 +272,29 @@ export class Game {
     return new Promise((resolve) => requestAnimationFrame(resolve));
   }
 
+  primeRendererTextures() {
+    if (typeof this.renderer.initTexture !== "function") return 0;
+    const textures = new Set();
+    this.scene.traverse((object) => {
+      const materials = object.material
+        ? (Array.isArray(object.material) ? object.material : [object.material])
+        : [];
+      for (const material of materials) {
+        for (const value of Object.values(material)) {
+          if (value?.isTexture) textures.add(value);
+        }
+      }
+    });
+    textures.forEach((texture) => {
+      try {
+        this.renderer.initTexture(texture);
+      } catch (error) {
+        console.warn("Texture pre-upload skipped", texture?.name || texture?.uuid, error);
+      }
+    });
+    return textures.size;
+  }
+
   async preWarmEverything() {
     const allEnemies = this.waveManager.getAllPooledEnemies();
     this.effectPool.preWarm();
@@ -263,6 +304,10 @@ export class Game {
     this.world.setNewGamePlusMode?.(true);
     this.world.prepareDawnAssets?.();
     this.world.setDawnPrewarmVisible?.(true);
+
+    // Explicitly upload every scene/GLB texture while the loading screen is up.
+    // This avoids a first-visible-frame texture upload on later enemy types.
+    this.primeRendererTextures();
 
     // Force every transient system visible before play: all extraction slots,
     // several occult strikes and both light/heavy manor-damage dust variants.
@@ -1023,7 +1068,11 @@ export class Game {
   }
 
   getUnassignedSouls() {
-    return Math.max(0, this.boundSouls - this.overchargeReserve - Object.values(this.assignments).reduce((sum, value) => sum + value, 0));
+    const assigned = (this.assignments.hellfire ?? 0)
+      + (this.assignments.demolition ?? 0)
+      + (this.assignments.undercroft ?? 0)
+      + (this.assignments.occult ?? 0);
+    return Math.max(0, this.boundSouls - this.overchargeReserve - assigned);
   }
 
   normaliseAssignments() {
@@ -1418,7 +1467,39 @@ export class Game {
     }
   }
 
-  syncUI() {
+  syncUI(force = false) {
+    const unassignedSouls = this.getUnassignedSouls();
+    const b = this.buildings;
+    const a = this.assignments;
+    const last = this.lastUISyncState;
+    const changed = force || !last
+      || last.waveIndex !== this.waveIndex
+      || last.souls !== this.souls
+      || last.manorHealth !== this.manorHealth
+      || last.manorMaxHealth !== this.manorMaxHealth
+      || last.demonDeaths !== this.demonDeaths
+      || last.boundSouls !== this.boundSouls
+      || last.unassignedSouls !== unassignedSouls
+      || last.bombs !== this.bombs
+      || last.fortifyLevel !== this.fortifyLevel
+      || last.extractionLevel !== this.extractionLevel
+      || last.extraction !== b.extraction
+      || last.hellfire !== b.hellfire
+      || last.demolition !== b.demolition
+      || last.undercroft !== b.undercroft
+      || last.occult !== b.occult
+      || last.aHellfire !== a.hellfire
+      || last.aDemolition !== a.demolition
+      || last.aUndercroft !== a.undercroft
+      || last.aOccult !== a.occult
+      || last.newGamePlus !== this.newGamePlus
+      || last.totalManorDamageTaken !== this.totalManorDamageTaken
+      || last.overchargeReserve !== this.overchargeReserve
+      || last.overchargeReady !== this.overchargeReady
+      || last.totalClicks !== this.totalClicks;
+
+    if (!changed) return;
+
     this.ui.setHUD({
       wave: Math.min(this.waveIndex + 1, CONFIG.waves.length),
       souls: this.souls,
@@ -1426,12 +1507,12 @@ export class Game {
       maxHealth: this.manorMaxHealth,
       deaths: this.demonDeaths,
       boundSouls: this.boundSouls,
-      unassignedSouls: this.getUnassignedSouls(),
+      unassignedSouls,
       bombs: this.bombs,
       fortifyLevel: this.fortifyLevel,
       extractionLevel: this.extractionLevel,
-      buildings: { ...this.buildings },
-      assignments: { ...this.assignments },
+      buildings: { ...b },
+      assignments: { ...a },
       purchaseCosts: {
         fortify: this.getFortifyCost(),
         majorFortify: this.getMajorFortifyCost(),
@@ -1442,12 +1523,54 @@ export class Game {
       overchargeReserve: this.overchargeReserve,
       overchargeReady: this.overchargeReady,
       totalClicks: this.totalClicks,
-      unlockWaves: Object.fromEntries(
-        Object.entries(CONFIG.buildings)
-          .filter(([, value]) => value.unlockWave)
-          .map(([key, value]) => [key, value.unlockWave])
-      )
+      unlockWaves: this.uiUnlockWaves
     });
+
+    this.lastUISyncState = {
+      waveIndex: this.waveIndex,
+      souls: this.souls,
+      manorHealth: this.manorHealth,
+      manorMaxHealth: this.manorMaxHealth,
+      demonDeaths: this.demonDeaths,
+      boundSouls: this.boundSouls,
+      unassignedSouls,
+      bombs: this.bombs,
+      fortifyLevel: this.fortifyLevel,
+      extractionLevel: this.extractionLevel,
+      extraction: b.extraction,
+      hellfire: b.hellfire,
+      demolition: b.demolition,
+      undercroft: b.undercroft,
+      occult: b.occult,
+      aHellfire: a.hellfire,
+      aDemolition: a.demolition,
+      aUndercroft: a.undercroft,
+      aOccult: a.occult,
+      newGamePlus: this.newGamePlus,
+      totalManorDamageTaken: this.totalManorDamageTaken,
+      overchargeReserve: this.overchargeReserve,
+      overchargeReady: this.overchargeReady,
+      totalClicks: this.totalClicks
+    };
+  }
+
+  updatePerformanceDiagnostics(dt) {
+    this.perfElapsed += dt;
+    this.perfFrames += 1;
+    if (this.perfElapsed < 0.5) return;
+
+    const info = this.renderer.info;
+    const poolMisses = this.waveManager?.poolMisses ?? this.performanceStats.poolMisses;
+    this.performanceStats.fps = Math.round(this.perfFrames / Math.max(this.perfElapsed, 0.001));
+    this.performanceStats.calls = info.render.calls;
+    this.performanceStats.triangles = info.render.triangles;
+    this.performanceStats.geometries = info.memory.geometries;
+    this.performanceStats.textures = info.memory.textures;
+    this.performanceStats.programs = info.programs?.length ?? 0;
+    this.performanceStats.poolMisses = poolMisses;
+    this.ui.setPerformanceStats?.(this.performanceStats);
+    this.perfElapsed = 0;
+    this.perfFrames = 0;
   }
 
   isMobileLandscapeView() {
@@ -1522,7 +1645,8 @@ export class Game {
   animate() {
     if (!this.running) return;
     requestAnimationFrame(this.animate);
-    const dt = Math.min(this.clock.getDelta(), 1 / 30);
+    const rawDt = this.clock.getDelta();
+    const dt = Math.min(rawDt, 1 / 30);
     const elapsed = this.clock.elapsedTime;
     this.ui.update(dt);
 
@@ -1567,6 +1691,7 @@ export class Game {
     this.syncUI();
     this.ui.draw();
     this.renderer.render(this.scene, this.camera);
+    this.updatePerformanceDiagnostics(rawDt);
   }
 
   onResize() {

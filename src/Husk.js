@@ -35,6 +35,7 @@ export class Husk {
     this.group.add(this.modelRoot);
 
     this.velocity = new THREE.Vector3();
+    this.screenProjection = new THREE.Vector3();
     this.mixer = null;
     this.actions = {};
     this.currentAction = null;
@@ -65,28 +66,6 @@ export class Husk {
     model.traverse((object) => {
       if (!object.isMesh) return;
       object.userData.enemy = this;
-      if ((this.type === "strong" || this.type === "siege") && object.material) {
-        const tintMaterial = (material) => {
-          const clone = material.clone();
-          if (clone.color) {
-            clone.color.multiply(
-              this.type === "siege"
-                ? new THREE.Color(0.10, 0.12, 0.16)
-                : new THREE.Color(0.72, 0.42, 0.34)
-            );
-          }
-          if ("emissive" in clone) {
-            clone.emissive = new THREE.Color(
-              this.type === "siege" ? 0x050812 : 0x351208
-            );
-            clone.emissiveIntensity = this.type === "siege" ? 0.06 : 0.45;
-          }
-          return clone;
-        };
-        object.material = Array.isArray(object.material)
-          ? object.material.map(tintMaterial)
-          : tintMaterial(object.material);
-      }
     });
     this.modelRoot.add(model);
     this.model = model;
@@ -213,8 +192,8 @@ export class Husk {
   }
 
   getScreenY() {
-    const projected = this.position.clone().project(this.camera);
-    return 1 - (projected.y + 1) * 0.5;
+    this.screenProjection.copy(this.position).project(this.camera);
+    return 1 - (this.screenProjection.y + 1) * 0.5;
   }
 
   updatePeakHeight() {

@@ -367,3 +367,13 @@ The GitHub Action builds `main`, copies `assets/`, `fonts/`, and `sounds/` into 
 - Normal campaign transitions into the existing Hell/NG+ atmosphere visually at Wave 40 only, with a 4-second opening window and no gameplay modifier changes.
 - The late-game Hell atmosphere fades away during the Wave 50 victory sequence before dawn.
 - Wave 50 uses `assets/level50music.mp3` instead of the normal rotating background tracks and holds enemy spawning for at least 5 seconds.
+
+## v1.9.5 performance pass
+- Gameplay, wave balance, controls and intended visuals unchanged.
+- Enemy pools now cover the full live-enemy cap (plus extraction slots) so no skinned GLB/AnimationMixer is constructed during a wave.
+- Strong Husk and Siege materials are shared across pooled rigs while preserving the previous final tint/emissive appearance.
+- GLB/scene textures are explicitly uploaded to the renderer during loading.
+- Occult strike pool reduced to the maximum three simultaneous strikes; its PointLights stay in a stable renderer light set while inactive flames are hidden.
+- Extraction beam cylinder segment counts reduced with the same glow/scale presentation.
+- HUD state sync, WaveManager filtering, Hellfire projectile math and Occult targeting now reuse state/scratch objects to reduce garbage-collection spikes.
+- Developer panel includes FPS/draw/GPU/program and enemy-pool-miss diagnostics for testing.

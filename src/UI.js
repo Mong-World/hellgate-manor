@@ -66,6 +66,15 @@ export class UI {
     this.overchargeReserve = 0;
     this.overchargeReady = false;
     this.totalClicks = 0;
+    this.performanceStats = {
+      fps: 0,
+      calls: 0,
+      triangles: 0,
+      geometries: 0,
+      textures: 0,
+      programs: 0,
+      poolMisses: { husk: 0, strong: 0, runner: 0, brute: 0, siege: 0 }
+    };
 
     this.touchDevice = window.matchMedia?.("(pointer: coarse)")?.matches || navigator.maxTouchPoints > 0;
     this.shopScroll = 0;
@@ -154,6 +163,10 @@ export class UI {
 
   setHUD(data) {
     Object.assign(this, data);
+  }
+
+  setPerformanceStats(stats) {
+    this.performanceStats = stats;
   }
 
   setHasSave(hasSave) {
@@ -1787,6 +1800,27 @@ export class UI {
     ctx.fillStyle = C.muted;
     ctx.font = this.dataFont(10, 800);
     ctx.fillText(`CURRENT: ${this.souls} SOULS • ${this.boundSouls} BOUND SOULS`, width / 2, row2 + 162);
+
+    const perf = this.performanceStats ?? {};
+    const misses = perf.poolMisses ?? {};
+    ctx.fillStyle = "rgba(181,140,255,.88)";
+    ctx.font = this.dataFont(9, 820);
+    ctx.fillText(
+      `PERF  ${perf.fps ?? 0} FPS • ${perf.calls ?? 0} DRAWS • ${Number(perf.triangles ?? 0).toLocaleString()} TRIANGLES • ${perf.programs ?? 0} PROGRAMS`,
+      width / 2,
+      row2 + 187
+    );
+    ctx.fillStyle = C.muted;
+    ctx.fillText(
+      `GPU  ${perf.geometries ?? 0} GEOMETRIES • ${perf.textures ?? 0} TEXTURES`,
+      width / 2,
+      row2 + 205
+    );
+    ctx.fillText(
+      `POOL MISSES  H:${misses.husk ?? 0}  ST:${misses.strong ?? 0}  R:${misses.runner ?? 0}  B:${misses.brute ?? 0}  SG:${misses.siege ?? 0}`,
+      width / 2,
+      row2 + 223
+    );
 
     this.button("CLOSE", width / 2 - 95, y + panelHeight - 62, 190, 44, () => this.callbacks.onDevClose?.());
   }

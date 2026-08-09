@@ -1158,7 +1158,7 @@ export class World {
       beamGroup.visible = true;
       this.scene.add(beamGroup);
 
-      const beamGeometry = new THREE.CylinderGeometry(0.48, 2.25, 13.5, 28, 1, true);
+      const beamGeometry = new THREE.CylinderGeometry(0.48, 2.25, 13.5, 18, 1, true);
       const beamMaterial = new THREE.MeshBasicMaterial({
         color: 0xfff1c9,
         transparent: true,
@@ -1172,7 +1172,7 @@ export class World {
       beam.visible = false;
       beamGroup.add(beam);
 
-      const innerGeometry = new THREE.CylinderGeometry(0.18, 0.92, 14.0, 20, 1, true);
+      const innerGeometry = new THREE.CylinderGeometry(0.18, 0.92, 14.0, 12, 1, true);
       const innerMaterial = new THREE.MeshBasicMaterial({
         color: 0xffffff,
         transparent: true,
@@ -1313,9 +1313,11 @@ export class World {
     // Pooled purple ground-fire strikes. These are deliberately flames rather
     // than circles so the Occult system is obvious in motion.
     this.occultStrikes = [];
-    for (let strikeIndex = 0; strikeIndex < 8; strikeIndex += 1) {
+    for (let strikeIndex = 0; strikeIndex < 3; strikeIndex += 1) {
       const group = new THREE.Group();
-      group.visible = false;
+      // Keep the parent/light in the scene at all times so the renderer sees a
+      // stable light count. Only the flame meshes toggle for the one-second hit.
+      group.visible = true;
       this.scene.add(group);
       const flames = [];
       for (let i = 0; i < 12; i += 1) {
@@ -1328,6 +1330,7 @@ export class World {
           depthWrite: false
         });
         const flame = new THREE.Mesh(geometry, material);
+        flame.visible = false;
         const angle = (i / 12) * Math.PI * 2;
         const radius = i < 4 ? 0.82 : i < 8 ? 1.55 : 2.20;
         flame.position.set(Math.cos(angle) * radius, 0.52, Math.sin(angle) * radius);
@@ -1494,6 +1497,7 @@ export class World {
     strike.group.visible = true;
     strike.group.position.copy(position).setY(0.04);
     strike.flames.forEach((flame, index) => {
+      flame.visible = true;
       flame.material.opacity = 0.72;
       flame.scale.setScalar(0.75 + index * 0.05);
     });
@@ -1683,9 +1687,12 @@ export class World {
     this.occultStrikes.forEach((strike) => {
       strike.active = false;
       strike.timer = 0;
-      strike.group.visible = false;
+      strike.group.visible = true;
       strike.light.intensity = 0;
-      strike.flames.forEach((flame) => { flame.material.opacity = 0; });
+      strike.flames.forEach((flame) => {
+        flame.visible = false;
+        flame.material.opacity = 0;
+      });
     });
     this.manorDustBursts?.forEach((burst) => {
       burst.active = false;
@@ -1790,6 +1797,16 @@ export class World {
       this.dawnLight.visible = false;
       this.dawnLight.intensity = 0;
     }
+    this.occultStrikes.forEach((strike) => {
+      strike.active = false;
+      strike.timer = 0;
+      strike.group.visible = true;
+      strike.light.intensity = 0;
+      strike.flames.forEach((flame) => {
+        flame.visible = false;
+        flame.material.opacity = 0;
+      });
+    });
   }
 
   startDawn() {
@@ -2100,7 +2117,11 @@ export class World {
       strike.light.intensity = 20 * fade;
       if (strike.timer <= 0) {
         strike.active = false;
-        strike.group.visible = false;
+        strike.light.intensity = 0;
+        strike.flames.forEach((flame) => {
+          flame.visible = false;
+          flame.material.opacity = 0;
+        });
       }
     });
 
