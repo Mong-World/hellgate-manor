@@ -22,16 +22,6 @@ export class Game {
     this.cameraShake = 0;
     this.cameraBase = new THREE.Vector3(...CONFIG.camera.position);
     this.cameraTarget = new THREE.Vector3(...CONFIG.camera.target);
-    const params = new URLSearchParams(window.location.search);
-    // Developer mode is deliberately not exposed by a public URL flag.
-    // Ctrl + Shift + D opens the temporary test panel during development.
-    this.developerMode = false;
-    this.developerWave = THREE.MathUtils.clamp(Math.floor(Number(params.get("wave")) || 1), 1, CONFIG.waves.length);
-    this.developerShop = false;
-    this.developerPanelOpen = false;
-    this.developerPanelPreviousMode = "start";
-    this.developerPanelPreviousPaused = false;
-    this.developerShortcutLatch = false;
     this.meta = this.readMeta();
     this.endingActive = false;
     this.endingTimer = 0;
@@ -44,17 +34,6 @@ export class Game {
         .filter(([, value]) => value.unlockWave)
         .map(([key, value]) => [key, value.unlockWave])
     );
-    this.perfElapsed = 0;
-    this.perfFrames = 0;
-    this.performanceStats = {
-      fps: 0,
-      calls: 0,
-      triangles: 0,
-      geometries: 0,
-      textures: 0,
-      programs: 0,
-      poolMisses: { husk: 0, strong: 0, runner: 0, brute: 0, siege: 0 }
-    };
     this.mobileOptimized = (window.matchMedia?.("(pointer: coarse)")?.matches || navigator.maxTouchPoints > 0) && Math.min(window.innerWidth, window.innerHeight) <= 900;
 
     this.scene = new THREE.Scene();
@@ -105,31 +84,17 @@ export class Game {
       onContinue: () => this.continueAfterIntermission(),
       onRetry: () => this.retryWave(),
       onRestart: () => this.beginNewGame(),
-      onDevWaveChange: (delta) => this.changeDeveloperWave(delta),
-      onDevStartWave: () => this.startDeveloperWave(),
-      onDevOpenShop: () => this.openDeveloperShop(),
-      onDevAddSouls: (amount) => this.addDeveloperSouls(amount),
-      onDevAddBound: (amount) => this.addDeveloperBoundSouls(amount),
-      onDevUnlock: (system) => this.unlockDeveloperSystem(system),
-      onDevDawn: () => this.testDeveloperDawn(),
-      onDevToggleNGPlus: () => this.toggleDeveloperNewGamePlus(),
-      onDevClose: () => this.closeDeveloperPanel()
     });
 
-    this.ui.setDeveloperMode(this.developerMode, this.developerWave, this.developerShop);
     this.ui.setMeta(this.meta);
     this.resetState({ newGamePlus: false });
     this.onResize = this.onResize.bind(this);
     this.onKeyDown = this.onKeyDown.bind(this);
-    this.onKeyUp = this.onKeyUp.bind(this);
     this.focusGameCanvas = this.focusGameCanvas.bind(this);
     this.trackCampaignClick = this.trackCampaignClick.bind(this);
     this.animate = this.animate.bind(this);
     window.addEventListener("resize", this.onResize);
-    // Capture phase plus a keyup fallback makes Ctrl + Shift + D more
-    // reliable inside Portals/browser iframes.
     window.addEventListener("keydown", this.onKeyDown, true);
-    window.addEventListener("keyup", this.onKeyUp, true);
     document.addEventListener("pointerdown", this.focusGameCanvas, true);
     document.addEventListener("pointerdown", this.trackCampaignClick, true);
   }
@@ -250,7 +215,7 @@ export class Game {
     this.applyUpgradeState();
     this.syncUI();
     this.ui.setMeta(this.meta);
-    this.ui.setHasSave(this.developerMode ? false : this.hasSave());
+    this.ui.setHasSave(this.hasSave());
     this.ui.setMode("start");
     this.running = true;
     requestAnimationFrame(this.animate);
@@ -444,7 +409,7 @@ export class Game {
   }
 
   async beginNewGamePlus() {
-    if (!this.meta.ngPlusUnlocked && !this.developerMode) return;
+    if (!this.meta.ngPlusUnlocked) return;
     return this.beginFreshGame(true);
   }
 
@@ -458,24 +423,8 @@ export class Game {
     this.world.setLateGameVisualMode?.(false, 0);
     this.world.setNewGamePlusMode?.(this.newGamePlus);
     this.world.resetNight?.();
-    if (!this.developerMode) this.clearSave();
+    this.clearSave();
 
-    if (this.developerMode) {
-      this.waveIndex = this.developerWave - 1;
-      this.souls = 50000;
-      this.boundSouls = 160;
-      this.manorMaxHealth = 5000;
-      this.manorHealth = 5000;
-      if (this.developerShop) {
-        this.gameplayActive = false;
-        this.grabSystem.setEnabled(false);
-        this.applyUpgradeState();
-        this.syncUI();
-        this.ui.setMode("intermission");
-        this.startingGame = false;
-        return;
-      }
-    }
 
     this.applyUpgradeState();
     this.startCurrentWave();
@@ -590,7 +539,6 @@ export class Game {
   }
 
   recordCompletion(result) {
-    if (this.developerMode) return;
     this.meta.ngPlusUnlocked = true;
     if (!this.meta.bestRank || this.rankValue(result.finalRank) > this.rankValue(this.meta.bestRank)) {
       this.meta.bestRank = result.finalRank;
@@ -617,7 +565,6 @@ export class Game {
   }
 
   saveGame(resumeWaveIndex = this.waveIndex) {
-    if (this.developerMode) return true;
     try {
       const state = this.snapshotState();
       state.waveIndex = THREE.MathUtils.clamp(resumeWaveIndex, 0, CONFIG.waves.length - 1);
@@ -631,7 +578,6 @@ export class Game {
   }
 
   clearSave() {
-    if (this.developerMode) return;
     try {
       localStorage.removeItem(SAVE_KEY);
     } catch {
@@ -1148,10 +1094,9 @@ export class Game {
     if (this.ui.mode !== "intermission") return;
     if (this.retryingWave) {
       this.retryingWave = false;
-    } else if (!(this.developerMode && this.developerShop)) {
+    } else {
       this.waveIndex += 1;
     }
-    this.developerShop = false;
     this.startCurrentWave();
   }
 
@@ -1286,7 +1231,7 @@ export class Game {
   }
 
   trackCampaignClick(event) {
-    if (!this.campaignTrackingActive || this.endingActive || this.developerMode) return;
+    if (!this.campaignTrackingActive || this.endingActive) return;
     if (event.pointerType === "mouse" && event.button !== 0) return;
     this.totalClicks += 1;
   }
@@ -1299,158 +1244,11 @@ export class Game {
     }
   }
 
-  isDeveloperShortcut(event) {
-    const dKey = event.code === "KeyD" || String(event.key || "").toLowerCase() === "d";
-    return !!(event.ctrlKey && event.shiftKey && !event.altKey && dKey);
-  }
-
-  triggerDeveloperShortcut(event) {
-    event.preventDefault();
-    event.stopPropagation();
-    if (event.repeat) return;
-    if (this.developerPanelOpen) this.closeDeveloperPanel();
-    else this.openDeveloperPanel();
-  }
-
   onKeyDown(event) {
-    if (this.isDeveloperShortcut(event)) {
-      // Latch the keydown so the matching keyup cannot immediately toggle the
-      // developer panel closed. If a browser swallows keydown, keyup remains a
-      // fallback route below.
-      this.developerShortcutLatch = true;
-      this.triggerDeveloperShortcut(event);
-      return;
-    }
-
     if (event.key !== "Escape") return;
-    if (this.developerPanelOpen) {
-      event.preventDefault();
-      this.closeDeveloperPanel();
-      return;
-    }
     if (this.ui.mode !== "playing" && this.ui.mode !== "paused") return;
     event.preventDefault();
     this.togglePause();
-  }
-
-  onKeyUp(event) {
-    if (!this.isDeveloperShortcut(event)) return;
-    event.preventDefault();
-    event.stopPropagation();
-    if (this.developerShortcutLatch) {
-      this.developerShortcutLatch = false;
-      return;
-    }
-    this.triggerDeveloperShortcut(event);
-  }
-
-  openDeveloperPanel() {
-    if (this.developerPanelOpen) return;
-    // Opening the desktop developer panel switches this browser session into
-    // test mode. Normal local save data is left untouched and no further
-    // autosaves are written until the page is refreshed.
-    this.developerMode = true;
-    this.developerPanelOpen = true;
-    this.developerPanelPreviousMode = this.ui.mode;
-    this.developerPanelPreviousPaused = this.paused;
-    this.developerWave = this.waveIndex + 1;
-    if (this.gameplayActive) {
-      this.paused = true;
-      this.grabSystem?.setEnabled(false);
-      this.audio.setMusicLevel(0.10, 0.15);
-    }
-    this.ui.setDeveloperMode(true, this.developerWave, false);
-    this.ui.setDeveloperPanel(true, this.developerWave);
-  }
-
-  closeDeveloperPanel() {
-    if (!this.developerPanelOpen) return;
-    this.developerPanelOpen = false;
-    this.ui.setDeveloperPanel(false, this.developerWave);
-    const previous = this.developerPanelPreviousMode;
-    if (this.gameplayActive && previous === "playing") {
-      this.paused = false;
-      this.grabSystem?.setEnabled(true);
-      this.audio.setMusicLevel(0.34, 0.2);
-      this.ui.setMode("playing");
-    } else if (this.gameplayActive && previous === "paused") {
-      this.paused = true;
-      this.ui.setMode("paused");
-    } else {
-      this.ui.setMode(previous);
-    }
-  }
-
-  changeDeveloperWave(delta) {
-    this.developerWave = THREE.MathUtils.clamp(
-      this.developerWave + delta,
-      1,
-      CONFIG.waves.length
-    );
-    this.ui.setDeveloperPanel(true, this.developerWave);
-  }
-
-  prepareDeveloperTransition() {
-    this.developerMode = true;
-    this.developerPanelOpen = false;
-    this.ui.setDeveloperPanel(false, this.developerWave);
-    this.paused = false;
-    this.gameplayActive = false;
-    this.grabSystem?.setEnabled(false);
-    this.waveManager?.clear();
-    this.waveIndex = this.developerWave - 1;
-  }
-
-  startDeveloperWave() {
-    this.prepareDeveloperTransition();
-    this.applyUpgradeState();
-    this.startCurrentWave();
-  }
-
-  openDeveloperShop() {
-    this.prepareDeveloperTransition();
-    this.developerShop = true;
-    this.applyUpgradeState();
-    this.syncUI();
-    this.ui.setMode("intermission");
-  }
-
-  addDeveloperSouls(amount) {
-    this.souls = Math.max(0, this.souls + amount);
-    this.syncUI();
-  }
-
-  addDeveloperBoundSouls(amount) {
-    this.boundSouls = Math.max(0, this.boundSouls + amount);
-    this.normaliseAssignments();
-    this.applyUpgradeState();
-    this.syncUI();
-  }
-
-  unlockDeveloperSystem(system) {
-    if (!(system in this.buildings)) return;
-    this.buildings[system] = true;
-    if (system === "extraction") this.extractionLevel = Math.max(1, this.extractionLevel);
-    this.applyUpgradeState();
-    this.syncUI();
-  }
-
-  testDeveloperDawn() {
-    this.prepareDeveloperTransition();
-    this.demonDeaths = Math.max(this.demonDeaths, 700);
-    this.boundSouls = Math.max(this.boundSouls, CONFIG.ranking.bindingMaxTarget);
-    this.totalBoundEver = Math.max(this.totalBoundEver, CONFIG.ranking.bindingMaxTarget);
-    this.totalManorDamageTaken = Math.max(this.totalManorDamageTaken, 4200);
-    this.beginVictorySequence();
-  }
-
-  toggleDeveloperNewGamePlus() {
-    this.developerMode = true;
-    this.newGamePlus = !this.newGamePlus;
-    this.waveManager?.setNewGamePlus?.(this.newGamePlus);
-    this.world?.setNewGamePlusMode?.(this.newGamePlus);
-    this.ui.setDeveloperPanel(true, this.developerWave);
-    this.syncUI();
   }
 
   togglePause() {
@@ -1554,146 +1352,6 @@ export class Game {
     };
   }
 
-  updatePerformanceDiagnostics(dt) {
-    this.perfElapsed += dt;
-    this.perfFrames += 1;
-    if (this.perfElapsed < 0.5) return;
-
-    const info = this.renderer.info;
-    const poolMisses = this.waveManager?.poolMisses ?? this.performanceStats.poolMisses;
-    this.performanceStats.fps = Math.round(this.perfFrames / Math.max(this.perfElapsed, 0.001));
-    this.performanceStats.calls = info.render.calls;
-    this.performanceStats.triangles = info.render.triangles;
-    this.performanceStats.geometries = info.memory.geometries;
-    this.performanceStats.textures = info.memory.textures;
-    this.performanceStats.programs = info.programs?.length ?? 0;
-    this.performanceStats.poolMisses = poolMisses;
-    this.ui.setPerformanceStats?.(this.performanceStats);
-    this.perfElapsed = 0;
-    this.perfFrames = 0;
-  }
-
-  isMobileLandscapeView() {
-    return !!this.mobileOptimized && window.innerWidth > window.innerHeight && window.innerHeight <= 700;
-  }
-
-  applyResponsiveCamera(immediate = false) {
-    if (!this.camera) return;
-
-    if (this.isMobileLandscapeView()) {
-      // Use the Portals 844x390 viewport as the framing reference. Phones with
-      // wider aspect ratios would otherwise reveal extra world at both sides,
-      // including the demon spawn edge and the far side of the manor. Holding
-      // horizontal FOV constant keeps that composition consistent across
-      // landscape phones while still allowing the viewport height to vary.
-      const referenceAspect = 844 / 390;
-      const referenceVerticalFov = THREE.MathUtils.degToRad(38.5);
-      const referenceHorizontalFov = 2 * Math.atan(
-        Math.tan(referenceVerticalFov / 2) * referenceAspect
-      );
-      const aspect = Math.max(1.35, window.innerWidth / Math.max(window.innerHeight, 1));
-      const adaptiveVerticalFov = 2 * Math.atan(
-        Math.tan(referenceHorizontalFov / 2) / aspect
-      );
-
-      // v1.7.2 held the horizontal framing completely fixed on increasingly
-      // wide phones. That successfully hid the spawn/manor edges, but on
-      // extra-wide devices it cropped a little too much from the top and
-      // sides. Keep 75% of that corrective crop and relax the remaining 25%
-      // back toward the 844x390 reference framing. The Portals reference
-      // itself is therefore unchanged, while longer phones gain a small
-      // amount of extra breathing room without returning to the old wide view.
-      const adaptiveVerticalFovDegrees = THREE.MathUtils.radToDeg(adaptiveVerticalFov);
-      const referenceVerticalFovDegrees = THREE.MathUtils.radToDeg(referenceVerticalFov);
-      const relaxedVerticalFov = aspect > referenceAspect
-        ? THREE.MathUtils.lerp(adaptiveVerticalFovDegrees, referenceVerticalFovDegrees, 0.25)
-        : adaptiveVerticalFovDegrees;
-
-      this.camera.fov = THREE.MathUtils.clamp(
-        relaxedVerticalFov,
-        31.5,
-        41.5
-      );
-      this.cameraBase.set(0.2, 8.75, 24.4);
-      this.cameraTarget.set(2.25, 3.0, 0);
-    } else {
-      this.camera.fov = CONFIG.camera.fov;
-      this.cameraBase.set(...CONFIG.camera.position);
-      this.cameraTarget.set(...CONFIG.camera.target);
-    }
-
-    this.camera.updateProjectionMatrix();
-    if (immediate) this.camera.position.copy(this.cameraBase);
-    this.camera.lookAt(this.cameraTarget);
-  }
-
-  updateCamera(dt) {
-    this.cameraShake = Math.max(0, this.cameraShake - dt * 1.9);
-    if (this.cameraShake > 0) {
-      const a = this.cameraShake;
-      this.camera.position.set(
-        this.cameraBase.x + THREE.MathUtils.randFloatSpread(a),
-        this.cameraBase.y + THREE.MathUtils.randFloatSpread(a * 0.55),
-        this.cameraBase.z + THREE.MathUtils.randFloatSpread(a * 0.35)
-      );
-    } else {
-      this.camera.position.lerp(this.cameraBase, 0.18);
-    }
-    this.camera.lookAt(this.cameraTarget);
-  }
-
-  animate() {
-    if (!this.running) return;
-    requestAnimationFrame(this.animate);
-    const rawDt = this.clock.getDelta();
-    const dt = Math.min(rawDt, 1 / 30);
-    const elapsed = this.clock.elapsedTime;
-    this.ui.update(dt);
-
-    if (this.endingActive) {
-      this.endingTimer += dt;
-      if (!this.endingDawnMusicStarted && this.endingTimer >= this.endingDawnMusicDelay) {
-        this.endingDawnMusicStarted = true;
-        this.audio.playMusic("newDawn", 1.4, false);
-      }
-    }
-
-    const simulationActive = this.gameplayActive && !this.paused;
-    if (this.waveManager) {
-      this.waveManager.update(simulationActive ? dt : 0);
-      for (const enemy of this.waveManager.getAliveEnemies()) {
-        enemy.update(
-          simulationActive ? dt : 0,
-          elapsed,
-          this.grabSystem?.isHolding(enemy) ?? false,
-          this.world.manorBarrierX
-        );
-      }
-      if (simulationActive) {
-        this.checkWorldCollisions();
-      }
-    }
-
-    this.grabSystem?.update(simulationActive ? dt : 0);
-    this.defence?.update(simulationActive ? dt : 0, simulationActive);
-    this.effectPool?.update(this.paused ? 0 : dt);
-    this.world?.update(elapsed, this.paused ? 0 : dt);
-
-    const completedBindings = this.world?.consumeExtractionCompletions?.() ?? 0;
-    for (let i = 0; i < completedBindings; i += 1) {
-      this.audio.play("soulBling", { volume: 0.68, pitchMin: 1.00, pitchMax: 1.05 });
-    }
-
-    if ((this.world?.getActiveExtractionCount?.() ?? 0) <= 0) {
-      this.audio.stopLoop("soul-binding", 0.35);
-    }
-    this.updateCamera(dt);
-    this.syncUI();
-    this.ui.draw();
-    this.renderer.render(this.scene, this.camera);
-    this.updatePerformanceDiagnostics(rawDt);
-  }
-
   onResize() {
     this.mobileOptimized = (window.matchMedia?.("(pointer: coarse)")?.matches || navigator.maxTouchPoints > 0) && Math.min(window.innerWidth, window.innerHeight) <= 900;
     this.camera.aspect = window.innerWidth / window.innerHeight;
@@ -1706,7 +1364,6 @@ export class Game {
     this.running = false;
     window.removeEventListener("resize", this.onResize);
     window.removeEventListener("keydown", this.onKeyDown, true);
-    window.removeEventListener("keyup", this.onKeyUp, true);
     document.removeEventListener("pointerdown", this.focusGameCanvas, true);
     document.removeEventListener("pointerdown", this.trackCampaignClick, true);
     this.ui.dispose();

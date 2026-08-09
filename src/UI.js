@@ -52,10 +52,6 @@ export class UI {
     this.saveNoticeSuccess = true;
     this.waveResults = { souls: 0, deaths: 0, damage: 0, health: this.health, maxHealth: this.maxHealth, saved: false };
     this.tutorial = null;
-    this.developerMode = false;
-    this.developerWave = 1;
-    this.developerShop = false;
-    this.developerPanelOpen = false;
     this.canRetry = true;
     this.continuesRemaining = 3;
     this.ngPlusUnlocked = false;
@@ -66,15 +62,6 @@ export class UI {
     this.overchargeReserve = 0;
     this.overchargeReady = false;
     this.totalClicks = 0;
-    this.performanceStats = {
-      fps: 0,
-      calls: 0,
-      triangles: 0,
-      geometries: 0,
-      textures: 0,
-      programs: 0,
-      poolMisses: { husk: 0, strong: 0, runner: 0, brute: 0, siege: 0 }
-    };
 
     this.touchDevice = window.matchMedia?.("(pointer: coarse)")?.matches || navigator.maxTouchPoints > 0;
     this.shopScroll = 0;
@@ -165,10 +152,6 @@ export class UI {
     Object.assign(this, data);
   }
 
-  setPerformanceStats(stats) {
-    this.performanceStats = stats;
-  }
-
   setHasSave(hasSave) {
     this.hasSave = hasSave;
   }
@@ -182,17 +165,6 @@ export class UI {
     this.endingData = data;
     this.endingElapsed = 0;
     this.mode = "ending";
-  }
-
-  setDeveloperMode(enabled, wave = 1, shop = false) {
-    this.developerMode = !!enabled;
-    this.developerWave = Math.max(1, Math.floor(Number(wave) || 1));
-    this.developerShop = !!shop;
-  }
-
-  setDeveloperPanel(open, wave = this.developerWave) {
-    this.developerPanelOpen = !!open;
-    this.developerWave = Math.max(1, Math.floor(Number(wave) || 1));
   }
 
   setContinueState({ canRetry = true, remaining = 3 } = {}) {
@@ -429,7 +401,6 @@ export class UI {
       this.drawComplete(width, height);
     }
 
-    if (this.developerPanelOpen) this.drawDeveloperPanel(width, height);
   }
 
   font(size) {
@@ -546,7 +517,7 @@ export class UI {
   drawStart(width, height) {
     const mobileLandscape = this.isMobileLandscape();
     const mobile = mobileLandscape || width < 700 || height < 620;
-    const buttonCount = 1 + (this.hasSave && !this.developerMode ? 1 : 0) + (this.ngPlusUnlocked && !this.developerMode ? 1 : 0);
+    const buttonCount = 1 + (this.hasSave ? 1 : 0) + (this.ngPlusUnlocked ? 1 : 0);
 
     // Keep the start menu tightly wrapped around its content. Earlier builds
     // reserved far more vertical space than the branding/buttons actually
@@ -559,12 +530,11 @@ export class UI {
     const buttonHeight = mobileLandscape ? 38 : (mobile ? 46 : 50);
     const buttonGap = mobileLandscape ? 7 : 10;
     const topBlockHeight = mobileLandscape ? 103 : (mobile ? 128 : 137);
-    const bestRankExtra = this.bestRank && !this.developerMode ? (mobileLandscape ? 18 : 23) : 0;
-    const developerExtra = this.developerMode ? (mobileLandscape ? 27 : 36) : 0;
+    const bestRankExtra = this.bestRank ? (mobileLandscape ? 18 : 23) : 0;
     const bottomPadding = mobileLandscape ? 15 : 24;
     const panelHeight = topBlockHeight + bestRankExtra +
       buttonCount * buttonHeight + Math.max(0, buttonCount - 1) * buttonGap +
-      bottomPadding + developerExtra;
+      bottomPadding;
 
     const x = (width - panelWidth) / 2;
     const y = (height - panelHeight) / 2;
@@ -595,7 +565,7 @@ export class UI {
     ctx.fillText("DEFEND THE MANOR.", width / 2, taglineY);
 
     let contentY = taglineY;
-    if (this.bestRank && !this.developerMode) {
+    if (this.bestRank) {
       ctx.fillStyle = C.orangeLight;
       ctx.font = this.dataFont(mobileLandscape ? 8 : (mobile ? 10 : 12), 900);
       contentY += mobileLandscape ? 16 : 21;
@@ -608,22 +578,16 @@ export class UI {
     this.button("NEW GAME", width / 2 - 105, buttonY, 210, buttonHeight, () => this.callbacks.onNewGame?.());
     buttonY += buttonHeight + buttonGap;
 
-    if (this.hasSave && !this.developerMode) {
+    if (this.hasSave) {
       this.button("CONTINUE", width / 2 - 105, buttonY, 210, buttonHeight, () => this.callbacks.onContinueSave?.());
       buttonY += buttonHeight + buttonGap;
     }
 
-    if (this.ngPlusUnlocked && !this.developerMode) {
+    if (this.ngPlusUnlocked) {
       this.button("NEW GAME+ (HELL MODE)", width / 2 - 130, buttonY, 260, buttonHeight, () => this.callbacks.onNewGamePlus?.(), false, null, C.red);
       buttonY += buttonHeight + buttonGap;
     }
 
-    if (this.developerMode) {
-      ctx.fillStyle = C.purple;
-      ctx.font = this.dataFont(mobile ? 10 : 12, 900);
-      const modeText = this.developerShop ? "SHOP TEST" : "WAVE TEST";
-      ctx.fillText(`DEVELOPER TEST — ${modeText} ${this.developerWave}`, width / 2, y + panelHeight - (mobileLandscape ? 12 : 16));
-    }
   }
 
   drawHUD(width, height) {
@@ -1735,94 +1699,6 @@ export class UI {
       ctx.fillText("NO CONTINUES REMAIN", width / 2, y + 132);
       this.button("NEW GAME", width / 2 - 110, y + 158, 220, 50, () => this.callbacks.onRestart?.());
     }
-  }
-
-  drawDeveloperPanel(width, height) {
-    // Modal developer controls for desktop testing. Opening this panel in Game
-    // disables persistence for the remainder of the browser session.
-    this.buttons = [];
-    const ctx = this.ctx;
-    ctx.fillStyle = "rgba(0,0,0,.84)";
-    ctx.fillRect(0, 0, width, height);
-
-    const panelWidth = Math.min(720, width - 48);
-    const panelHeight = Math.min(650, height - 36);
-    const x = (width - panelWidth) / 2;
-    const y = (height - panelHeight) / 2;
-    this.panel(x, y, panelWidth, panelHeight, "rgba(8,7,13,.98)", 14);
-
-    ctx.textAlign = "center";
-    ctx.fillStyle = C.purple;
-    ctx.font = this.font(38);
-    ctx.fillText("DEVELOPER TEST", width / 2, y + 52);
-    ctx.fillStyle = C.muted;
-    ctx.font = this.dataFont(10, 850);
-    ctx.fillText("ESC TO CLOSE — TEST MODE DOES NOT SAVE", width / 2, y + 77);
-
-    const waveY = y + 100;
-    ctx.fillStyle = C.text;
-    ctx.font = this.dataFont(14, 900);
-    ctx.fillText(`TEST WAVE  ${this.developerWave}`, width / 2, waveY + 25);
-    this.button("−5", x + 80, waveY, 72, 42, () => this.callbacks.onDevWaveChange?.(-5));
-    this.button("−", x + 162, waveY, 72, 42, () => this.callbacks.onDevWaveChange?.(-1));
-    this.button("+", x + panelWidth - 234, waveY, 72, 42, () => this.callbacks.onDevWaveChange?.(1));
-    this.button("+5", x + panelWidth - 152, waveY, 72, 42, () => this.callbacks.onDevWaveChange?.(5));
-
-    const row1 = waveY + 62;
-    this.button("START WAVE", x + 38, row1, 190, 46, () => this.callbacks.onDevStartWave?.(), false, null, C.purple);
-    this.button("OPEN UPGRADES", width / 2 - 95, row1, 190, 46, () => this.callbacks.onDevOpenShop?.(), false, null, C.purple);
-    this.button("TEST ENDING", x + panelWidth - 228, row1, 190, 46, () => this.callbacks.onDevDawn?.(), false, null, C.purple);
-
-    const row2 = row1 + 64;
-    this.button("+1000 SOULS", x + 38, row2, 190, 44, () => this.callbacks.onDevAddSouls?.(1000));
-    this.button(this.newGamePlus ? "NG+ ON" : "NG+ OFF", width / 2 - 88, row2, 176, 44, () => this.callbacks.onDevToggleNGPlus?.(), false, null, this.newGamePlus ? C.red : C.purple);
-    this.button("+10 BOUND SOULS", x + panelWidth - 228, row2, 190, 44, () => this.callbacks.onDevAddBound?.(10));
-
-    ctx.fillStyle = C.orangeLight;
-    ctx.font = this.dataFont(12, 900);
-    ctx.fillText("UNLOCK SYSTEMS", width / 2, row2 + 78);
-
-    const unlocks = [
-      ["EXTRACTION", "extraction"],
-      ["HELLFIRE", "hellfire"],
-      ["BOMB FORGE", "demolition"],
-      ["UNDERCROFT", "undercroft"],
-      ["OCCULT", "occult"]
-    ];
-    const buttonW = 118;
-    const gap = 8;
-    const totalW = unlocks.length * buttonW + (unlocks.length - 1) * gap;
-    const startX = width / 2 - totalW / 2;
-    unlocks.forEach(([label, key], index) => {
-      this.button(label, startX + index * (buttonW + gap), row2 + 92, buttonW, 42, () => this.callbacks.onDevUnlock?.(key), false, null, C.purple);
-    });
-
-    ctx.fillStyle = C.muted;
-    ctx.font = this.dataFont(10, 800);
-    ctx.fillText(`CURRENT: ${this.souls} SOULS • ${this.boundSouls} BOUND SOULS`, width / 2, row2 + 162);
-
-    const perf = this.performanceStats ?? {};
-    const misses = perf.poolMisses ?? {};
-    ctx.fillStyle = "rgba(181,140,255,.88)";
-    ctx.font = this.dataFont(9, 820);
-    ctx.fillText(
-      `PERF  ${perf.fps ?? 0} FPS • ${perf.calls ?? 0} DRAWS • ${Number(perf.triangles ?? 0).toLocaleString()} TRIANGLES • ${perf.programs ?? 0} PROGRAMS`,
-      width / 2,
-      row2 + 187
-    );
-    ctx.fillStyle = C.muted;
-    ctx.fillText(
-      `GPU  ${perf.geometries ?? 0} GEOMETRIES • ${perf.textures ?? 0} TEXTURES`,
-      width / 2,
-      row2 + 205
-    );
-    ctx.fillText(
-      `POOL MISSES  H:${misses.husk ?? 0}  ST:${misses.strong ?? 0}  R:${misses.runner ?? 0}  B:${misses.brute ?? 0}  SG:${misses.siege ?? 0}`,
-      width / 2,
-      row2 + 223
-    );
-
-    this.button("CLOSE", width / 2 - 95, y + panelHeight - 62, 190, 44, () => this.callbacks.onDevClose?.());
   }
 
   drawStars(stars, x, y, size = 24) {
