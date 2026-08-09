@@ -168,14 +168,14 @@ export class WaveManager {
     return queue;
   }
 
-  startWave(index) {
+  startWave(index, minimumInitialDelay = 0) {
     this.clearActiveOnly();
     this.waveIndex = index;
     this.config = this.getWaveConfig(index);
     this.queue = this.makeQueue(this.config.counts);
     this.spawned = 0;
     this.resolved = 0;
-    this.spawnTimer = this.config.initialDelay;
+    this.spawnTimer = Math.max(this.config.initialDelay, minimumInitialDelay);
     this.running = true;
   }
 

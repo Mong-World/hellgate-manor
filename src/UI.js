@@ -42,6 +42,7 @@ export class UI {
     this.bannerSubtitle = "";
     this.bannerTimer = 0;
     this.healthFlash = 0;
+    this.uiTime = 0;
     this.soulPulse = 0;
     this.boundPulse = 0;
     this.soulFlights = [];
@@ -366,6 +367,7 @@ export class UI {
   }
 
   update(dt) {
+    this.uiTime += dt;
     if (this.mode === "ending") this.endingElapsed += dt;
     this.bannerTimer = Math.max(0, this.bannerTimer - dt);
     this.healthFlash = Math.max(0, this.healthFlash - dt);
@@ -650,10 +652,30 @@ export class UI {
     const ratio = Math.max(0, Math.min(1, this.health / this.maxHealth));
     ctx.fillStyle = "rgba(255,255,255,.07)";
     ctx.fillRect(barX, barY, barWidth, 14);
+    const criticalHealth = ratio > 0 && ratio <= 0.10;
+    const criticalPulse = criticalHealth ? 0.5 + 0.5 * Math.sin(this.uiTime * 7.5) : 0;
+    ctx.save();
     ctx.fillStyle = this.healthFlash > 0 || ratio <= 0.35 ? C.red : C.orange;
+    if (criticalHealth) {
+      ctx.fillStyle = "#ff3428";
+      ctx.globalAlpha = 0.48 + criticalPulse * 0.52;
+      ctx.shadowColor = "rgba(255,45,32,.95)";
+      ctx.shadowBlur = 5 + criticalPulse * 15;
+    }
     ctx.fillRect(barX, barY, barWidth * ratio, 14);
+    ctx.restore();
     ctx.strokeStyle = "rgba(255,255,255,.18)";
     ctx.strokeRect(barX, barY, barWidth, 14);
+    if (criticalHealth) {
+      ctx.save();
+      ctx.globalAlpha = 0.35 + criticalPulse * 0.60;
+      ctx.strokeStyle = "#ff3b31";
+      ctx.lineWidth = 2;
+      ctx.shadowColor = "rgba(255,45,32,.90)";
+      ctx.shadowBlur = 6 + criticalPulse * 13;
+      ctx.strokeRect(barX - 1, barY - 1, barWidth + 2, 16);
+      ctx.restore();
+    }
     ctx.fillStyle = C.text;
     ctx.font = this.dataFont(compact ? 9 : 10, 850);
     ctx.fillText(`${Math.ceil(this.health)} / ${this.maxHealth}`, width / 2, barY + 12);
@@ -763,10 +785,30 @@ export class UI {
     const ratio = Math.max(0, Math.min(1, this.health / this.maxHealth));
     ctx.fillStyle = "rgba(255,255,255,.07)";
     ctx.fillRect(barX, barY, barW, 8);
+    const criticalHealth = ratio > 0 && ratio <= 0.10;
+    const criticalPulse = criticalHealth ? 0.5 + 0.5 * Math.sin(this.uiTime * 7.5) : 0;
+    ctx.save();
     ctx.fillStyle = this.healthFlash > 0 || ratio <= 0.35 ? C.red : C.orange;
+    if (criticalHealth) {
+      ctx.fillStyle = "#ff3428";
+      ctx.globalAlpha = 0.48 + criticalPulse * 0.52;
+      ctx.shadowColor = "rgba(255,45,32,.95)";
+      ctx.shadowBlur = 4 + criticalPulse * 11;
+    }
     ctx.fillRect(barX, barY, barW * ratio, 8);
+    ctx.restore();
     ctx.strokeStyle = "rgba(255,255,255,.18)";
     ctx.strokeRect(barX, barY, barW, 8);
+    if (criticalHealth) {
+      ctx.save();
+      ctx.globalAlpha = 0.35 + criticalPulse * 0.60;
+      ctx.strokeStyle = "#ff3b31";
+      ctx.lineWidth = 1.5;
+      ctx.shadowColor = "rgba(255,45,32,.90)";
+      ctx.shadowBlur = 4 + criticalPulse * 9;
+      ctx.strokeRect(barX - 1, barY - 1, barW + 2, 10);
+      ctx.restore();
+    }
     ctx.fillStyle = C.text;
     ctx.font = this.dataFont(6, 900);
     ctx.fillText(`${Math.ceil(this.health)} / ${this.maxHealth}`, width / 2, barY + 7);

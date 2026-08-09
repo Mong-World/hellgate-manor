@@ -129,7 +129,7 @@ export class AudioManager {
   }
 
   primeAllPlaybackPaths() {
-    const musicKeys = new Set(["background1", "background2", "newDawn"]);
+    const musicKeys = new Set(["background1", "background2", "level50", "newDawn"]);
     for (const key of this.buffers.keys()) {
       this.prime(key, { music: musicKeys.has(key) });
     }

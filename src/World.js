@@ -263,6 +263,14 @@ export class World {
     this.dawnLight = null;
     this.dawnBirds = [];
     this.newGamePlus = false;
+    this.lateGameVisualMode = false;
+    this.hellVisualStrength = 0;
+    this.hellVisualTarget = 0;
+    this.hellVisualTransitionRate = 0;
+    this.normalNightColor = new THREE.Color(0x050609);
+    this.hellNightColor = new THREE.Color(0x120407);
+    this.normalFogColor = new THREE.Color(0x08090d);
+    this.hellFogColor = new THREE.Color(0x170609);
     this.ngPlusEmbers = null;
     this.ngPlusEmberBase = null;
     this.ngPlusSkyGlow = null;
@@ -1537,17 +1545,54 @@ export class World {
     mount.pivot.rotation.x = THREE.MathUtils.clamp(pitch, -0.25, 0.28);
   }
 
-  setNewGamePlusMode(enabled) {
-    this.newGamePlus = !!enabled;
-    if (this.ngPlusEmbers) this.ngPlusEmbers.visible = this.newGamePlus && !this.dawnActive;
-    if (this.ngPlusSkyGlow) {
-      this.ngPlusSkyGlow.visible = this.newGamePlus && !this.dawnActive;
-      this.ngPlusSkyGlow.material.opacity = this.newGamePlus ? 0.42 : 0;
+  setHellVisualTarget(target, duration = 0) {
+    this.hellVisualTarget = THREE.MathUtils.clamp(target, 0, 1);
+    if (duration <= 0) {
+      this.hellVisualStrength = this.hellVisualTarget;
+      this.hellVisualTransitionRate = 0;
+      this.applyHellVisualStrength(this.hellVisualStrength);
+      return;
     }
-    if (this.riftGroup && !this.dawnActive && !this.victoryClosing) {
-      const scale = this.newGamePlus ? 1.34 : 1;
+    this.hellVisualTransitionRate = Math.abs(this.hellVisualTarget - this.hellVisualStrength) / Math.max(0.01, duration);
+    if (this.ngPlusEmbers && this.hellVisualTarget > 0) this.ngPlusEmbers.visible = true;
+    if (this.ngPlusSkyGlow && this.hellVisualTarget > 0) this.ngPlusSkyGlow.visible = true;
+  }
+
+  setLateGameVisualMode(enabled, duration = 0) {
+    this.lateGameVisualMode = !!enabled;
+    this.setHellVisualTarget(this.newGamePlus || this.lateGameVisualMode ? 1 : 0, duration);
+  }
+
+  applyHellVisualStrength(strength = this.hellVisualStrength) {
+    const value = THREE.MathUtils.clamp(strength, 0, 1);
+    if (this.dawnActive) return;
+    if (this.scene.background?.isColor) this.scene.background.copy(this.normalNightColor).lerp(this.hellNightColor, value);
+    if (this.scene.fog?.color) {
+      this.scene.fog.color.copy(this.normalFogColor).lerp(this.hellFogColor, value);
+      this.scene.fog.density = THREE.MathUtils.lerp(0.018, 0.020, value);
+    }
+    if (this.ngPlusEmbers) {
+      this.ngPlusEmbers.visible = value > 0.01;
+      this.ngPlusEmbers.material.opacity = 0.88 * value;
+    }
+    if (this.ngPlusSkyGlow) {
+      this.ngPlusSkyGlow.visible = value > 0.01;
+      this.ngPlusSkyGlow.material.opacity = 0.42 * value;
+    }
+    if (this.riftGroup && !this.victoryClosing) {
+      const scale = THREE.MathUtils.lerp(1, 1.34, value);
       this.riftGroup.scale.set(scale, 1, scale);
     }
+    if (!this.victoryClosing) {
+      if (this.riftLight) this.riftLight.intensity = THREE.MathUtils.lerp(92, 155, value);
+      if (this.riftWalkLight) this.riftWalkLight.intensity = THREE.MathUtils.lerp(38, 74, value);
+      if (this.hellGlow) this.hellGlow.intensity = THREE.MathUtils.lerp(33, 48, value);
+    }
+  }
+
+  setNewGamePlusMode(enabled) {
+    this.newGamePlus = !!enabled;
+    this.setHellVisualTarget(this.newGamePlus || this.lateGameVisualMode ? 1 : 0, 0);
     this.resetNight();
   }
 
@@ -1557,6 +1602,7 @@ export class World {
     this.victoryTimer = 0;
     this.victoryDawnStarted = false;
     this.setOverchargeActive(false);
+    this.setHellVisualTarget(0, 3.6);
   }
 
   prepareDawnAssets() {
@@ -1689,14 +1735,14 @@ export class World {
     this.victoryDawnStarted = false;
     this.dawnActive = false;
     this.dawnProgress = 0;
-    this.scene.background.set(this.newGamePlus ? 0x120407 : 0x050609);
+    this.scene.background.copy(this.normalNightColor).lerp(this.hellNightColor, this.hellVisualStrength);
     if (this.scene.fog?.color) {
-      this.scene.fog.color.set(this.newGamePlus ? 0x170609 : 0x08090d);
-      this.scene.fog.density = this.newGamePlus ? 0.020 : 0.018;
+      this.scene.fog.color.copy(this.normalFogColor).lerp(this.hellFogColor, this.hellVisualStrength);
+      this.scene.fog.density = THREE.MathUtils.lerp(0.018, 0.020, this.hellVisualStrength);
     }
     if (this.riftGroup) {
       this.riftGroup.visible = true;
-      const scale = this.newGamePlus ? 1.34 : 1;
+      const scale = THREE.MathUtils.lerp(1, 1.34, this.hellVisualStrength);
       this.riftGroup.scale.set(scale, 1, scale);
     }
     this.materials.rift.opacity = 0.86;
@@ -1709,19 +1755,22 @@ export class World {
       inner.visible = true;
       light.intensity = 10;
     });
-    if (this.ngPlusEmbers) this.ngPlusEmbers.visible = this.newGamePlus;
+    if (this.ngPlusEmbers) {
+      this.ngPlusEmbers.visible = this.hellVisualStrength > 0.01;
+      this.ngPlusEmbers.material.opacity = 0.88 * this.hellVisualStrength;
+    }
     if (this.ngPlusSkyGlow) {
-      this.ngPlusSkyGlow.visible = this.newGamePlus;
-      this.ngPlusSkyGlow.material.opacity = this.newGamePlus ? 0.42 : 0;
+      this.ngPlusSkyGlow.visible = this.hellVisualStrength > 0.01;
+      this.ngPlusSkyGlow.material.opacity = 0.42 * this.hellVisualStrength;
     }
     if (this.moon?.material) this.moon.material.opacity = 0.78;
     if (this.stars?.material) this.stars.material.opacity = 0.86;
     if (this.moonLight) this.moonLight.intensity = 3.25;
     if (this.rimLight) this.rimLight.intensity = 1.2;
     if (this.huskFillLight) this.huskFillLight.intensity = 0.75;
-    if (this.riftLight) this.riftLight.intensity = this.newGamePlus ? 155 : 92;
-    if (this.riftWalkLight) this.riftWalkLight.intensity = this.newGamePlus ? 74 : 38;
-    if (this.hellGlow) this.hellGlow.intensity = this.newGamePlus ? 48 : 33;
+    if (this.riftLight) this.riftLight.intensity = THREE.MathUtils.lerp(92, 155, this.hellVisualStrength);
+    if (this.riftWalkLight) this.riftWalkLight.intensity = THREE.MathUtils.lerp(38, 74, this.hellVisualStrength);
+    if (this.hellGlow) this.hellGlow.intensity = THREE.MathUtils.lerp(33, 48, this.hellVisualStrength);
 
     this.flames.forEach(({ flames, light, sparks }) => {
       flames?.forEach(({ flame }) => { flame.visible = true; });
@@ -1809,12 +1858,26 @@ export class World {
   }
 
   update(elapsed, dt = 0) {
+    if (!this.dawnActive && Math.abs(this.hellVisualStrength - this.hellVisualTarget) > 0.0001) {
+      const direction = Math.sign(this.hellVisualTarget - this.hellVisualStrength);
+      const step = Math.max(0.0001, this.hellVisualTransitionRate || 1) * dt;
+      this.hellVisualStrength = THREE.MathUtils.clamp(
+        this.hellVisualStrength + direction * step,
+        Math.min(this.hellVisualStrength, this.hellVisualTarget),
+        Math.max(this.hellVisualStrength, this.hellVisualTarget)
+      );
+      if (Math.abs(this.hellVisualStrength - this.hellVisualTarget) <= step + 0.0001) {
+        this.hellVisualStrength = this.hellVisualTarget;
+      }
+      this.applyHellVisualStrength(this.hellVisualStrength);
+    }
+
     if (this.victoryClosing && !this.dawnActive) {
       this.victoryTimer += dt;
       const closeT = THREE.MathUtils.clamp(this.victoryTimer / 4.2, 0, 1);
       const remaining = 1 - closeT;
       if (this.riftGroup) {
-        const baseScale = this.newGamePlus ? 1.34 : 1;
+        const baseScale = THREE.MathUtils.lerp(1, 1.34, this.hellVisualStrength);
         this.riftGroup.scale.set(
           baseScale * THREE.MathUtils.lerp(1, 0.55, closeT),
           THREE.MathUtils.lerp(1, 0.72, closeT),
@@ -1824,8 +1887,8 @@ export class World {
       this.materials.rift.opacity = 0.86 * remaining;
       this.materials.riftHot.opacity = 0.96 * remaining;
       if (this.riftEmbers?.material) this.riftEmbers.material.opacity = 0.96 * remaining;
-      if (this.riftLight) this.riftLight.intensity = (this.newGamePlus ? 155 : 92) * remaining;
-      if (this.riftWalkLight) this.riftWalkLight.intensity = (this.newGamePlus ? 74 : 38) * remaining;
+      if (this.riftLight) this.riftLight.intensity = THREE.MathUtils.lerp(92, 155, this.hellVisualStrength) * remaining;
+      if (this.riftWalkLight) this.riftWalkLight.intensity = THREE.MathUtils.lerp(38, 74, this.hellVisualStrength) * remaining;
       this.riftFlames?.forEach(({ outer, inner, light }) => {
         outer.material.opacity = 0.72 * remaining;
         inner.material.opacity = 0.88 * remaining;
@@ -1847,13 +1910,17 @@ export class World {
       this.dawnProgress = Math.min(1, this.dawnProgress + dt / 15);
       const t = this.dawnProgress;
       const eased = t * t * (3 - 2 * t);
-      const night = new THREE.Color(this.newGamePlus ? 0x120407 : 0x050609);
+      const night = this.normalNightColor.clone().lerp(this.hellNightColor, this.hellVisualStrength);
       const morning = new THREE.Color(0x8ea7b4);
       this.scene.background.copy(night).lerp(morning, eased);
       if (this.scene.fog?.color) {
-        const nightFog = new THREE.Color(this.newGamePlus ? 0x170609 : 0x08090d);
+        const nightFog = this.normalFogColor.clone().lerp(this.hellFogColor, this.hellVisualStrength);
         this.scene.fog.color.copy(nightFog.lerp(new THREE.Color(0xa5a7a0), eased));
-        this.scene.fog.density = THREE.MathUtils.lerp(this.newGamePlus ? 0.020 : 0.018, 0.0075, eased);
+        this.scene.fog.density = THREE.MathUtils.lerp(
+          THREE.MathUtils.lerp(0.018, 0.020, this.hellVisualStrength),
+          0.0075,
+          eased
+        );
       }
       if (this.dawnSun) {
         this.dawnSun.position.y = THREE.MathUtils.lerp(1.0, 14.5, eased);
@@ -1935,7 +2002,7 @@ export class World {
         arr[idx + 2] = this.ngPlusEmberBase[idx + 2] + Math.cos(elapsed * 0.42 + i) * 0.24;
       }
       attr.needsUpdate = true;
-      if (this.ngPlusSkyGlow) this.ngPlusSkyGlow.material.opacity = 0.38 + Math.sin(elapsed * 0.55) * 0.06;
+      if (this.ngPlusSkyGlow) this.ngPlusSkyGlow.material.opacity = (0.38 + Math.sin(elapsed * 0.55) * 0.06) * this.hellVisualStrength;
     }
 
     if (this.dawnActive && this.dawnBirds.length > 0) {
@@ -2068,15 +2135,16 @@ export class World {
     });
 
     if (!this.dawnActive && !this.victoryClosing) {
-      const riftBase = this.newGamePlus ? 155 : 92;
-      const walkBase = this.newGamePlus ? 74 : 38;
-      this.riftLight.intensity = riftBase + Math.sin(elapsed * 4.2) * (this.newGamePlus ? 24 : 14);
-      if (this.riftWalkLight) this.riftWalkLight.intensity = walkBase + Math.sin(elapsed * 2.7 + 0.6) * (this.newGamePlus ? 10 : 5);
-      this.hellGlow.intensity = (this.newGamePlus ? 48 : 33) + Math.sin(elapsed * 2.1) * 2;
+      const visualStrength = this.hellVisualStrength;
+      const riftBase = THREE.MathUtils.lerp(92, 155, visualStrength);
+      const walkBase = THREE.MathUtils.lerp(38, 74, visualStrength);
+      this.riftLight.intensity = riftBase + Math.sin(elapsed * 4.2) * THREE.MathUtils.lerp(14, 24, visualStrength);
+      if (this.riftWalkLight) this.riftWalkLight.intensity = walkBase + Math.sin(elapsed * 2.7 + 0.6) * THREE.MathUtils.lerp(5, 10, visualStrength);
+      this.hellGlow.intensity = THREE.MathUtils.lerp(33, 48, visualStrength) + Math.sin(elapsed * 2.1) * 2;
     } else if (this.dawnActive) {
       this.riftLight.intensity = 0;
       if (this.riftWalkLight) this.riftWalkLight.intensity = 0;
-      this.hellGlow.intensity = Math.max(0, (this.newGamePlus ? 48 : 33) * (1 - this.dawnProgress));
+      this.hellGlow.intensity = Math.max(0, THREE.MathUtils.lerp(33, 48, this.hellVisualStrength) * (1 - this.dawnProgress));
     }
   }
 

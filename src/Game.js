@@ -410,6 +410,7 @@ export class Game {
     await this.primeRuntimeAfterUnlock();
     this.resetState({ newGamePlus });
     this.campaignTrackingActive = true;
+    this.world.setLateGameVisualMode?.(false, 0);
     this.world.setNewGamePlusMode?.(this.newGamePlus);
     this.world.resetNight?.();
     if (!this.developerMode) this.clearSave();
@@ -448,6 +449,7 @@ export class Game {
     }
     this.restoreState(save);
     this.campaignTrackingActive = true;
+    this.world.setLateGameVisualMode?.(false, 0);
     this.world.setNewGamePlusMode?.(this.newGamePlus);
     this.world.resetNight?.();
     this.applyUpgradeState();
@@ -624,20 +626,38 @@ export class Game {
         )
       : 0;
 
+    const waveNumber = this.waveIndex + 1;
+    const enteringLateGameVisuals = !this.newGamePlus && waveNumber === 40;
+    if (!this.newGamePlus) {
+      if (waveNumber >= 40) {
+        this.world.setLateGameVisualMode?.(true, enteringLateGameVisuals ? 4.0 : 0);
+      } else {
+        this.world.setLateGameVisualMode?.(false, 0);
+      }
+    }
+
+    // Waves 40 and 50 get deliberate presentation windows before enemies arrive.
+    // Wave 40 uses the pause for the visual Hell transition; Wave 50 lets the
+    // dedicated final-wave music establish itself before the last assault.
+    const openingDelay = waveNumber === 50 ? 5.0 : (enteringLateGameVisuals ? 4.0 : 0);
+
     this.waveStartSnapshot = this.snapshotState();
     this.waveManager.setNewGamePlus?.(this.newGamePlus);
-    this.waveManager.startWave(this.waveIndex);
+    this.waveManager.startWave(this.waveIndex, openingDelay);
     this.defence.resetCooldown();
     this.audio.setMusicLevel(0.34, 0.3);
-    this.audio.playMusic(this.waveIndex % 2 === 0 ? "background1" : "background2", 0.7);
+    this.audio.playMusic(
+      waveNumber === 50 ? "level50" : (this.waveIndex % 2 === 0 ? "background1" : "background2"),
+      waveNumber === 50 ? 1.15 : 0.7
+    );
     this.audio.play("waveStart", { volume: 0.72, pitchMin: 0.97, pitchMax: 1.03 });
     this.ui.setMode("playing");
     this.ui.showBanner(
-      `WAVE ${this.waveIndex + 1}`,
+      `WAVE ${waveNumber}`,
       this.newGamePlus
         ? "NEW GAME+ — HELL HAS RETURNED"
-        : (this.waveIndex === 0 ? "THE FIRST DEMONS ARE COMING" : "DEFEND THE MANOR"),
-      2.6
+        : (waveNumber === 40 ? "HELL DEEPENS" : (this.waveIndex === 0 ? "THE FIRST DEMONS ARE COMING" : "DEFEND THE MANOR")),
+      waveNumber === 40 ? 3.6 : 2.6
     );
     this.saveGame(this.waveIndex);
     this.syncUI();

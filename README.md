@@ -361,3 +361,9 @@ The GitHub Action builds `main`, copies `assets/`, `fonts/`, and `sounds/` into 
 - Extraction slots cost 5,000 / 10,000; Undercroft repairs 50 HP per assigned soul.
 - Retry returns to upgrades with failed-wave earnings rolled back.
 - Fortify economy, ending defence score, click counter, occult area, dust/embers, crossbow/shed placement and preload paths polished.
+
+## v1.9.3 final polish
+- Manor HUD now pulses when health reaches 10% or less on desktop and mobile.
+- Normal campaign transitions into the existing Hell/NG+ atmosphere visually at Wave 40 only, with a 4-second opening window and no gameplay modifier changes.
+- The late-game Hell atmosphere fades away during the Wave 50 victory sequence before dawn.
+- Wave 50 uses `assets/level50music.mp3` instead of the normal rotating background tracks and holds enemy spawning for at least 5 seconds.
