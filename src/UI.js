@@ -1800,7 +1800,7 @@ export class UI {
     const y = mobileLandscape ? 6 : Math.min(height - panelHeight - 18, height * 0.39);
     ctx.save();
     ctx.globalAlpha = panelA;
-    this.panel(x, y, panelWidth, panelHeight, "rgba(7,8,11,.83)", 14);
+    this.panel(x, y, panelWidth, panelHeight, "rgba(7,8,11,.95)", 14);
     ctx.restore();
 
     ctx.textAlign = "center";
@@ -1833,7 +1833,7 @@ export class UI {
       const ry = y + (mobileLandscape ? 64 : 82) + index * (rowH + (mobileLandscape ? 5 : 7));
       ctx.save();
       ctx.globalAlpha = alpha;
-      this.panel(rowX, ry, rowW, rowH, "rgba(13,13,17,.90)", 7);
+      this.panel(rowX, ry, rowW, rowH, "rgba(13,13,17,.96)", 7);
       ctx.textAlign = "left";
       ctx.fillStyle = C.text;
       ctx.font = this.font(mobileLandscape ? 17 : (mobile ? 20 : 23));
@@ -1854,12 +1854,12 @@ export class UI {
       ctx.textAlign = "center";
       ctx.fillStyle = C.muted;
       ctx.font = this.dataFont(11, 900);
-      ctx.fillText("FINAL RANK", width / 2, y + panelHeight - (mobileLandscape ? 112 : 132));
+      ctx.fillText("FINAL RANK", width / 2, y + panelHeight - (mobileLandscape ? 126 : 148));
       ctx.fillStyle = data.finalRank === "S" ? "#ffe5a8" : data.finalRank === "A" ? C.orangeLight : C.text;
       ctx.font = this.font(mobileLandscape ? 45 : (mobile ? 54 : 66));
       ctx.shadowColor = data.newGamePlus ? "rgba(239,81,78,.8)" : "rgba(255,112,49,.75)";
       ctx.shadowBlur = 18;
-      ctx.fillText(data.finalRank, width / 2, y + panelHeight - (mobileLandscape ? 68 : 78));
+      ctx.fillText(data.finalRank, width / 2, y + panelHeight - (mobileLandscape ? 82 : 94));
       ctx.restore();
     }
 

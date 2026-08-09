@@ -961,17 +961,17 @@ export class World {
   }
 
   createTurretMounts() {
-    const baseY = Math.min(this.manorBounds.max.y * 0.64, 8.45);
-    const manorWidth = Math.max(4.8, this.manorBounds.max.x - this.manorBounds.min.x);
-    const frontZ = this.manorBounds.max.z + 0.16;
-    const xPositions = [0.24, 0.50, 0.76].map((t) => this.manorBounds.min.x + manorWidth * t);
+    const extractionY = Math.min(this.manorBounds.max.y * 0.58, 7.45);
+    const baseY = extractionY - 1.15;
+    const fixedX = this.manorBarrierX + 0.58;
+    const zPositions = [-1.75, -0.15, 1.45];
 
     for (let i = 0; i < 3; i += 1) {
       const mount = new THREE.Group();
       mount.position.set(
-        xPositions[i],
+        fixedX,
         baseY,
-        frontZ
+        zPositions[i]
       );
       mount.rotation.y = -Math.PI / 2;
       mount.scale.setScalar(0.94);
@@ -1556,6 +1556,7 @@ export class World {
     this.victoryClosing = true;
     this.victoryTimer = 0;
     this.victoryDawnStarted = false;
+    this.setOverchargeActive(false);
   }
 
   prepareDawnAssets() {

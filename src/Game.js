@@ -828,7 +828,7 @@ export class Game {
       },
       binding: {
         stars: bindingStars,
-        detail: ""
+        detail: `${this.totalBoundEver} BOUND SOULS`
       }
     };
   }
