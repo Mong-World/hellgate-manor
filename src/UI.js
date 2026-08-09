@@ -62,6 +62,9 @@ export class UI {
     this.newGamePlus = false;
     this.endingData = null;
     this.endingElapsed = 0;
+    this.overchargeReserve = 0;
+    this.overchargeReady = false;
+    this.totalClicks = 0;
 
     this.touchDevice = window.matchMedia?.("(pointer: coarse)")?.matches || navigator.maxTouchPoints > 0;
     this.shopScroll = 0;
@@ -1239,7 +1242,9 @@ export class UI {
     let contentHeight = 330;
     if (this.shopPage === 2) {
       const systemCount = [this.buildings.hellfire, this.buildings.demolition, this.buildings.undercroft, this.buildings.occult].filter(Boolean).length;
-      contentHeight = systemCount > 0 ? 42 + systemCount * 86 + Math.max(0, systemCount - 1) * 8 : 130;
+      const overchargeRows = this.wave >= (CONFIG.overcharge?.unlockWave ?? 40) ? 1 : 0;
+      const totalRows = systemCount + overchargeRows;
+      contentHeight = totalRows > 0 ? 42 + totalRows * 86 + Math.max(0, totalRows - 1) * 8 : 130;
     }
     this.shopScrollMax = Math.max(0, contentHeight - viewportH);
     this.shopScroll = Math.max(0, Math.min(this.shopScrollMax, this.shopScroll));
@@ -1404,8 +1409,7 @@ export class UI {
         () => this.callbacks.onPurchase?.(type),
         disabled,
         () => {
-          if (insufficientSouls && laterSystem) this.callbacks.onPurchase?.(type);
-          else this.callbacks.onDeniedPurchase?.();
+          this.callbacks.onDeniedPurchase?.();
         },
         C.borderHot,
         visualState
@@ -1436,7 +1440,9 @@ export class UI {
 
     const startY = y + 36;
     const rowGap = 8;
-    const rowH = Math.max(mobile ? 76 : 78, Math.min(mobile ? 86 : 92, (height - 42 - rowGap * (systems.length - 1)) / systems.length));
+    const showOvercharge = this.wave >= (CONFIG.overcharge?.unlockWave ?? 40);
+    const totalRows = Math.max(1, systems.length + (showOvercharge ? 1 : 0));
+    const rowH = Math.max(mobile ? 76 : 72, Math.min(mobile ? 86 : 92, (height - 42 - rowGap * (totalRows - 1)) / totalRows));
     systems.forEach(([key, label, , accent], index) => {
       const rowY = startY + index * (rowH + rowGap);
       this.panel(x, rowY, width, rowH, C.panel2, 7);
@@ -1480,7 +1486,7 @@ export class UI {
           ? `${bombs} HELL BOMB${bombs === 1 ? "" : "S"} AT THE START OF EACH WAVE`
           : `${CONFIG.defence.bombSoulsPerCharge} BOUND SOULS NEEDED FOR 1 WAVE BOMB`;
       } else if (key === "undercroft") {
-        effectText = `+${assigned * 6} MANOR HEALTH AFTER EACH WAVE`;
+        effectText = `+${assigned * (CONFIG.defence.undercroftRepairPerSoul ?? 50)} MANOR HEALTH AFTER EACH WAVE`;
       } else if (key === "occult") {
         const interval = assigned <= 0 ? 0 : 13.5 - Math.min(1, (assigned - 1) / 29) * 7.5;
         const strikes = assigned >= 20 ? 3 : assigned >= 10 ? 2 : assigned > 0 ? 1 : 0;
@@ -1497,6 +1503,37 @@ export class UI {
       this.button("−", minusX, by, buttonSize, buttonSize, () => this.callbacks.onAssign?.(key, -1), assigned <= 0, () => this.callbacks.onDeniedPurchase?.(), accent);
       this.button(maxed ? "MAX" : "+", plusX, by, buttonSize, buttonSize, () => this.callbacks.onAssign?.(key, 1), maxed || this.unassignedSouls <= 0, () => this.callbacks.onDeniedPurchase?.(), accent);
     });
+
+    if (showOvercharge) {
+      const rowY = startY + systems.length * (rowH + rowGap);
+      this.panel(x, rowY, width, rowH, "rgba(25,10,12,.96)", 7);
+      ctx.textAlign = "left";
+      ctx.fillStyle = C.red;
+      ctx.font = this.font(mobile ? 20 : 24);
+      ctx.fillText("MANOR OVERCHARGE", x + 16, rowY + 30);
+      ctx.fillStyle = C.text;
+      ctx.font = this.dataFont(mobile ? 9 : 10, 820);
+      ctx.fillText("ONE WAVE • 20% LESS MANOR DAMAGE • EXTRA HELLFIRE BOLTS", x + 16, rowY + 50);
+      ctx.fillStyle = C.muted;
+      ctx.font = this.dataFont(mobile ? 8 : 9, 800);
+      const status = this.overchargeReady ? "50 / 50 RESERVED — READY FOR NEXT WAVE" : "COST: 50 UNASSIGNED BOUND SOULS";
+      ctx.fillText(status, x + 16, rowY + 68);
+
+      const buttonW = mobile ? 118 : 146;
+      const buttonH = mobile ? 44 : 48;
+      const bx = x + width - buttonW - 12;
+      const by = rowY + (rowH - buttonH) / 2;
+      const cannotAfford = !this.overchargeReady && this.unassignedSouls < (CONFIG.overcharge?.cost ?? 50);
+      this.button(
+        this.overchargeReady ? "READY" : "CHARGE 50",
+        bx, by, buttonW, buttonH,
+        () => this.callbacks.onOvercharge?.(),
+        this.overchargeReady || cannotAfford,
+        () => this.callbacks.onDeniedPurchase?.(),
+        C.red,
+        this.overchargeReady ? "available" : (cannotAfford ? "unaffordable" : "available")
+      );
+    }
   }
 
   drawTutorial(width, height) {
@@ -1758,7 +1795,7 @@ export class UI {
     const mobileLandscape = this.isMobileLandscape();
     const mobile = mobileLandscape || width < 760 || height < 650;
     const panelWidth = Math.min(mobile ? width - 18 : 650, width - 18);
-    const panelHeight = mobileLandscape ? Math.min(350, height - 12) : (mobile ? 452 : 492);
+    const panelHeight = mobileLandscape ? Math.min(368, height - 12) : (mobile ? 474 : 514);
     const x = (width - panelWidth) / 2;
     const y = mobileLandscape ? 6 : Math.min(height - panelHeight - 18, height * 0.39);
     ctx.save();
@@ -1771,6 +1808,17 @@ export class UI {
     ctx.font = this.font(mobileLandscape ? 24 : (mobile ? 28 : 34));
     ctx.fillText(data.newGamePlus ? "HELL MODE COMPLETE" : "FINAL REPORT", width / 2, y + (mobileLandscape ? 34 : 44));
 
+    const clickA = this.fadeInAt(t, 13.8, 0.6);
+    if (clickA > 0) {
+      ctx.save();
+      ctx.globalAlpha = clickA;
+      ctx.textAlign = "center";
+      ctx.fillStyle = C.muted;
+      ctx.font = this.dataFont(mobileLandscape ? 8 : (mobile ? 9 : 11), 850);
+      ctx.fillText(`TOTAL CLICKS: ${data.totalClicks ?? 0}`, width / 2, y + (mobileLandscape ? 55 : 70));
+      ctx.restore();
+    }
+
     const rows = [
       ["SURVIVAL", data.survival, 14.1],
       ["DEFENCE", data.defence, 16.5],
@@ -1782,7 +1830,7 @@ export class UI {
     rows.forEach(([label, rating, reveal], index) => {
       const alpha = this.fadeInAt(t, reveal, 0.65);
       if (alpha <= 0) return;
-      const ry = y + (mobileLandscape ? 48 : 64) + index * (rowH + (mobileLandscape ? 5 : 7));
+      const ry = y + (mobileLandscape ? 64 : 82) + index * (rowH + (mobileLandscape ? 5 : 7));
       ctx.save();
       ctx.globalAlpha = alpha;
       this.panel(rowX, ry, rowW, rowH, "rgba(13,13,17,.90)", 7);
@@ -1790,9 +1838,11 @@ export class UI {
       ctx.fillStyle = C.text;
       ctx.font = this.font(mobileLandscape ? 17 : (mobile ? 20 : 23));
       ctx.fillText(label, rowX + 14, ry + (mobileLandscape ? 21 : 28));
-      ctx.fillStyle = C.muted;
-      ctx.font = this.dataFont(mobileLandscape ? 7 : (mobile ? 8 : 10), 820);
-      ctx.fillText(rating.detail, rowX + 14, ry + (mobileLandscape ? 37 : 49));
+      if (rating.detail) {
+        ctx.fillStyle = C.muted;
+        ctx.font = this.dataFont(mobileLandscape ? 7 : (mobile ? 8 : 10), 820);
+        ctx.fillText(rating.detail, rowX + 14, ry + (mobileLandscape ? 37 : 49));
+      }
       this.drawStars(rating.stars, rowX + rowW - (mobileLandscape ? 108 : (mobile ? 128 : 150)), ry + (mobileLandscape ? 34 : 43), mobileLandscape ? 17 : (mobile ? 20 : 23));
       ctx.restore();
     });

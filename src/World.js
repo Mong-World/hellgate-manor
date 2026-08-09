@@ -254,6 +254,9 @@ export class World {
     this.occultPulseTimer = 0;
     this.occultStrikes = [];
     this.manorDustBursts = [];
+    this.overchargeShield = null;
+    this.overchargeActive = false;
+    this.overchargeHitPulse = 0;
     this.dawnActive = false;
     this.dawnProgress = 0;
     this.dawnSun = null;
@@ -907,27 +910,27 @@ export class World {
       group.visible = false;
       this.scene.add(group);
       const puffs = [];
-      for (let i = 0; i < 5; i += 1) {
+      for (let i = 0; i < 7; i += 1) {
         const material = new THREE.SpriteMaterial({
           map: texture,
-          color: i % 2 ? 0xb8aa98 : 0x8f8780,
+          color: i % 2 ? 0xc8b7a4 : 0xa49589,
           transparent: true,
           opacity: 0,
           depthWrite: false,
-          depthTest: true,
+          depthTest: false,
           fog: true
         });
         const sprite = new THREE.Sprite(material);
         sprite.position.set(0, 0, 0);
-        sprite.scale.set(0.8, 0.55, 1);
+        sprite.scale.set(1.0, 0.72, 1);
         group.add(sprite);
         puffs.push({
           sprite,
           material,
-          offsetX: THREE.MathUtils.randFloat(-0.22, 0.18),
-          offsetY: THREE.MathUtils.randFloat(0.05, 0.55),
-          offsetZ: THREE.MathUtils.randFloatSpread(0.65),
-          grow: THREE.MathUtils.randFloat(0.9, 1.35)
+          offsetX: THREE.MathUtils.randFloat(-0.38, 0.32),
+          offsetY: THREE.MathUtils.randFloat(0.08, 0.85),
+          offsetZ: THREE.MathUtils.randFloatSpread(0.9),
+          grow: THREE.MathUtils.randFloat(1.15, 1.65)
         });
         this.disposables.push(material);
       }
@@ -941,34 +944,37 @@ export class World {
     const heavy = enemyType === "brute" || enemyType === "siege";
     burst.active = true;
     burst.timer = burst.duration;
+    burst.scaleMultiplier = heavy ? 1.45 : 1.18;
+    burst.opacityMultiplier = heavy ? 1.0 : 0.88;
     burst.group.visible = true;
     burst.group.position.set(
-      this.manorBarrierX - 0.10,
-      heavy ? 0.95 : 0.55,
+      position.x + 0.24,
+      heavy ? 1.30 : 0.95,
       THREE.MathUtils.clamp(position.z, this.manorBounds.min.z + 0.5, this.manorBounds.max.z - 0.5)
     );
     burst.puffs.forEach(({ sprite, material, offsetX, offsetY, offsetZ }, index) => {
       sprite.position.set(offsetX, offsetY, offsetZ);
-      const scale = (heavy ? 1.35 : 1) * (0.72 + index * 0.08);
-      sprite.scale.set(scale, scale * 0.66, 1);
-      material.opacity = heavy ? 0.62 : 0.48;
+      const scale = (heavy ? 1.72 : 1.34) * (0.72 + index * 0.075);
+      sprite.scale.set(scale, scale * 0.72, 1);
+      material.opacity = heavy ? 0.86 : 0.76;
     });
   }
 
   createTurretMounts() {
-    const baseY = Math.min(this.manorBounds.max.y * 0.31, 4.2);
-    const zPositions = [-4.35, -0.15, 4.05];
-    const yOffsets = [0.0, 1.45, 0.45];
+    const baseY = Math.min(this.manorBounds.max.y * 0.64, 8.45);
+    const manorWidth = Math.max(4.8, this.manorBounds.max.x - this.manorBounds.min.x);
+    const frontZ = this.manorBounds.max.z + 0.16;
+    const xPositions = [0.24, 0.50, 0.76].map((t) => this.manorBounds.min.x + manorWidth * t);
 
     for (let i = 0; i < 3; i += 1) {
       const mount = new THREE.Group();
       mount.position.set(
-        this.manorBarrierX + 0.24,
-        baseY + yOffsets[i],
-        zPositions[i]
+        xPositions[i],
+        baseY,
+        frontZ
       );
       mount.rotation.y = -Math.PI / 2;
-      mount.scale.setScalar(1.12);
+      mount.scale.setScalar(0.94);
       mount.visible = false;
       this.scene.add(mount);
 
@@ -1138,7 +1144,10 @@ export class World {
       beamGroup.position.copy(
         this.extractionCentre.clone().add(new THREE.Vector3(slotOffsets[slot] ?? 0, 0, 0))
       );
-      beamGroup.visible = false;
+      // Keep the group itself present from startup so its PointLight is always
+      // part of the renderer's light set. Only the visible beam meshes toggle.
+      // This prevents a first-binding shader recompile hitch.
+      beamGroup.visible = true;
       this.scene.add(beamGroup);
 
       const beamGeometry = new THREE.CylinderGeometry(0.48, 2.25, 13.5, 28, 1, true);
@@ -1152,6 +1161,7 @@ export class World {
       });
       const beam = new THREE.Mesh(beamGeometry, beamMaterial);
       beam.position.y = 6.55;
+      beam.visible = false;
       beamGroup.add(beam);
 
       const innerGeometry = new THREE.CylinderGeometry(0.18, 0.92, 14.0, 20, 1, true);
@@ -1165,6 +1175,7 @@ export class World {
       });
       const inner = new THREE.Mesh(innerGeometry, innerMaterial);
       inner.position.y = 6.8;
+      inner.visible = false;
       beamGroup.add(inner);
 
       const particleCount = 20;
@@ -1188,6 +1199,7 @@ export class World {
         blending: THREE.AdditiveBlending
       });
       const particles = new THREE.Points(particleGeometry, particleMaterial);
+      particles.visible = false;
       beamGroup.add(particles);
 
       const beamLight = new THREE.PointLight(0xffd69b, 0, 12, 1.8);
@@ -1222,16 +1234,26 @@ export class World {
     // old placeholder box, rotated 90 degrees clockwise from a camera-facing
     // source orientation.
     const demolition = new THREE.Group();
-    demolition.position.set(this.manorBarrierX + 0.4, 0, 4.8);
+    demolition.position.set(this.manorBarrierX + 1.10, 0, 2.85);
     demolition.visible = false;
     this.scene.add(demolition);
 
     const shed = this.assets.createShedClone();
     AssetLibrary.prepareModel(shed);
     AssetLibrary.fitModelToHeight(shed, 2.45, -Math.PI / 2);
+    shed.traverse((object) => {
+      if (!object.isMesh || !object.material) return;
+      const darken = (material) => {
+        const clone = material.clone();
+        clone.color?.multiplyScalar?.(0.28);
+        if (clone.emissive) clone.emissiveIntensity = Math.min(clone.emissiveIntensity ?? 0, 0.06);
+        return clone;
+      };
+      object.material = Array.isArray(object.material) ? object.material.map(darken) : darken(object.material);
+    });
     demolition.add(shed);
 
-    const shedGlow = new THREE.PointLight(0xff3e26, 9, 5.5, 2);
+    const shedGlow = new THREE.PointLight(0x7a2118, 1.15, 3.6, 2);
     shedGlow.position.set(0, 1.15, 0);
     demolition.add(shedGlow);
     this.upgradeGroups.demolition = { group: demolition, shed, light: shedGlow };
@@ -1288,8 +1310,8 @@ export class World {
       group.visible = false;
       this.scene.add(group);
       const flames = [];
-      for (let i = 0; i < 6; i += 1) {
-        const geometry = new THREE.ConeGeometry(0.22 + (i % 3) * 0.05, 0.9 + (i % 2) * 0.45, 8);
+      for (let i = 0; i < 12; i += 1) {
+        const geometry = new THREE.ConeGeometry(0.34 + (i % 3) * 0.07, 1.10 + (i % 2) * 0.58, 8);
         const material = new THREE.MeshBasicMaterial({
           color: i % 2 ? 0xd4a6ff : 0x9c5cff,
           transparent: true,
@@ -1298,17 +1320,40 @@ export class World {
           depthWrite: false
         });
         const flame = new THREE.Mesh(geometry, material);
-        const angle = (i / 6) * Math.PI * 2;
-        flame.position.set(Math.cos(angle) * 0.42, 0.45, Math.sin(angle) * 0.42);
+        const angle = (i / 12) * Math.PI * 2;
+        const radius = i < 4 ? 0.82 : i < 8 ? 1.55 : 2.20;
+        flame.position.set(Math.cos(angle) * radius, 0.52, Math.sin(angle) * radius);
         group.add(flame);
         flames.push(flame);
         this.disposables.push(geometry, material);
       }
-      const light = new THREE.PointLight(0xb16cff, 0, 7, 1.8);
+      const light = new THREE.PointLight(0xb16cff, 0, 11.5, 1.8);
       light.position.y = 0.9;
       group.add(light);
       this.occultStrikes.push({ group, flames, light, timer: 0, active: false, phase: strikeIndex * 0.9 });
     }
+
+    // Late-game Overcharge: a one-wave supernatural force field around the manor.
+    // It is created during startup and only toggled at runtime, avoiding a
+    // first-use allocation hitch in Waves 40-50.
+    const shieldGeometry = new THREE.SphereGeometry(1, 32, 20);
+    const shieldMaterial = new THREE.MeshBasicMaterial({
+      color: 0xff5a2d,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide
+    });
+    const shield = new THREE.Mesh(shieldGeometry, shieldMaterial);
+    const manorHeight = Math.max(8, this.manorBounds.max.y - this.manorBounds.min.y);
+    const manorDepth = Math.max(8, this.manorBounds.max.z - this.manorBounds.min.z);
+    shield.position.set(this.manorBarrierX + 2.25, this.manorBounds.min.y + manorHeight * 0.50, (this.manorBounds.min.z + this.manorBounds.max.z) * 0.5);
+    shield.scale.set(3.7, manorHeight * 0.60, manorDepth * 0.61);
+    shield.visible = false;
+    this.scene.add(shield);
+    this.overchargeShield = { mesh: shield, material: shieldMaterial };
+    this.disposables.push(shieldGeometry, shieldMaterial);
 
     // Fortification stages: simple readable additions that accumulate around the manor.
     const fortifyStage1 = new THREE.Group();
@@ -1367,7 +1412,17 @@ export class World {
       this.extractionBeams.forEach((slot) => {
         slot.active = false;
         slot.timer = 0;
-        slot.group.visible = false;
+        // Keep the group/light present with zero intensity. Removing a PointLight
+        // from the visible scene can force a new shader/light-count variant on
+        // the first real binding, which is exactly the hitch we want to avoid.
+        slot.group.visible = true;
+        slot.beam.visible = false;
+        slot.inner.visible = false;
+        slot.particles.visible = false;
+        slot.beam.material.opacity = 0;
+        slot.inner.material.opacity = 0;
+        slot.particles.material.opacity = 0;
+        slot.light.intensity = 0;
       });
     }
     if (this.upgradeGroups.demolition) this.upgradeGroups.demolition.group.visible = demolition;
@@ -1403,6 +1458,9 @@ export class World {
     slot.active = true;
     slot.timer = slot.duration;
     slot.group.visible = true;
+    slot.beam.visible = true;
+    slot.inner.visible = true;
+    slot.particles.visible = true;
     slot.beam.material.opacity = 0.02;
     slot.inner.material.opacity = 0.02;
     slot.particles.material.opacity = 0.02;
@@ -1436,6 +1494,19 @@ export class World {
 
   pulseOccultEffect() {
     this.occultPulseTimer = 0.65;
+  }
+
+  setOverchargeActive(active) {
+    this.overchargeActive = !!active;
+    this.overchargeHitPulse = 0;
+    if (!this.overchargeShield) return;
+    this.overchargeShield.mesh.visible = this.overchargeActive;
+    this.overchargeShield.material.opacity = this.overchargeActive ? 0.10 : 0;
+  }
+
+  pulseOverchargeShield() {
+    if (!this.overchargeActive) return;
+    this.overchargeHitPulse = 0.34;
   }
 
   setTurretLevel(level) {
@@ -1553,7 +1624,10 @@ export class World {
     this.extractionBeams.forEach((slot) => {
       slot.active = false;
       slot.timer = 0;
-      slot.group.visible = false;
+      slot.group.visible = true;
+      slot.beam.visible = false;
+      slot.inner.visible = false;
+      slot.particles.visible = false;
       slot.beam.material.opacity = 0;
       slot.inner.material.opacity = 0;
       slot.particles.material.opacity = 0;
@@ -1573,6 +1647,7 @@ export class World {
       burst.puffs.forEach(({ material }) => { material.opacity = 0; });
     });
     this.setDawnPrewarmVisible(false);
+    this.setOverchargeActive(false);
     this.extractionCompletions = 0;
   }
 
@@ -1910,7 +1985,13 @@ export class World {
 
       if (slot.timer <= 0) {
         slot.active = false;
-        slot.group.visible = false;
+        slot.beam.visible = false;
+        slot.inner.visible = false;
+        slot.particles.visible = false;
+        slot.beam.material.opacity = 0;
+        slot.inner.material.opacity = 0;
+        slot.particles.material.opacity = 0;
+        slot.light.intensity = 0;
         this.extractionCompletions += 1;
       }
     });
@@ -1924,9 +2005,9 @@ export class World {
         sprite.position.x -= dt * (0.28 + index * 0.025);
         sprite.position.y += dt * (0.32 + index * 0.035);
         const base = 0.72 + index * 0.08;
-        const size = base + t * grow;
-        sprite.scale.set(size, size * 0.66, 1);
-        material.opacity = fade * (index % 2 ? 0.34 : 0.46);
+        const size = (base + t * grow) * (burst.scaleMultiplier ?? 1);
+        sprite.scale.set(size, size * 0.70, 1);
+        material.opacity = fade * (index % 2 ? 0.62 : 0.78) * (burst.opacityMultiplier ?? 1);
       });
       if (burst.timer <= 0) {
         burst.active = false;
@@ -1935,7 +2016,7 @@ export class World {
     });
 
     if (this.upgradeGroups.demolition?.group.visible) {
-      this.upgradeGroups.demolition.light.intensity = 7.5 + Math.sin(elapsed * 4.2) * 1.8;
+      this.upgradeGroups.demolition.light.intensity = 0.82 + Math.sin(elapsed * 4.2) * 0.18;
     }
 
     this.occultStrikes.forEach((strike) => {
@@ -1954,6 +2035,18 @@ export class World {
         strike.group.visible = false;
       }
     });
+
+    if (this.overchargeShield?.mesh.visible) {
+      this.overchargeHitPulse = Math.max(0, this.overchargeHitPulse - dt);
+      const hit = this.overchargeHitPulse > 0 ? this.overchargeHitPulse / 0.34 : 0;
+      const pulse = 0.095 + Math.sin(elapsed * 3.4) * 0.022 + hit * 0.20;
+      this.overchargeShield.material.opacity = pulse;
+      const scalePulse = 1 + Math.sin(elapsed * 2.1) * 0.008 + hit * 0.014;
+      // Rebuild scale each frame so the shield breathes without cumulative growth.
+      const manorHeight = Math.max(8, this.manorBounds.max.y - this.manorBounds.min.y);
+      const manorDepth = Math.max(8, this.manorBounds.max.z - this.manorBounds.min.z);
+      this.overchargeShield.mesh.scale.set(3.7 * scalePulse, manorHeight * 0.60 * scalePulse, manorDepth * 0.61 * scalePulse);
+    }
 
     if (this.upgradeGroups.occult?.group.visible) {
       const occult = this.upgradeGroups.occult;

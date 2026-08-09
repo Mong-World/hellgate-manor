@@ -24,8 +24,8 @@ export class AshExplosion {
 
     this.geometry.setAttribute("position", new THREE.BufferAttribute(this.positions, 3));
     this.material = new THREE.PointsMaterial({
-      color: warm ? 0xffcc74 : 0xff8d3a,
-      size: warm ? 0.5 : 0.42,
+      color: warm ? 0xb83a16 : 0x8f2514,
+      size: warm ? 0.24 : 0.19,
       transparent: true,
       opacity: 0.95,
       depthWrite: false,

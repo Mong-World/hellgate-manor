@@ -15,6 +15,8 @@ export class DefenceSystem {
 
     this.hellfireSouls = 0;
     this.occultSouls = 0;
+    this.overchargeActive = false;
+    this.pendingExtraShots = [];
     this.mountTimers = [1.2, 2.2, 3.2];
     this.occultTimer = 12;
     this.projectiles = [];
@@ -130,6 +132,11 @@ export class DefenceSystem {
     this.occultTimer = Math.min(this.occultTimer, this.getOccultInterval());
   }
 
+  setOvercharge(active) {
+    this.overchargeActive = !!active;
+    this.pendingExtraShots = [];
+  }
+
   getMountCount() {
     const souls = Math.min(this.hellfireSouls, CONFIG.defence.hellfireMaxSouls);
     if (souls <= 0) return 0;
@@ -169,6 +176,15 @@ export class DefenceSystem {
     this.updateImpacts(dt);
     if (!active) return;
 
+    for (let i = this.pendingExtraShots.length - 1; i >= 0; i -= 1) {
+      const shot = this.pendingExtraShots[i];
+      shot.timer -= dt;
+      if (shot.timer <= 0) {
+        this.fireMount(shot.mountIndex, false);
+        this.pendingExtraShots.splice(i, 1);
+      }
+    }
+
     const mounts = this.getMountCount();
     if (mounts > 0) {
       for (let index = 0; index < mounts; index += 1) {
@@ -204,7 +220,7 @@ export class DefenceSystem {
     );
   }
 
-  fireMount(mountIndex) {
+  fireMount(mountIndex, scheduleExtra = true) {
     const target = this.chooseTarget();
     const fallback = this.chooseGroundPoint(mountIndex, target);
     const destination = target
@@ -213,6 +229,12 @@ export class DefenceSystem {
     this.world.aimTurret(mountIndex, destination);
     this.fireProjectile(mountIndex, target, destination, fallback);
     this.onFire?.({ mountIndex, target });
+    if (scheduleExtra && this.overchargeActive) {
+      this.pendingExtraShots.push({
+        mountIndex,
+        timer: this.getFireInterval() * 0.5
+      });
+    }
   }
 
   acquireArrow() {
@@ -324,12 +346,23 @@ export class DefenceSystem {
 
     const strikeCount = this.occultSouls >= 20 ? 3 : this.occultSouls >= 10 ? 2 : 1;
     const targets = candidates.slice(0, Math.min(strikeCount, candidates.length));
+    const damaged = new Set();
+    const radius = CONFIG.defence.occultRadius ?? 2.85;
     this.world.pulseOccultEffect?.();
     targets.forEach((target) => {
-      this.world.triggerOccultStrike?.(target.position.clone());
-      this.onDamageEnemy?.(target, "occult", 1);
+      const centre = target.position.clone();
+      this.world.triggerOccultStrike?.(centre);
+      candidates.forEach((enemy) => {
+        if (damaged.has(enemy)) return;
+        const dx = enemy.position.x - centre.x;
+        const dz = enemy.position.z - centre.z;
+        if (dx * dx + dz * dz <= radius * radius) {
+          damaged.add(enemy);
+          this.onDamageEnemy?.(enemy, "occult", 1);
+        }
+      });
     });
-    this.onOccultPulse?.(targets.length);
+    this.onOccultPulse?.(damaged.size);
   }
 
   preWarm() {
@@ -342,11 +375,14 @@ export class DefenceSystem {
 
   resetCooldown() {
     this.mountTimers = [1.2, 1.2 + CONFIG.defence.fireStagger, 1.2 + CONFIG.defence.fireStagger * 2];
+    this.pendingExtraShots = [];
   }
 
   clearForDawn() {
     this.hellfireSouls = 0;
     this.occultSouls = 0;
+    this.overchargeActive = false;
+    this.pendingExtraShots = [];
     // Keep the physical crossbows visible for the first seconds of the ending;
     // World powers the manor upgrades down as the Hell Gate collapses.
     this.projectiles.slice().forEach((projectile) => this.releaseArrow(projectile));

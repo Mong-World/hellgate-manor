@@ -353,3 +353,11 @@ The GitHub Action builds `main`, copies `assets/`, `fonts/`, and `sounds/` into 
 - Undercroft cost reduced to **8,000 Souls**.
 - Occult Tower cost reduced to **16,000 Souls**.
 - Undercroft now repairs **10 HP per assigned Bound Soul** after each completed wave.
+
+
+## v1.9.0 final-test balance/polish pass
+- Overcharge (Wave 40+, 50 Bound Souls, one-wave shield + extra Hellfire mid-cycle bolt).
+- Brutes/Siege cannot be bound; only Husk, Strong Husk and Runner can be converted.
+- Extraction slots cost 5,000 / 10,000; Undercroft repairs 50 HP per assigned soul.
+- Retry returns to upgrades with failed-wave earnings rolled back.
+- Fortify economy, ending defence score, click counter, occult area, dust/embers, crossbow/shed placement and preload paths polished.

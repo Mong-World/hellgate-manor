@@ -81,6 +81,7 @@ export class Game {
       onPause: () => this.togglePause(),
       onPurchase: (type) => this.purchase(type),
       onAssign: (system, delta) => this.assignBoundSoul(system, delta),
+      onOvercharge: () => this.chargeOvercharge(),
       onDeniedPurchase: () => this.playDeniedPurchase(),
       onResultsContinue: () => this.openIntermission(),
       onSave: () => this.manualSave(),
@@ -105,6 +106,7 @@ export class Game {
     this.onKeyDown = this.onKeyDown.bind(this);
     this.onKeyUp = this.onKeyUp.bind(this);
     this.focusGameCanvas = this.focusGameCanvas.bind(this);
+    this.trackCampaignClick = this.trackCampaignClick.bind(this);
     this.animate = this.animate.bind(this);
     window.addEventListener("resize", this.onResize);
     // Capture phase plus a keyup fallback makes Ctrl + Shift + D more
@@ -112,6 +114,7 @@ export class Game {
     window.addEventListener("keydown", this.onKeyDown, true);
     window.addEventListener("keyup", this.onKeyUp, true);
     document.addEventListener("pointerdown", this.focusGameCanvas, true);
+    document.addEventListener("pointerdown", this.trackCampaignClick, true);
   }
 
   resetState({ newGamePlus = false } = {}) {
@@ -146,6 +149,13 @@ export class Game {
     this.waveStartSnapshot = null;
     this.continuesUsed = 0;
     this.totalManorDamageTaken = 0;
+    this.totalClicks = 0;
+    this.totalBoundEver = 0;
+    this.overchargeReserve = 0;
+    this.overchargeReady = false;
+    this.overchargeActive = false;
+    this.retryingWave = false;
+    this.campaignTrackingActive = false;
     this.endingActive = false;
     this.endingTimer = 0;
     this.endingDawnMusicStarted = false;
@@ -294,6 +304,32 @@ export class Game {
       this.setLoadingProgress(78 + (warmed / Math.max(allEnemies.length, 1)) * 13);
     }
 
+    // Dedicated first-spawn passes for the two largest animated rigs. They are
+    // rendered on their own under the real scene lighting so skinning/material
+    // programs are cached before Waves 25/35.
+    for (const type of ["brute", "siege"]) {
+      const enemy = this.waveManager.pools[type]?.[0];
+      if (!enemy) continue;
+      enemy.resetForSpawn(-9000, new THREE.Vector3(-4, 0, 0));
+      enemy.preWarmAllActions(1 / 20);
+      for (let frame = 0; frame < 6; frame += 1) {
+        enemy.update(1 / 30, frame / 30, false, this.world.manorBarrierX);
+        this.renderer.render(this.scene, this.camera);
+        await this.waitForFrame();
+      }
+      if (typeof this.renderer.compileAsync === "function") await this.renderer.compileAsync(this.scene, this.camera);
+      enemy.deactivateForPool();
+    }
+
+    // Warm an Overcharge shield frame too; it is late-game but should never
+    // compile for the first time during Wave 40+.
+    this.world.setOverchargeActive?.(true);
+    this.defence.setOvercharge?.(true);
+    this.renderer.render(this.scene, this.camera);
+    await this.waitForFrame();
+    this.world.setOverchargeActive?.(false);
+    this.defence.setOvercharge?.(false);
+
     this.setLoadingProgress(92);
     // Render the complete pooled effect set before hiding it. Unlike the older
     // warm-up this actually sends every soul/ash/ring material to the GPU.
@@ -347,9 +383,14 @@ export class Game {
     this.runtimePrimed = true;
     await this.audio.unlock();
     this.audio.primeAllPlaybackPaths?.();
+    // Prime the exact looping node path used by Soul Extraction as well. It is
+    // effectively silent and is stopped immediately, but prevents the first
+    // real binding from being the browser's first loop/source ramp setup.
+    this.audio.playLoop?.("soulBinding", "__binding-prewarm", { volume: 0.0001, fadeSeconds: 0.05 });
     // Give WebAudio one frame to finish creating the silent source/gain paths
     // before the first wave transition begins.
     await this.waitForFrame();
+    this.audio.stopLoop?.("__binding-prewarm", 0.05);
   }
 
   async beginNewGame() {
@@ -367,6 +408,7 @@ export class Game {
     await this.audio.unlock();
     await this.primeRuntimeAfterUnlock();
     this.resetState({ newGamePlus });
+    this.campaignTrackingActive = true;
     this.world.setNewGamePlusMode?.(this.newGamePlus);
     this.world.resetNight?.();
     if (!this.developerMode) this.clearSave();
@@ -404,6 +446,7 @@ export class Game {
       return this.beginNewGame();
     }
     this.restoreState(save);
+    this.campaignTrackingActive = true;
     this.world.setNewGamePlusMode?.(this.newGamePlus);
     this.world.resetNight?.();
     this.applyUpgradeState();
@@ -424,6 +467,11 @@ export class Game {
       extractionLevel: this.extractionLevel,
       continuesUsed: this.continuesUsed,
       totalManorDamageTaken: this.totalManorDamageTaken,
+      totalClicks: this.totalClicks,
+      totalBoundEver: this.totalBoundEver,
+      overchargeReserve: this.overchargeReserve,
+      overchargeReady: this.overchargeReady,
+      overchargeActive: this.overchargeActive,
       newGamePlus: this.newGamePlus,
       buildings: { ...this.buildings },
       assignments: { ...this.assignments },
@@ -453,6 +501,12 @@ export class Game {
     );
     this.continuesUsed = THREE.MathUtils.clamp(Number(data.continuesUsed) || 0, 0, 3);
     this.totalManorDamageTaken = Math.max(0, Number(data.totalManorDamageTaken) || 0);
+    this.totalClicks = Math.max(0, Math.floor(Number(data.totalClicks) || 0));
+    this.totalBoundEver = Math.max(0, Math.floor(Number(data.totalBoundEver) || Number(data.boundSouls) || 0));
+    this.overchargeReserve = Number(data.overchargeReserve) >= (CONFIG.overcharge?.cost ?? 50) ? (CONFIG.overcharge?.cost ?? 50) : 0;
+    this.overchargeReady = !!data.overchargeReady || this.overchargeReserve > 0;
+    this.overchargeActive = !!data.overchargeActive;
+    this.retryingWave = false;
     this.newGamePlus = !!data.newGamePlus;
     this.buildings = { ...this.buildings, ...(data.buildings ?? {}) };
     this.assignments = { ...this.assignments, ...(data.assignments ?? {}) };
@@ -539,6 +593,22 @@ export class Game {
   }
 
   startCurrentWave() {
+    // A charged Overcharge consumes its reserved Bound Souls as the wave begins.
+    // If this wave is being restored from its start-of-wave save, a previously
+    // paid Overcharge remains active without charging the player a second time.
+    const overchargeCost = CONFIG.overcharge?.cost ?? 50;
+    const restoredPaidOvercharge = this.overchargeActive && !this.overchargeReady && this.overchargeReserve === 0;
+    const activatingOvercharge = this.overchargeReady && this.overchargeReserve >= overchargeCost;
+    this.overchargeActive = restoredPaidOvercharge || activatingOvercharge;
+    if (activatingOvercharge) {
+      this.boundSouls = Math.max(0, this.boundSouls - this.overchargeReserve);
+      this.overchargeReserve = 0;
+      this.overchargeReady = false;
+      this.normaliseAssignments();
+    }
+    this.world.setOverchargeActive?.(this.overchargeActive);
+    this.defence.setOvercharge?.(this.overchargeActive);
+
     this.gameplayActive = true;
     this.paused = false;
     this.grabSystem.setEnabled(true);
@@ -582,6 +652,7 @@ export class Game {
       const slot = this.world.startExtractionBeam(this.extractionLevel);
       if (slot >= 0 && this.waveManager.captureEnemy(enemy)) {
         this.boundSouls += 1;
+        this.totalBoundEver += 1;
         this.ui.pulseBound();
         this.audio.play("soulBling", { volume: 0.62, pitchMin: 0.98, pitchMax: 1.03 });
         this.audio.playLoop("soulBinding", "soul-binding", { volume: 0.34, fadeSeconds: 0.25 });
@@ -656,10 +727,13 @@ export class Game {
 
   handleManorAttack(enemy) {
     if (!this.gameplayActive || this.manorHealth <= 0 || !enemy || enemy.dead) return;
-    const damageTaken = Math.min(this.manorHealth, enemy.attackDamage);
-    this.manorHealth = Math.max(0, this.manorHealth - enemy.attackDamage);
+    const damageMultiplier = this.overchargeActive ? (1 - (CONFIG.overcharge?.manorDamageReduction ?? 0.20)) : 1;
+    const appliedDamage = Math.max(1, Math.round(enemy.attackDamage * damageMultiplier));
+    const damageTaken = Math.min(this.manorHealth, appliedDamage);
+    this.manorHealth = Math.max(0, this.manorHealth - appliedDamage);
     this.totalManorDamageTaken += damageTaken;
     this.world.triggerManorDamageDust?.(enemy.position, enemy.type);
+    if (this.overchargeActive) this.world.pulseOverchargeShield?.();
     this.audio.play("attack", {
       volume: enemy.type === "siege" ? 0.78 : enemy.type === "brute" ? 0.7 : 0.58,
       pitchMin: enemy.type === "runner" ? 1.02 : 0.86,
@@ -682,12 +756,16 @@ export class Game {
     const waveDeaths = Math.max(0, this.demonDeaths - (snapshot.demonDeaths ?? 0));
     const waveDamage = Math.max(0, (snapshot.manorHealth ?? this.manorHealth) - this.manorHealth);
 
-    // Undercroft is deliberately capped so it remains useful without turning
-    // the manor into an effectively infinite-health economy.
+    // Undercroft repairs 50 HP per assigned Bound Soul, up to 1500 HP
+    // after a wave at the 30-soul cap, never exceeding current max health.
     if (this.buildings.undercroft && this.assignments.undercroft > 0) {
-      const repair = this.assignments.undercroft * 10;
+      const repair = this.assignments.undercroft * (CONFIG.defence.undercroftRepairPerSoul ?? 50);
       this.manorHealth = Math.min(this.manorMaxHealth, this.manorHealth + repair);
     }
+
+    this.overchargeActive = false;
+    this.world.setOverchargeActive?.(false);
+    this.defence.setOvercharge?.(false);
 
     this.syncUI();
     if (this.waveIndex >= CONFIG.waves.length - 1) {
@@ -718,7 +796,7 @@ export class Game {
           : this.totalManorDamageTaken <= two ? 2 : 1;
 
     const bindingTarget = CONFIG.ranking.bindingMaxTarget;
-    const bindingRatio = this.boundSouls / Math.max(1, bindingTarget);
+    const bindingRatio = this.totalBoundEver / Math.max(1, bindingTarget);
     const bindingStars = bindingRatio >= 1 ? 5
       : bindingRatio >= 0.80 ? 4
         : bindingRatio >= 0.60 ? 3
@@ -738,7 +816,8 @@ export class Game {
       finalRank,
       average,
       demonDeaths: this.demonDeaths,
-      boundSouls: this.boundSouls,
+      boundSouls: this.totalBoundEver,
+      totalClicks: this.totalClicks,
       survival: {
         stars: survivalStars,
         detail: `${this.continuesUsed} CONTINUE${this.continuesUsed === 1 ? "" : "S"} USED`
@@ -749,13 +828,14 @@ export class Game {
       },
       binding: {
         stars: bindingStars,
-        detail: `${this.boundSouls} / ${bindingTarget} BOUND SOULS`
+        detail: ""
       }
     };
   }
 
   beginVictorySequence() {
     const result = this.calculateEndingResult();
+    this.campaignTrackingActive = false;
     this.recordCompletion(result);
     this.clearSave();
     this.gameplayActive = false;
@@ -787,23 +867,32 @@ export class Game {
     this.syncUI();
   }
 
+  getIntermissionResumeWaveIndex() {
+    return this.retryingWave ? this.waveIndex : Math.min(this.waveIndex + 1, CONFIG.waves.length - 1);
+  }
+
   manualSave() {
     if (this.ui.mode !== "intermission") return;
-    const saved = this.saveGame(this.waveIndex + 1);
+    const saved = this.saveGame(this.getIntermissionResumeWaveIndex());
     this.ui.showSaveNotice(saved);
   }
 
   getFortifyCost() {
+    // Predictable late-game curve: still expensive, but never jumps into the
+    // absurd 80k+ range near the cap.
     return CONFIG.helpers.round10(
-      CONFIG.manor.fortify.baseCost * Math.pow(1.18, this.fortifyLevel)
+      CONFIG.manor.fortify.baseCost * Math.pow(1.10, this.fortifyLevel)
     );
   }
 
   getMajorFortifyCost() {
-    const stages = Math.floor(this.fortifyLevel / CONFIG.manor.majorFortify.levels);
-    return CONFIG.helpers.round10(
-      CONFIG.manor.majorFortify.baseCost * Math.pow(2.15, stages)
-    );
+    // Ten levels at a bulk discount. It is always more expensive than one
+    // normal Fortify, while remaining better value than buying ten singles.
+    const single = this.getFortifyCost();
+    return CONFIG.helpers.round10(Math.max(
+      CONFIG.manor.majorFortify.baseCost,
+      single * 6.5
+    ));
   }
 
   getPurchaseDefinition(type) {
@@ -841,8 +930,6 @@ export class Game {
     if (!tutorials[type] || this.tutorialsSeen[type]) return false;
     this.tutorialsSeen[type] = true;
     tutorials[type]();
-    this.saveGame(this.waveIndex + 1);
-    this.syncUI();
     return true;
   }
 
@@ -873,12 +960,6 @@ export class Game {
       return this.playDeniedPurchase();
     }
 
-    // The three later systems explain themselves the first time the player
-    // clicks their unlocked shop button. The tutorial intentionally appears
-    // before affordability/purchase handling so players can learn what they
-    // are saving Souls for. Extraction and Hellfire keep their existing flow.
-    if (this.showLaterSystemTutorial(type)) return;
-
     if (cost == null || this.souls < cost) return this.playDeniedPurchase();
 
     this.souls -= cost;
@@ -901,13 +982,14 @@ export class Game {
       this.extractionLevel = Math.min(CONFIG.extraction.maxLevel, this.extractionLevel + 1);
     } else if (type in this.buildings) {
       this.buildings[type] = true;
-      if (firstPoweredSystemPurchase) this.ui.showAllocationTutorial();
+      const showedSystemTutorial = this.showLaterSystemTutorial(type);
+      if (!showedSystemTutorial && firstPoweredSystemPurchase) this.ui.showAllocationTutorial();
     }
 
     this.audio.play("purchase", { volume: 0.68, pitchMin: 0.96, pitchMax: 1.05 });
     this.normaliseAssignments();
     this.applyUpgradeState();
-    this.saveGame(this.waveIndex + 1);
+    this.saveGame(this.getIntermissionResumeWaveIndex());
     this.syncUI();
   }
 
@@ -916,7 +998,7 @@ export class Game {
   }
 
   getUnassignedSouls() {
-    return Math.max(0, this.boundSouls - Object.values(this.assignments).reduce((sum, value) => sum + value, 0));
+    return Math.max(0, this.boundSouls - this.overchargeReserve - Object.values(this.assignments).reduce((sum, value) => sum + value, 0));
   }
 
   normaliseAssignments() {
@@ -929,8 +1011,14 @@ export class Game {
       );
       if (!this.buildings[key]) this.assignments[key] = 0;
     });
+    const overchargeCost = CONFIG.overcharge?.cost ?? 50;
+    if (this.overchargeReserve > 0 && this.overchargeReserve !== overchargeCost) this.overchargeReserve = 0;
+    if (this.overchargeReserve > this.boundSouls) {
+      this.overchargeReserve = 0;
+      this.overchargeReady = false;
+    }
     let assigned = Object.values(this.assignments).reduce((sum, value) => sum + value, 0);
-    while (assigned > this.boundSouls) {
+    while (assigned + this.overchargeReserve > this.boundSouls) {
       const key = keys.find((name) => this.assignments[name] > 0);
       if (!key) break;
       this.assignments[key] -= 1;
@@ -951,7 +1039,20 @@ export class Game {
     }
     this.audio.play("purchase", { volume: 0.34, pitchMin: 0.98, pitchMax: 1.05 });
     this.applyUpgradeState();
-    this.saveGame(this.waveIndex + 1);
+    this.saveGame(this.getIntermissionResumeWaveIndex());
+    this.syncUI();
+  }
+
+  chargeOvercharge() {
+    if (this.ui.mode !== "intermission") return;
+    if (this.waveIndex + 1 < (CONFIG.overcharge?.unlockWave ?? 40)) return this.playDeniedPurchase();
+    if (this.overchargeReady || this.overchargeReserve > 0) return this.playDeniedPurchase();
+    const cost = CONFIG.overcharge?.cost ?? 50;
+    if (this.getUnassignedSouls() < cost) return this.playDeniedPurchase();
+    this.overchargeReserve = cost;
+    this.overchargeReady = true;
+    this.audio.play("purchase", { volume: 0.62, pitchMin: 0.94, pitchMax: 1.02 });
+    this.saveGame(this.getIntermissionResumeWaveIndex());
     this.syncUI();
   }
 
@@ -971,7 +1072,11 @@ export class Game {
 
   continueAfterIntermission() {
     if (this.ui.mode !== "intermission") return;
-    if (!(this.developerMode && this.developerShop)) this.waveIndex += 1;
+    if (this.retryingWave) {
+      this.retryingWave = false;
+    } else if (!(this.developerMode && this.developerShop)) {
+      this.waveIndex += 1;
+    }
     this.developerShop = false;
     this.startCurrentWave();
   }
@@ -1013,11 +1118,24 @@ export class Game {
   retryWave() {
     if (!this.waveStartSnapshot || this.continuesUsed >= 3) return;
     const used = this.continuesUsed + 1;
+    const clicksMade = this.totalClicks;
     this.waveManager.clear();
     this.restoreState(this.waveStartSnapshot);
+    // Clicks made during the failed attempt still happened, but Souls, Bound
+    // Souls and combat gains from that attempt are rolled back.
+    this.totalClicks = clicksMade;
     this.continuesUsed = used;
+    this.overchargeActive = false;
+    this.world.setOverchargeActive?.(false);
+    this.defence.setOvercharge?.(false);
+    this.gameplayActive = false;
+    this.paused = false;
+    this.grabSystem.setEnabled(false);
+    this.retryingWave = true;
     this.applyUpgradeState();
-    this.startCurrentWave();
+    this.saveGame(this.waveIndex);
+    this.syncUI();
+    this.ui.setMode("intermission");
   }
 
   checkWorldCollisions() {
@@ -1091,6 +1209,12 @@ export class Game {
       x: (projected.x * 0.5 + 0.5) * window.innerWidth,
       y: (-projected.y * 0.5 + 0.5) * window.innerHeight
     };
+  }
+
+  trackCampaignClick(event) {
+    if (!this.campaignTrackingActive || this.endingActive || this.developerMode) return;
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    this.totalClicks += 1;
   }
 
   focusGameCanvas() {
@@ -1241,6 +1365,7 @@ export class Game {
     this.prepareDeveloperTransition();
     this.demonDeaths = Math.max(this.demonDeaths, 700);
     this.boundSouls = Math.max(this.boundSouls, CONFIG.ranking.bindingMaxTarget);
+    this.totalBoundEver = Math.max(this.totalBoundEver, CONFIG.ranking.bindingMaxTarget);
     this.totalManorDamageTaken = Math.max(this.totalManorDamageTaken, 4200);
     this.beginVictorySequence();
   }
@@ -1289,6 +1414,9 @@ export class Game {
       },
       newGamePlus: this.newGamePlus,
       totalManorDamageTaken: this.totalManorDamageTaken,
+      overchargeReserve: this.overchargeReserve,
+      overchargeReady: this.overchargeReady,
+      totalClicks: this.totalClicks,
       unlockWaves: Object.fromEntries(
         Object.entries(CONFIG.buildings)
           .filter(([, value]) => value.unlockWave)
@@ -1430,6 +1558,7 @@ export class Game {
     window.removeEventListener("keydown", this.onKeyDown, true);
     window.removeEventListener("keyup", this.onKeyUp, true);
     document.removeEventListener("pointerdown", this.focusGameCanvas, true);
+    document.removeEventListener("pointerdown", this.trackCampaignClick, true);
     this.ui.dispose();
     this.grabSystem?.dispose();
     this.waveManager?.dispose();

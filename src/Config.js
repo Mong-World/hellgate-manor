@@ -133,8 +133,8 @@ export const CONFIG = Object.freeze({
 
   buildings: {
     extraction: { cost: 900, label: "SOUL EXTRACTION", unlockWave: 4 },
-    extractionUpgrade2: { cost: 3000, label: "SOUL EXTRACTION II" },
-    extractionUpgrade3: { cost: 6000, label: "SOUL EXTRACTION III" },
+    extractionUpgrade2: { cost: 5000, label: "SOUL EXTRACTION II" },
+    extractionUpgrade3: { cost: 10000, label: "SOUL EXTRACTION III" },
     hellfire: { cost: 1000, label: "HELLFIRE BATTERY", unlockWave: 4 },
     demolition: { cost: 4800, label: "HELL BOMB FORGE", unlockWave: 15 },
     undercroft: { cost: 8000, label: "UNDERCROFT", unlockWave: 25 },
@@ -146,6 +146,12 @@ export const CONFIG = Object.freeze({
     maxConcurrent: 3,
     maxLevel: 3,
     radius: 2.35
+  },
+
+  overcharge: {
+    unlockWave: 40,
+    cost: 50,
+    manorDamageReduction: 0.20
   },
 
   boundCaps: {
@@ -214,7 +220,7 @@ export const CONFIG = Object.freeze({
       grabY: 2.45,
       throwScale: 0.52,
       durability: 2,
-      convertible: true
+      convertible: false
     },
     siege: {
       asset: "siege",
@@ -240,7 +246,9 @@ export const CONFIG = Object.freeze({
     groundDeathScreenFraction: 0.5,
     hardSurfaceKillSpeed: 10.5,
     treeKillSpeed: 10.5,
-    collisionRadius: 0.58
+    collisionRadius: 0.58,
+    playableZMin: -5.35,
+    playableZMax: 5.35
   },
 
   defence: {
@@ -249,7 +257,9 @@ export const CONFIG = Object.freeze({
     bombMaxCharges: 3,
     bombSoulsPerCharge: 15,
     hellfireMaxSouls: 45,
-    occultMaxSouls: 30
+    occultMaxSouls: 30,
+    occultRadius: 3.6,
+    undercroftRepairPerSoul: 50
   },
 
   pool: {
@@ -276,7 +286,7 @@ export const CONFIG = Object.freeze({
 
   ranking: {
     bindingMaxTarget: 150,
-    defenceDamageThresholds: [2500, 5000, 8500, 13000],
+    defenceDamageThresholds: [7000, 14000, 24000, 38000],
     newGamePlusDefenceScale: 1.25
   },
 

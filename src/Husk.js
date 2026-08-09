@@ -365,6 +365,19 @@ export class Husk {
       this.velocity.y -= this.gravity * dt;
       this.velocity.multiplyScalar(Math.pow(0.992, dt * 60));
       this.group.position.addScaledVector(this.velocity, dt);
+
+      // Keep thrown demons inside the readable battlefield depth. A hard side
+      // throw used to let them slide all the way to the horizon where they were
+      // difficult to see and recover. Bounce a little energy back into the
+      // field instead of allowing them to escape the playable ground.
+      if (this.position.z < CONFIG.enemy.playableZMin) {
+        this.position.z = CONFIG.enemy.playableZMin;
+        this.velocity.z = Math.abs(this.velocity.z) * 0.22;
+      } else if (this.position.z > CONFIG.enemy.playableZMax) {
+        this.position.z = CONFIG.enemy.playableZMax;
+        this.velocity.z = -Math.abs(this.velocity.z) * 0.22;
+      }
+
       this.group.rotation.z -= this.velocity.x * dt * 0.12;
       this.group.rotation.x += this.velocity.z * dt * 0.12;
 
