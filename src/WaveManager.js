@@ -39,20 +39,31 @@ export class WaveManager {
     this.pooledEnemies = new Set();
     this.activeExtractions = new Set();
     this.newGamePlus = false;
-    this.poolMisses = Object.fromEntries(TYPES.map((type) => [type, 0]));
-    this.aliveScratch = [];
-    this.combatScratch = [];
+    this.mobileDifficulty = false;
   }
 
   setNewGamePlus(enabled) {
     this.newGamePlus = !!enabled;
   }
 
+  setMobileDifficulty(enabled) {
+    this.mobileDifficulty = !!enabled;
+  }
+
+  applyDeviceDifficulty(config, wave) {
+    if (!this.mobileDifficulty || wave < (CONFIG.mobileDifficulty?.lateWaveStart ?? 35)) return config;
+    return {
+      ...config,
+      maxActive: config.maxActive + (CONFIG.mobileDifficulty?.maxActiveBonus ?? 2),
+      spawnGap: Math.max(0.42, config.spawnGap * (CONFIG.mobileDifficulty?.spawnGapMultiplier ?? 0.92))
+    };
+  }
+
   getWaveConfig(index) {
     const base = CONFIG.waves[index];
-    if (!this.newGamePlus) return base;
-
     const wave = index + 1;
+    if (!this.newGamePlus) return this.applyDeviceDifficulty(base, wave);
+
     const settings = CONFIG.newGamePlus;
     const total = Math.max(12, Math.ceil(base.total * settings.waveCountMultiplier));
     let runner = 0;
@@ -74,17 +85,17 @@ export class WaveManager {
     }
 
     const husk = Math.max(8, total - runner - strong - brute - siege);
-    return {
+    return this.applyDeviceDifficulty({
       ...base,
       counts: { husk, strong, runner, brute, siege },
       total,
-      maxActive: settings.maxActive,
+      maxActive: Math.max(base.maxActive, settings.maxActive),
       initialDelay: Math.max(1.0, base.initialDelay * 0.72),
       spawnGap: Math.max(0.46, base.spawnGap * 0.84),
       burstChance: Math.min(0.94, base.burstChance + 0.10),
       burstMax: Math.min(9, base.burstMax + 1),
       huskPaceVariation: true
-    };
+    }, wave);
   }
 
   async preparePools(onProgress = null) {
@@ -138,14 +149,7 @@ export class WaveManager {
 
   acquireEnemy(type, id, position) {
     const pool = this.pools[type];
-    const enemy = pool.pop();
-    if (!enemy) {
-      // Never construct a skinned/animated GLB during live gameplay. The pools
-      // are sized to cover the campaign caps, so this is a diagnostic fallback
-      // only; spawning simply waits for a pooled enemy to become free.
-      this.poolMisses[type] = (this.poolMisses[type] ?? 0) + 1;
-      return null;
-    }
+    const enemy = pool.pop() ?? this.createEnemy({ id, type, position });
     this.pooledEnemies.delete(enemy);
     enemy.resetForSpawn(id, position, type);
     return enemy;
@@ -178,52 +182,36 @@ export class WaveManager {
     return queue;
   }
 
-  startWave(index, minimumInitialDelay = 0) {
+  startWave(index) {
     this.clearActiveOnly();
     this.waveIndex = index;
     this.config = this.getWaveConfig(index);
     this.queue = this.makeQueue(this.config.counts);
     this.spawned = 0;
     this.resolved = 0;
-    this.spawnTimer = Math.max(this.config.initialDelay, minimumInitialDelay);
+    this.spawnTimer = this.config.initialDelay;
     this.running = true;
   }
 
   update(dt) {
     if (!this.running || !this.config) return;
-
-    // Compact the active list in place instead of allocating a new filtered
-    // array every frame. This reduces garbage-collector pressure in long waves.
-    let write = 0;
-    for (let read = 0; read < this.enemies.length; read += 1) {
-      const enemy = this.enemies[read];
-      if (!enemy.removed) this.enemies[write++] = enemy;
-    }
-    this.enemies.length = write;
+    this.enemies = this.enemies.filter((enemy) => !enemy.removed);
 
     if (this.spawned < this.queue.length) {
       this.spawnTimer -= dt;
       if (this.spawnTimer <= 0) {
-        const available = Math.max(0, this.config.maxActive - this.countActiveCombatEnemies());
+        const available = Math.max(0, this.config.maxActive - this.getActiveCombatEnemies().length);
         if (available > 0) {
           let burst = 1;
           if (Math.random() < this.config.burstChance) {
             burst = THREE.MathUtils.randInt(2, this.config.burstMax);
           }
           burst = Math.min(burst, available, this.queue.length - this.spawned);
-          let spawnedNow = 0;
-          for (let i = 0; i < burst; i += 1) {
-            if (!this.spawnEnemy(i, burst)) break;
-            spawnedNow += 1;
-          }
-          if (spawnedNow > 0) {
-            const jitter = THREE.MathUtils.randFloat(0.78, 1.22);
-            this.spawnTimer = this.config.spawnGap * jitter;
-          } else {
-            this.spawnTimer = 0.08;
-          }
+          for (let i = 0; i < burst; i += 1) this.spawnEnemy(i, burst);
+          const jitter = THREE.MathUtils.randFloat(0.78, 1.22);
+          this.spawnTimer = this.config.spawnGap * jitter;
         } else {
-          // The 25-enemy cap is the only thing that pauses spawning.
+          // The current wave active-enemy cap is the only thing that pauses spawning.
           this.spawnTimer = 0.2;
         }
       }
@@ -232,7 +220,7 @@ export class WaveManager {
     if (
       this.spawned >= this.queue.length &&
       this.resolved >= this.queue.length &&
-      this.countActiveCombatEnemies() === 0
+      this.getActiveCombatEnemies().length === 0
     ) {
       this.running = false;
       this.onWaveComplete?.(this.waveIndex);
@@ -250,15 +238,13 @@ export class WaveManager {
     );
     const enemy = this.acquireEnemy(
       type,
-      this.nextEnemyId,
+      this.nextEnemyId++,
       new THREE.Vector3(
         THREE.MathUtils.randFloat(CONFIG.enemy.spawnXMin, CONFIG.enemy.spawnXMax) - burstIndex * 0.35,
         0,
         z
       )
     );
-    if (!enemy) return false;
-    this.nextEnemyId += 1;
 
     // From Wave 4 onward the basic Husk population includes slower walkers and
     // slightly quicker walkers without introducing the true Running Husk early.
@@ -280,7 +266,6 @@ export class WaveManager {
 
     this.enemies.push(enemy);
     this.spawned += 1;
-    return true;
   }
 
   handleEnemyDeath(data) {
@@ -320,34 +305,13 @@ export class WaveManager {
   }
 
   getAliveEnemies() {
-    this.aliveScratch.length = 0;
-    for (const enemy of this.enemies) {
-      if (!enemy.dead && !enemy.removed) this.aliveScratch.push(enemy);
-    }
-    return this.aliveScratch;
+    return this.enemies.filter((enemy) => !enemy.dead && !enemy.removed);
   }
 
   getActiveCombatEnemies() {
-    this.combatScratch.length = 0;
-    for (const enemy of this.enemies) {
-      if (!enemy.dead && !enemy.removed && enemy.state !== "extracting") this.combatScratch.push(enemy);
-    }
-    return this.combatScratch;
-  }
-
-  countActiveCombatEnemies() {
-    let count = 0;
-    for (const enemy of this.enemies) {
-      if (!enemy.dead && !enemy.removed && enemy.state !== "extracting") count += 1;
-    }
-    return count;
-  }
-
-  getPoolDiagnostics() {
-    return {
-      misses: this.poolMisses,
-      free: Object.fromEntries(TYPES.map((type) => [type, this.pools[type].length]))
-    };
+    return this.enemies.filter(
+      (enemy) => !enemy.dead && !enemy.removed && enemy.state !== "extracting"
+    );
   }
 
   getExtractionCount() {

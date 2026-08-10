@@ -129,7 +129,7 @@ export class AudioManager {
   }
 
   primeAllPlaybackPaths() {
-    const musicKeys = new Set(["background1", "background2", "level50", "newDawn"]);
+    const musicKeys = new Set(["background1", "background2", "newDawn"]);
     for (const key of this.buffers.keys()) {
       this.prime(key, { music: musicKeys.has(key) });
     }
@@ -286,6 +286,18 @@ export class AudioManager {
       try { loop.source.disconnect(); } catch {}
       try { loop.gain.disconnect(); } catch {}
     }, Math.ceil((fadeSeconds + 0.08) * 1000));
+  }
+
+
+  setSfxLevel(level, seconds = 0.25) {
+    if (!this.context || !this.sfxGain) return;
+    const now = this.context.currentTime;
+    this.sfxGain.gain.cancelScheduledValues(now);
+    this.sfxGain.gain.setValueAtTime(this.sfxGain.gain.value, now);
+    this.sfxGain.gain.linearRampToValueAtTime(
+      Math.max(0, level),
+      now + Math.max(seconds, 0.01)
+    );
   }
 
   setMusicLevel(level, seconds = 0.35) {

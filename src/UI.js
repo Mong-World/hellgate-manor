@@ -23,6 +23,7 @@ export class UI {
     this.callbacks = callbacks;
     this.mode = "loading";
     this.wave = 1;
+    this.preparingWave = 1;
     this.waveTotal = CONFIG.waves.length;
     this.souls = 0;
     this.health = CONFIG.manor.startHealth;
@@ -42,7 +43,6 @@ export class UI {
     this.bannerSubtitle = "";
     this.bannerTimer = 0;
     this.healthFlash = 0;
-    this.uiTime = 0;
     this.soulPulse = 0;
     this.boundPulse = 0;
     this.soulFlights = [];
@@ -66,15 +66,6 @@ export class UI {
     this.overchargeReserve = 0;
     this.overchargeReady = false;
     this.totalClicks = 0;
-    this.performanceStats = {
-      fps: 0,
-      calls: 0,
-      triangles: 0,
-      geometries: 0,
-      textures: 0,
-      programs: 0,
-      poolMisses: { husk: 0, strong: 0, runner: 0, brute: 0, siege: 0 }
-    };
 
     this.touchDevice = window.matchMedia?.("(pointer: coarse)")?.matches || navigator.maxTouchPoints > 0;
     this.shopScroll = 0;
@@ -165,10 +156,6 @@ export class UI {
     Object.assign(this, data);
   }
 
-  setPerformanceStats(stats) {
-    this.performanceStats = stats;
-  }
-
   setHasSave(hasSave) {
     this.hasSave = hasSave;
   }
@@ -200,13 +187,26 @@ export class UI {
     this.continuesRemaining = Math.max(0, Math.floor(Number(remaining) || 0));
   }
 
+  showFirstWaveTutorial(onClose = null) {
+    this.tutorial = {
+      simple: true,
+      title: "DEFEND THE MANOR",
+      lines: [
+        "Grab demons and throw them to destroy them.",
+        "Stronger demons may be too powerful to pick up",
+        "and can only be pushed to be destroyed."
+      ],
+      onClose
+    };
+  }
+
   showExtractionTutorial() {
     this.tutorial = {
       title: "SOUL EXTRACTION",
       lines: [
-        "GRAB A DEMON AND DROP IT INTO THE GLOWING PORTAL",
-        "ABOVE THE MANOR TO CREATE A BOUND SOUL.",
-        "WAIT FOR A BINDING SLOT TO BECOME FREE BEFORE DROPPING ANOTHER."
+        "Grab a demon and drop it into the glowing portal",
+        "above the Manor to create a Bound Soul.",
+        "Wait for a binding slot to become free before dropping another."
       ]
     };
   }
@@ -216,8 +216,8 @@ export class UI {
       simple: true,
       title: "POWER YOUR UPGRADES",
       lines: [
-        "MAKE SURE YOU ALLOCATE YOUR BOUND SOULS.",
-        "UPGRADES ONLY GAIN POWER FROM SOULS ASSIGNED TO THEM."
+        "Make sure you allocate your Bound Souls.",
+        "Upgrades only gain power from souls assigned to them."
       ]
     };
   }
@@ -227,8 +227,8 @@ export class UI {
       simple: true,
       title: "HELL BOMB FORGE",
       lines: [
-        "ASSIGN BOUND SOULS TO CREATE HELL BOMBS.",
-        "CLICK THE BOMB COUNTER TO ACTIVATE ONE."
+        "Assign Bound Souls to create Hell Bombs.",
+        "Tap or click the bomb counter to activate one."
       ]
     };
   }
@@ -238,8 +238,8 @@ export class UI {
       simple: true,
       title: "UNDERCROFT",
       lines: [
-        "ASSIGN BOUND SOULS TO AUTOMATICALLY REPAIR",
-        "THE MANOR AFTER EACH WAVE."
+        "Assign Bound Souls to automatically repair",
+        "the Manor after each wave."
       ]
     };
   }
@@ -249,8 +249,8 @@ export class UI {
       simple: true,
       title: "OCCULT TOWER",
       lines: [
-        "ASSIGN BOUND SOULS TO AUTOMATICALLY SUMMON",
-        "OCCULT STRIKES AGAINST DEMONS."
+        "Assign Bound Souls to automatically summon",
+        "Occult strikes against demons."
       ]
     };
   }
@@ -260,9 +260,9 @@ export class UI {
       simple: true,
       title: "MANOR OVERCHARGE",
       lines: [
-        "OVERCHARGE IS NOW AVAILABLE IN BOUND SOULS.",
-        "SPEND 50 UNASSIGNED BOUND SOULS TO CHARGE IT",
-        "FOR ONE WAVE OF EXTRA DEFENCE AND HELLFIRE POWER."
+        "Overcharge is now available in Bound Souls.",
+        "Spend 50 unassigned Bound Souls to charge it for one wave",
+        "of extra defence, Hellfire power and an extra Hell Bomb."
       ]
     };
   }
@@ -315,7 +315,7 @@ export class UI {
 
   activateButton(button) {
     if (!button) return;
-    this.callbacks.onUIClick?.();
+    if (!button.silent) this.callbacks.onUIClick?.();
     if (button.disabled) button.onDenied?.();
     else button.onClick?.();
   }
@@ -380,7 +380,6 @@ export class UI {
   }
 
   update(dt) {
-    this.uiTime += dt;
     if (this.mode === "ending") this.endingElapsed += dt;
     this.bannerTimer = Math.max(0, this.bannerTimer - dt);
     this.healthFlash = Math.max(0, this.healthFlash - dt);
@@ -410,6 +409,7 @@ export class UI {
       this.drawHUD(width, height);
       this.drawPauseButton(width, height);
       if (this.bannerTimer > 0) this.drawBanner(width, height);
+      if (this.tutorial) this.drawTutorial(width, height);
     } else if (this.mode === "paused") {
       this.drawHUD(width, height);
       this.drawPaused(width, height);
@@ -429,6 +429,7 @@ export class UI {
       this.drawComplete(width, height);
     }
 
+    if (this.developerPanelOpen) this.drawDeveloperPanel(width, height);
   }
 
   font(size) {
@@ -664,30 +665,10 @@ export class UI {
     const ratio = Math.max(0, Math.min(1, this.health / this.maxHealth));
     ctx.fillStyle = "rgba(255,255,255,.07)";
     ctx.fillRect(barX, barY, barWidth, 14);
-    const criticalHealth = ratio > 0 && ratio <= 0.20;
-    const criticalPulse = criticalHealth ? 0.5 + 0.5 * Math.sin(this.uiTime * 7.5) : 0;
-    ctx.save();
     ctx.fillStyle = this.healthFlash > 0 || ratio <= 0.35 ? C.red : C.orange;
-    if (criticalHealth) {
-      ctx.fillStyle = "#ff3428";
-      ctx.globalAlpha = 0.48 + criticalPulse * 0.52;
-      ctx.shadowColor = "rgba(255,45,32,.95)";
-      ctx.shadowBlur = 5 + criticalPulse * 15;
-    }
     ctx.fillRect(barX, barY, barWidth * ratio, 14);
-    ctx.restore();
     ctx.strokeStyle = "rgba(255,255,255,.18)";
     ctx.strokeRect(barX, barY, barWidth, 14);
-    if (criticalHealth) {
-      ctx.save();
-      ctx.globalAlpha = 0.35 + criticalPulse * 0.60;
-      ctx.strokeStyle = "#ff3b31";
-      ctx.lineWidth = 2;
-      ctx.shadowColor = "rgba(255,45,32,.90)";
-      ctx.shadowBlur = 6 + criticalPulse * 13;
-      ctx.strokeRect(barX - 1, barY - 1, barWidth + 2, 16);
-      ctx.restore();
-    }
     ctx.fillStyle = C.text;
     ctx.font = this.dataFont(compact ? 9 : 10, 850);
     ctx.fillText(`${Math.ceil(this.health)} / ${this.maxHealth}`, width / 2, barY + 12);
@@ -797,30 +778,10 @@ export class UI {
     const ratio = Math.max(0, Math.min(1, this.health / this.maxHealth));
     ctx.fillStyle = "rgba(255,255,255,.07)";
     ctx.fillRect(barX, barY, barW, 8);
-    const criticalHealth = ratio > 0 && ratio <= 0.20;
-    const criticalPulse = criticalHealth ? 0.5 + 0.5 * Math.sin(this.uiTime * 7.5) : 0;
-    ctx.save();
     ctx.fillStyle = this.healthFlash > 0 || ratio <= 0.35 ? C.red : C.orange;
-    if (criticalHealth) {
-      ctx.fillStyle = "#ff3428";
-      ctx.globalAlpha = 0.48 + criticalPulse * 0.52;
-      ctx.shadowColor = "rgba(255,45,32,.95)";
-      ctx.shadowBlur = 4 + criticalPulse * 11;
-    }
     ctx.fillRect(barX, barY, barW * ratio, 8);
-    ctx.restore();
     ctx.strokeStyle = "rgba(255,255,255,.18)";
     ctx.strokeRect(barX, barY, barW, 8);
-    if (criticalHealth) {
-      ctx.save();
-      ctx.globalAlpha = 0.35 + criticalPulse * 0.60;
-      ctx.strokeStyle = "#ff3b31";
-      ctx.lineWidth = 1.5;
-      ctx.shadowColor = "rgba(255,45,32,.90)";
-      ctx.shadowBlur = 4 + criticalPulse * 9;
-      ctx.strokeRect(barX - 1, barY - 1, barW + 2, 10);
-      ctx.restore();
-    }
     ctx.fillStyle = C.text;
     ctx.font = this.dataFont(6, 900);
     ctx.fillText(`${Math.ceil(this.health)} / ${this.maxHealth}`, width / 2, barY + 7);
@@ -946,6 +907,20 @@ export class UI {
     const titleY = y + (mobileLandscape ? 32 : (mobile ? 38 : 41));
     ctx.fillText("HELLGATE MANOR", width / 2, titleY);
     ctx.shadowBlur = 0;
+
+    // Invisible developer gesture: 10 taps/clicks on the pause title within
+    // five seconds. No visual or audio feedback is exposed to normal players.
+    const secretW = mobileLandscape ? 250 : (mobile ? 300 : 330);
+    const secretH = mobileLandscape ? 34 : 44;
+    this.buttons.push({
+      x: width / 2 - secretW / 2,
+      y: titleY - secretH * 0.72,
+      w: secretW,
+      h: secretH,
+      onClick: () => this.callbacks.onDevSecretTap?.(),
+      disabled: false,
+      silent: true
+    });
 
     ctx.fillStyle = C.orangeLight;
     ctx.font = this.font(mobileLandscape ? 23 : (mobile ? 27 : 30));
@@ -1125,6 +1100,11 @@ export class UI {
     ctx.fillStyle = C.text;
     ctx.font = this.font(mobile ? 31 : 43);
     ctx.fillText("MANOR UPGRADES", width / 2, y + (mobile ? 42 : 52));
+    ctx.textAlign = "left";
+    ctx.fillStyle = C.orangeLight;
+    ctx.font = this.dataFont(mobile ? 9 : 11, 900);
+    ctx.fillText(`WAVE ${this.preparingWave}`, x + 18, y + (mobile ? 27 : 31));
+    ctx.textAlign = "center";
 
     const saveSize = mobile ? 38 : 42;
     const saveX = x + panelWidth - saveSize - 16;
@@ -1236,6 +1216,9 @@ export class UI {
     ctx.fillStyle = C.text;
     ctx.font = this.font(25);
     ctx.fillText("MANOR UPGRADES", x + 16, y + 31);
+    ctx.fillStyle = C.orangeLight;
+    ctx.font = this.dataFont(8, 900);
+    ctx.fillText(`WAVE ${this.preparingWave}`, x + 238, y + 29);
 
     ctx.fillStyle = C.orangeLight;
     ctx.font = this.dataFont(8, 900);
@@ -1308,7 +1291,7 @@ export class UI {
     let contentHeight = 330;
     if (this.shopPage === 2) {
       const systemCount = [this.buildings.hellfire, this.buildings.demolition, this.buildings.undercroft, this.buildings.occult].filter(Boolean).length;
-      const overchargeRows = this.wave >= (CONFIG.overcharge?.unlockWave ?? 40) ? 1 : 0;
+      const overchargeRows = this.preparingWave >= (CONFIG.overcharge?.unlockWave ?? 40) ? 1 : 0;
       const totalRows = systemCount + overchargeRows;
       contentHeight = totalRows > 0 ? 42 + totalRows * 86 + Math.max(0, totalRows - 1) * 8 : 130;
     }
@@ -1369,7 +1352,8 @@ export class UI {
 
   drawSystemsShop(x, y, width, height, mobile) {
     const b = CONFIG.buildings;
-    const extractionUnlock = this.wave < (b.extraction.unlockWave ?? 1);
+    const shopWave = this.preparingWave ?? this.wave;
+    const extractionUnlock = shopWave < (b.extraction.unlockWave ?? 1);
     let extractionItem;
     if (!this.buildings.extraction || this.extractionLevel <= 0) {
       const extractionWave = b.extraction.unlockWave ?? 1;
@@ -1385,18 +1369,22 @@ export class UI {
         extractionUnlock ? `WAVE ${extractionWave}` : null
       ];
     } else if (this.extractionLevel < CONFIG.extraction.maxLevel) {
-      const next = this.extractionLevel + 1;
+      const upgradeWave = b.extractionUpgrade2.unlockWave ?? 35;
+      const upgradeLocked = shopWave < upgradeWave;
       extractionItem = [
-        `SOUL EXTRACTION — ${this.extractionLevel} SLOT${this.extractionLevel === 1 ? "" : "S"}`,
-        `UPGRADE TO ${next} SIMULTANEOUS BINDING SLOTS`,
-        this.purchaseCosts.extractionUpgrade ?? (next === 2 ? b.extractionUpgrade2.cost : b.extractionUpgrade3.cost),
+        "SOUL EXTRACTION — 1 SLOT",
+        upgradeLocked
+          ? `SECOND SLOT UNLOCKS WAVE ${upgradeWave}`
+          : "UPGRADE TO 2 SIMULTANEOUS BINDING SLOTS",
+        this.purchaseCosts.extractionUpgrade ?? b.extractionUpgrade2.cost,
         "extractionUpgrade",
         false,
-        false
+        upgradeLocked,
+        upgradeLocked ? `WAVE ${upgradeWave}` : null
       ];
     } else {
       extractionItem = [
-        "SOUL EXTRACTION — 3 SLOTS",
+        "SOUL EXTRACTION — 2 SLOTS",
         "MAXIMUM BINDING CAPACITY",
         0,
         "extractionUpgrade",
@@ -1409,7 +1397,7 @@ export class UI {
     const makeSystem = (key, title, description) => {
       const def = b[key];
       const unlockWave = def.unlockWave ?? 1;
-      const waveLocked = this.wave < unlockWave;
+      const waveLocked = shopWave < unlockWave;
       const extractionLocked = !this.buildings.extraction;
       const locked = waveLocked || extractionLocked;
       let text = description;
@@ -1426,7 +1414,7 @@ export class UI {
     const items = [
       extractionItem,
       makeSystem("hellfire", "HELLFIRE BATTERY", "BOUND SOULS BUILD AND SPEED UP CROSSBOW DEFENCES"),
-      makeSystem("demolition", "HELL BOMB FORGE", "15 BOUND SOULS = 1 BOMB AT WAVE START — MAX 3"),
+      makeSystem("demolition", "HELL BOMB FORGE", "25 BOUND SOULS = 1 BOMB • 50 = 2 • OVERCHARGE CAN ADD A 3RD"),
       makeSystem("undercroft", "UNDERCROFT", "BOUND SOULS REPAIR THE MANOR BETWEEN WAVES"),
       makeSystem("occult", "OCCULT TOWER", "LIGHT-PURPLE GROUND FIRE STRIKES ACTIVE DEMONS")
     ];
@@ -1497,7 +1485,8 @@ export class UI {
       ["occult", "OCCULT", this.buildings.occult, C.purple]
     ].filter((entry) => entry[2]);
 
-    if (systems.length === 0) {
+    const showOvercharge = this.preparingWave >= (CONFIG.overcharge?.unlockWave ?? 40);
+    if (systems.length === 0 && !showOvercharge) {
       ctx.fillStyle = C.muted;
       ctx.font = this.dataFont(13, 800);
       ctx.fillText("PURCHASE A BOUND-SOUL SYSTEM TO ASSIGN YOUR CONVERTED DEMONS.", x + width / 2, y + 72);
@@ -1506,7 +1495,6 @@ export class UI {
 
     const startY = y + 36;
     const rowGap = 8;
-    const showOvercharge = this.wave >= (CONFIG.overcharge?.unlockWave ?? 40);
     const totalRows = Math.max(1, systems.length + (showOvercharge ? 1 : 0));
     const rowH = Math.max(mobile ? 76 : 72, Math.min(mobile ? 86 : 92, (height - 42 - rowGap * (totalRows - 1)) / totalRows));
 
@@ -1580,17 +1568,22 @@ export class UI {
           ? `${mounts} CROSSBOW${mounts === 1 ? "" : "S"} • ${interval.toFixed(1)}s RELOAD${next}`
           : "NO DEFENCE ACTIVE";
       } else if (key === "demolition") {
-        const bombs = Math.min(CONFIG.defence.bombMaxCharges, Math.floor(assigned / CONFIG.defence.bombSoulsPerCharge));
-        effectText = bombs > 0
-          ? `${bombs} HELL BOMB${bombs === 1 ? "" : "S"} AT THE START OF EACH WAVE`
-          : `${CONFIG.defence.bombSoulsPerCharge} BOUND SOULS NEEDED FOR 1 WAVE BOMB`;
+        const firstCost = CONFIG.defence.bombFirstSoulCost ?? 25;
+        const secondCost = CONFIG.defence.bombSecondSoulCost ?? 50;
+        const bombs = assigned >= secondCost ? 2 : assigned >= firstCost ? 1 : 0;
+        effectText = bombs === 2
+          ? "2 HELL BOMBS EACH WAVE • OVERCHARGE ADDS A 3RD"
+          : bombs === 1
+            ? `${secondCost - assigned} MORE BOUND SOULS FOR A SECOND BOMB`
+            : `${firstCost - assigned} MORE BOUND SOULS FOR THE FIRST BOMB`;
       } else if (key === "undercroft") {
-        effectText = `+${assigned * (CONFIG.defence.undercroftRepairPerSoul ?? 50)} MANOR HEALTH AFTER EACH WAVE`;
+        effectText = `+${assigned * (CONFIG.defence.undercroftRepairPerSoul ?? 25)} MANOR HEALTH AFTER EACH WAVE`;
       } else if (key === "occult") {
         const interval = assigned <= 0 ? 0 : 13.5 - Math.min(1, (assigned - 1) / 29) * 7.5;
-        const strikes = assigned >= 20 ? 3 : assigned >= 10 ? 2 : assigned > 0 ? 1 : 0;
+        const secondStrikeAt = CONFIG.defence.occultSecondStrikeSouls ?? 25;
+        const strikes = assigned >= secondStrikeAt ? 2 : assigned > 0 ? 1 : 0;
         effectText = assigned > 0
-          ? `${strikes} PURPLE FIRE STRIKE${strikes === 1 ? "" : "S"} ABOUT EVERY ${interval.toFixed(1)}s`
+          ? `${strikes} PURPLE FIRE STRIKE${strikes === 1 ? "" : "S"} • ${interval.toFixed(1)}s • ${strikes === 1 ? `2ND AT ${secondStrikeAt}` : "MAX 2 STRIKES"}`
           : "NO OCCULT STRIKES";
       }
       ctx.fillText(effectText, x + 16, rowY + 68);
@@ -1635,7 +1628,9 @@ export class UI {
       });
 
       this.button("GOT IT", width / 2 - 90, y + panelHeight - 52, 180, 38, () => {
+        const onClose = this.tutorial?.onClose;
         this.tutorial = null;
+        onClose?.();
       });
       return;
     }
@@ -1701,7 +1696,9 @@ export class UI {
     });
 
     this.button("GOT IT", width / 2 - 95, y + panelHeight - 58, 190, 42, () => {
+      const onClose = this.tutorial?.onClose;
       this.tutorial = null;
+      onClose?.();
     });
   }
 
@@ -1737,26 +1734,69 @@ export class UI {
   }
 
   drawDeveloperPanel(width, height) {
-    // Modal developer controls for desktop testing. Opening this panel in Game
-    // disables persistence for the remainder of the browser session.
+    // Hidden test controls. This layout deliberately supports the same panel
+    // on desktop and landscape phones.
     this.buttons = [];
     const ctx = this.ctx;
     ctx.fillStyle = "rgba(0,0,0,.84)";
     ctx.fillRect(0, 0, width, height);
 
-    const panelWidth = Math.min(720, width - 48);
-    const panelHeight = Math.min(650, height - 36);
+    const compact = this.isMobileLandscape() || height < 520;
+    const panelWidth = Math.min(compact ? width - 14 : 720, width - (compact ? 14 : 48));
+    const panelHeight = Math.min(compact ? height - 14 : 650, height - (compact ? 14 : 36));
     const x = (width - panelWidth) / 2;
     const y = (height - panelHeight) / 2;
-    this.panel(x, y, panelWidth, panelHeight, "rgba(8,7,13,.98)", 14);
+    this.panel(x, y, panelWidth, panelHeight, "rgba(8,7,13,.98)", compact ? 10 : 14);
 
     ctx.textAlign = "center";
     ctx.fillStyle = C.purple;
-    ctx.font = this.font(38);
-    ctx.fillText("DEVELOPER TEST", width / 2, y + 52);
+    ctx.font = this.font(compact ? 26 : 38);
+    ctx.fillText("DEVELOPER TEST", width / 2, y + (compact ? 29 : 52));
     ctx.fillStyle = C.muted;
-    ctx.font = this.dataFont(10, 850);
-    ctx.fillText("ESC TO CLOSE — TEST MODE DOES NOT SAVE", width / 2, y + 77);
+    ctx.font = this.dataFont(compact ? 7 : 10, 850);
+    ctx.fillText(compact ? "TEST MODE DOES NOT SAVE" : "ESC TO CLOSE — TEST MODE DOES NOT SAVE", width / 2, y + (compact ? 46 : 77));
+
+    if (compact) {
+      const waveY = y + 58;
+      ctx.fillStyle = C.text;
+      ctx.font = this.dataFont(12, 900);
+      ctx.fillText(`TEST WAVE ${this.developerWave}`, width / 2, waveY + 24);
+      const smallW = 58;
+      const smallH = 34;
+      this.button("−5", x + 20, waveY, smallW, smallH, () => this.callbacks.onDevWaveChange?.(-5));
+      this.button("−", x + 86, waveY, smallW, smallH, () => this.callbacks.onDevWaveChange?.(-1));
+      this.button("+", x + panelWidth - 144, waveY, smallW, smallH, () => this.callbacks.onDevWaveChange?.(1));
+      this.button("+5", x + panelWidth - 78, waveY, smallW, smallH, () => this.callbacks.onDevWaveChange?.(5));
+
+      const actionY = y + 102;
+      const actionGap = 6;
+      const actionW = (panelWidth - 40 - actionGap * 3) / 4;
+      this.button("START WAVE", x + 20, actionY, actionW, 36, () => this.callbacks.onDevStartWave?.(), false, null, C.purple);
+      this.button("UPGRADES", x + 20 + (actionW + actionGap), actionY, actionW, 36, () => this.callbacks.onDevOpenShop?.(), false, null, C.purple);
+      this.button("ENDING", x + 20 + (actionW + actionGap) * 2, actionY, actionW, 36, () => this.callbacks.onDevDawn?.(), false, null, C.purple);
+      this.button(this.newGamePlus ? "NG+ ON" : "NG+ OFF", x + 20 + (actionW + actionGap) * 3, actionY, actionW, 36, () => this.callbacks.onDevToggleNGPlus?.(), false, null, this.newGamePlus ? C.red : C.purple);
+
+      const resourceY = y + 146;
+      this.button("+1000 SOULS", x + 20, resourceY, 150, 34, () => this.callbacks.onDevAddSouls?.(1000));
+      this.button("+10 BOUND", x + panelWidth - 170, resourceY, 150, 34, () => this.callbacks.onDevAddBound?.(10));
+      ctx.fillStyle = C.orangeLight;
+      ctx.font = this.dataFont(9, 900);
+      ctx.fillText("UNLOCK SYSTEMS", width / 2, resourceY + 26);
+
+      const unlocks = [["EXTRACT", "extraction"], ["HELLFIRE", "hellfire"], ["BOMBS", "demolition"], ["UNDERCROFT", "undercroft"], ["OCCULT", "occult"]];
+      const gap = 5;
+      const buttonW = (panelWidth - 40 - gap * 4) / 5;
+      const unlockY = y + 188;
+      unlocks.forEach(([label, key], index) => {
+        this.button(label, x + 20 + index * (buttonW + gap), unlockY, buttonW, 34, () => this.callbacks.onDevUnlock?.(key), false, null, C.purple);
+      });
+
+      ctx.fillStyle = C.muted;
+      ctx.font = this.dataFont(8, 800);
+      ctx.fillText(`${this.souls} SOULS • ${this.boundSouls} BOUND SOULS`, width / 2, y + 240);
+      this.button("CLOSE", width / 2 - 80, y + panelHeight - 43, 160, 34, () => this.callbacks.onDevClose?.());
+      return;
+    }
 
     const waveY = y + 100;
     ctx.fillStyle = C.text;
@@ -1781,13 +1821,7 @@ export class UI {
     ctx.font = this.dataFont(12, 900);
     ctx.fillText("UNLOCK SYSTEMS", width / 2, row2 + 78);
 
-    const unlocks = [
-      ["EXTRACTION", "extraction"],
-      ["HELLFIRE", "hellfire"],
-      ["BOMB FORGE", "demolition"],
-      ["UNDERCROFT", "undercroft"],
-      ["OCCULT", "occult"]
-    ];
+    const unlocks = [["EXTRACTION", "extraction"], ["HELLFIRE", "hellfire"], ["BOMB FORGE", "demolition"], ["UNDERCROFT", "undercroft"], ["OCCULT", "occult"]];
     const buttonW = 118;
     const gap = 8;
     const totalW = unlocks.length * buttonW + (unlocks.length - 1) * gap;
@@ -1799,28 +1833,6 @@ export class UI {
     ctx.fillStyle = C.muted;
     ctx.font = this.dataFont(10, 800);
     ctx.fillText(`CURRENT: ${this.souls} SOULS • ${this.boundSouls} BOUND SOULS`, width / 2, row2 + 162);
-
-    const perf = this.performanceStats ?? {};
-    const misses = perf.poolMisses ?? {};
-    ctx.fillStyle = "rgba(181,140,255,.88)";
-    ctx.font = this.dataFont(9, 820);
-    ctx.fillText(
-      `PERF  ${perf.fps ?? 0} FPS • ${perf.calls ?? 0} DRAWS • ${Number(perf.triangles ?? 0).toLocaleString()} TRIANGLES • ${perf.programs ?? 0} PROGRAMS`,
-      width / 2,
-      row2 + 187
-    );
-    ctx.fillStyle = C.muted;
-    ctx.fillText(
-      `GPU  ${perf.geometries ?? 0} GEOMETRIES • ${perf.textures ?? 0} TEXTURES`,
-      width / 2,
-      row2 + 205
-    );
-    ctx.fillText(
-      `POOL MISSES  H:${misses.husk ?? 0}  ST:${misses.strong ?? 0}  R:${misses.runner ?? 0}  B:${misses.brute ?? 0}  SG:${misses.siege ?? 0}`,
-      width / 2,
-      row2 + 223
-    );
-
     this.button("CLOSE", width / 2 - 95, y + panelHeight - 62, 190, 44, () => this.callbacks.onDevClose?.());
   }
 

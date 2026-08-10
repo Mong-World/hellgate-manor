@@ -23,10 +23,6 @@ export class DefenceSystem {
     this.impacts = [];
     this.arrowPool = [];
     this.impactPool = [];
-    this.groundPointScratch = new THREE.Vector3();
-    this.destinationScratch = new THREE.Vector3();
-    this.occultCandidates = [];
-    this.occultDamaged = new Set();
 
     this.createPools();
   }
@@ -103,7 +99,6 @@ export class DefenceSystem {
       target: null,
       destination: new THREE.Vector3(),
       fallback: new THREE.Vector3(),
-      direction: new THREE.Vector3(),
       age: 0,
       speed: 16
     };
@@ -211,21 +206,14 @@ export class DefenceSystem {
   }
 
   chooseTarget() {
-    let best = null;
-    let bestX = -Infinity;
-    for (const enemy of this.getEnemies()) {
-      if (enemy.dead || enemy.removed || enemy.state === "extracting" || this.isEnemyHeld(enemy)) continue;
-      if (enemy.position.x > bestX) {
-        best = enemy;
-        bestX = enemy.position.x;
-      }
-    }
-    return best;
+    return this.getEnemies()
+      .filter((enemy) => !enemy.dead && !enemy.removed && enemy.state !== "extracting" && !this.isEnemyHeld(enemy))
+      .sort((a, b) => b.position.x - a.position.x)[0] ?? null;
   }
 
-  chooseGroundPoint(mountIndex, target = null, out = this.groundPointScratch) {
-    if (target) return out.set(target.position.x, 0.08, target.position.z);
-    return out.set(
+  chooseGroundPoint(mountIndex, target = null) {
+    if (target) return new THREE.Vector3(target.position.x, 0.08, target.position.z);
+    return new THREE.Vector3(
       THREE.MathUtils.randFloat(-12, 7),
       0.08,
       THREE.MathUtils.clamp((mountIndex - 1) * 1.8 + THREE.MathUtils.randFloatSpread(5), -5.2, 5.2)
@@ -234,14 +222,10 @@ export class DefenceSystem {
 
   fireMount(mountIndex, scheduleExtra = true) {
     const target = this.chooseTarget();
-    const fallback = this.chooseGroundPoint(mountIndex, target, this.groundPointScratch);
-    const destination = this.destinationScratch;
-    if (target) {
-      destination.copy(target.position);
-      destination.y += Math.min(target.definition.height * 0.4, 2.1);
-    } else {
-      destination.copy(fallback);
-    }
+    const fallback = this.chooseGroundPoint(mountIndex, target);
+    const destination = target
+      ? target.position.clone().add(new THREE.Vector3(0, Math.min(target.definition.height * 0.4, 2.1), 0))
+      : fallback.clone();
     this.world.aimTurret(mountIndex, destination);
     this.fireProjectile(mountIndex, target, destination, fallback);
     this.onFire?.({ mountIndex, target });
@@ -291,19 +275,21 @@ export class DefenceSystem {
         projectile.target.state !== "extracting" &&
         !this.isEnemyHeld(projectile.target)
       ) {
-        projectile.destination.copy(projectile.target.position);
-        projectile.destination.y += Math.min(projectile.target.definition.height * 0.4, 2.1);
+        projectile.destination.copy(projectile.target.position).add(
+          new THREE.Vector3(0, Math.min(projectile.target.definition.height * 0.4, 2.1), 0)
+        );
       } else if (projectile.target) {
         projectile.destination.copy(projectile.fallback);
         projectile.target = null;
       }
 
-      const direction = projectile.direction.copy(projectile.destination).sub(projectile.group.position);
+      const direction = projectile.destination.clone().sub(projectile.group.position);
       const distance = direction.length();
       if (distance <= 0.32 || projectile.age > 4.6) {
         const target = projectile.target;
-        this.createImpact(projectile.destination);
+        const impact = projectile.destination.clone();
         this.releaseArrow(projectile);
+        this.createImpact(impact);
         if (target && !target.dead && !target.removed && !this.isEnemyHeld(target)) {
           this.onDamageEnemy?.(target, "turret", 1);
         }
@@ -346,43 +332,36 @@ export class DefenceSystem {
   }
 
   fireOccultPulse() {
-    const candidates = this.occultCandidates;
-    candidates.length = 0;
-    for (const enemy of this.getEnemies()) {
-      if (!enemy.dead && !enemy.removed && enemy.state !== "extracting") candidates.push(enemy);
-    }
+    const candidates = this.getEnemies().filter(
+      (enemy) => !enemy.dead && !enemy.removed && enemy.state !== "extracting"
+    );
     if (candidates.length === 0) return;
 
-    // Shuffle the reusable candidate array so targeting remains exactly as
-    // unpredictable as before, without allocating filter/slice arrays.
+    // Shuffle so the purple ground-fire reads as strikes across the field, not
+    // a hidden damage calculation always hitting the same front-most target.
     for (let i = candidates.length - 1; i > 0; i -= 1) {
       const j = Math.floor(Math.random() * (i + 1));
       [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
     }
 
-    const strikeCount = this.occultSouls >= 20 ? 3 : this.occultSouls >= 10 ? 2 : 1;
-    const targetCount = Math.min(strikeCount, candidates.length);
-    const damaged = this.occultDamaged;
-    damaged.clear();
+    const strikeCount = this.occultSouls >= (CONFIG.defence.occultSecondStrikeSouls ?? 25) ? 2 : 1;
+    const targets = candidates.slice(0, Math.min(strikeCount, candidates.length));
+    const damaged = new Set();
     const radius = CONFIG.defence.occultRadius ?? 2.85;
-    const radiusSq = radius * radius;
     this.world.pulseOccultEffect?.();
-
-    for (let targetIndex = 0; targetIndex < targetCount; targetIndex += 1) {
-      const target = candidates[targetIndex];
-      const centreX = target.position.x;
-      const centreZ = target.position.z;
-      this.world.triggerOccultStrike?.(target.position);
-      for (const enemy of candidates) {
-        if (damaged.has(enemy)) continue;
-        const dx = enemy.position.x - centreX;
-        const dz = enemy.position.z - centreZ;
-        if (dx * dx + dz * dz <= radiusSq) {
+    targets.forEach((target) => {
+      const centre = target.position.clone();
+      this.world.triggerOccultStrike?.(centre);
+      candidates.forEach((enemy) => {
+        if (damaged.has(enemy)) return;
+        const dx = enemy.position.x - centre.x;
+        const dz = enemy.position.z - centre.z;
+        if (dx * dx + dz * dz <= radius * radius) {
           damaged.add(enemy);
           this.onDamageEnemy?.(enemy, "occult", 1);
         }
-      }
-    }
+      });
+    });
     this.onOccultPulse?.(damaged.size);
   }
 

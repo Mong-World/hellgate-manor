@@ -67,10 +67,14 @@ function makeWave(wave) {
       wave < 40 ? 6 : 7
   };
 
+  const maxActive = wave < 35
+    ? 25
+    : Math.min(35, 25 + Math.ceil((wave - 34) * (10 / 16)));
+
   return {
     counts: { husk, strong, runner, brute, siege },
     total,
-    maxActive: 25,
+    maxActive,
     initialDelay: pacing.initialDelay,
     spawnGap: pacing.spawnGap,
     burstChance: pacing.burstChance,
@@ -103,7 +107,6 @@ export const CONFIG = Object.freeze({
     deniedPurchase: "./sounds/denied-purchase-sound.mp3",
     gameOver: "./sounds/game-over-sound.mp3",
     endgameBang: "./assets/endgamebang.mp3",
-    level50: "./assets/level50music.mp3",
     newDawn: "./assets/newdawnmusic.mp3",
     purchase: "./sounds/purchasesound.mp3",
     soulBinding: "./assets/soulmusic.mp3",
@@ -134,8 +137,7 @@ export const CONFIG = Object.freeze({
 
   buildings: {
     extraction: { cost: 900, label: "SOUL EXTRACTION", unlockWave: 4 },
-    extractionUpgrade2: { cost: 5000, label: "SOUL EXTRACTION II" },
-    extractionUpgrade3: { cost: 10000, label: "SOUL EXTRACTION III" },
+    extractionUpgrade2: { cost: 10000, label: "SOUL EXTRACTION II", unlockWave: 35 },
     hellfire: { cost: 1000, label: "HELLFIRE BATTERY", unlockWave: 4 },
     demolition: { cost: 4800, label: "HELL BOMB FORGE", unlockWave: 15 },
     undercroft: { cost: 8000, label: "UNDERCROFT", unlockWave: 25 },
@@ -144,8 +146,8 @@ export const CONFIG = Object.freeze({
 
   extraction: {
     duration: 14,
-    maxConcurrent: 3,
-    maxLevel: 3,
+    maxConcurrent: 2,
+    maxLevel: 2,
     radius: 2.35
   },
 
@@ -157,7 +159,7 @@ export const CONFIG = Object.freeze({
 
   boundCaps: {
     hellfire: 45,
-    demolition: 45,
+    demolition: 50,
     undercroft: 30,
     occult: 30
   },
@@ -185,7 +187,7 @@ export const CONFIG = Object.freeze({
       speed: [2.9, 3.3],
       animationSpeed: [1.0, 1.25],
       reward: 20,
-      attackDamage: 18,
+      attackDamage: 30,
       attackInterval: 1.55,
       grabBox: [1.6, 4.35, 1.6],
       grabY: 1.98,
@@ -215,12 +217,12 @@ export const CONFIG = Object.freeze({
       speed: [2.25, 2.7],
       animationSpeed: [0.82, 1.0],
       reward: 30,
-      attackDamage: 38,
+      attackDamage: 72,
       attackInterval: 1.75,
       grabBox: [2.05, 5.4, 2.05],
       grabY: 2.45,
-      throwScale: 0.52,
-      durability: 2,
+      throwScale: 0,
+      durability: 4,
       convertible: false
     },
     siege: {
@@ -230,12 +232,12 @@ export const CONFIG = Object.freeze({
       speed: [1.82, 2.08],
       animationSpeed: [0.72, 0.9],
       reward: 50,
-      attackDamage: 90,
+      attackDamage: 120,
       attackInterval: 6.8,
       grabBox: [5.4, 12.4, 7.0],
       grabY: 5.3,
       throwScale: 0,
-      durability: 5,
+      durability: 8,
       convertible: false,
       siegeStopOffset: 8.4
     }
@@ -255,24 +257,34 @@ export const CONFIG = Object.freeze({
   defence: {
     turretMaxLevel: 3,
     fireStagger: 1,
-    bombMaxCharges: 3,
-    bombSoulsPerCharge: 15,
+    bombMaxCharges: 2,
+    bombFirstSoulCost: 25,
+    bombSecondSoulCost: 50,
+    bombOverchargeMaxCharges: 3,
     hellfireMaxSouls: 45,
     occultMaxSouls: 30,
+    occultSecondStrikeSouls: 25,
     occultRadius: 3.6,
-    undercroftRepairPerSoul: 50
+    undercroftRepairPerSoul: 25
   },
 
   pool: {
-    // Pools cover the absolute live-enemy cap (plus the 3 simultaneous
-    // extraction slots for convertible Husk-family types) so gameplay never
-    // has to clone a skinned GLB or create an AnimationMixer mid-wave.
-    husk: 33,
-    strong: 33,
-    runner: 33,
-    brute: 30,
-    siege: 26,
+    husk: 30,
+    strong: 19,
+    runner: 22,
+    brute: 12,
+    siege: 6,
     effects: 44
+  },
+
+  mobileDifficulty: {
+    lateWaveStart: 35,
+    maxActiveBonus: 2,
+    spawnGapMultiplier: 0.92
+  },
+
+  finalWaveAudio: {
+    sfxLevel: 0.58
   },
 
   newGamePlus: {

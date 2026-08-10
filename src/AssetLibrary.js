@@ -100,12 +100,10 @@ export class AssetLibrary {
 
     const clone = material.clone();
     if (type === "strong") {
-      // Combined value of the two historical Strong-Husk tint passes. Keeping
-      // it here means every pooled Strong Husk can share the same material.
-      if (clone.color) clone.color.multiply(new THREE.Color(0.5184, 0.1932, 0.1292));
+      if (clone.color) clone.color.multiply(new THREE.Color(0.72, 0.46, 0.38));
       if ("emissive" in clone) {
-        clone.emissive = new THREE.Color(0x351208);
-        clone.emissiveIntensity = 0.45;
+        clone.emissive = new THREE.Color(0x5d1407);
+        clone.emissiveIntensity = 0.5;
       }
     } else if (type === "runner") {
       if ("emissive" in clone) {
@@ -119,12 +117,10 @@ export class AssetLibrary {
         clone.emissiveIntensity = 0.18;
       }
     } else if (type === "siege") {
-      // Combined value of the two historical Siege tint passes. This preserves
-      // the dark in-game look without cloning materials for every enemy rig.
-      if (clone.color) clone.color.multiply(new THREE.Color(0.042, 0.0552, 0.0864));
+      if (clone.color) clone.color.multiply(new THREE.Color(0.42, 0.46, 0.54));
       if ("emissive" in clone) {
-        clone.emissive = new THREE.Color(0x050812);
-        clone.emissiveIntensity = 0.06;
+        clone.emissive = new THREE.Color(0x25142e);
+        clone.emissiveIntensity = 0.12;
       }
     } else if ("emissive" in clone) {
       clone.emissive = new THREE.Color(0x142237);

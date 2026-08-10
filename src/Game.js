@@ -23,38 +23,22 @@ export class Game {
     this.cameraBase = new THREE.Vector3(...CONFIG.camera.position);
     this.cameraTarget = new THREE.Vector3(...CONFIG.camera.target);
     const params = new URLSearchParams(window.location.search);
-    // Developer mode is deliberately not exposed by a public URL flag.
-    // Ctrl + Shift + D opens the temporary test panel during development.
+    // Developer mode is deliberately not exposed by a public URL flag or
+    // keyboard shortcut. It is hidden behind a 10-tap/click pause-title gesture.
     this.developerMode = false;
     this.developerWave = THREE.MathUtils.clamp(Math.floor(Number(params.get("wave")) || 1), 1, CONFIG.waves.length);
     this.developerShop = false;
     this.developerPanelOpen = false;
     this.developerPanelPreviousMode = "start";
     this.developerPanelPreviousPaused = false;
-    this.developerShortcutLatch = false;
+    this.developerSecretTapCount = 0;
+    this.developerSecretTapStartedAt = 0;
     this.meta = this.readMeta();
     this.endingActive = false;
     this.endingTimer = 0;
     this.endingDawnMusicStarted = false;
     this.endingDawnMusicDelay = 4.15;
     this.runtimePrimed = false;
-    this.lastUISyncState = null;
-    this.uiUnlockWaves = Object.fromEntries(
-      Object.entries(CONFIG.buildings)
-        .filter(([, value]) => value.unlockWave)
-        .map(([key, value]) => [key, value.unlockWave])
-    );
-    this.perfElapsed = 0;
-    this.perfFrames = 0;
-    this.performanceStats = {
-      fps: 0,
-      calls: 0,
-      triangles: 0,
-      geometries: 0,
-      textures: 0,
-      programs: 0,
-      poolMisses: { husk: 0, strong: 0, runner: 0, brute: 0, siege: 0 }
-    };
     this.mobileOptimized = (window.matchMedia?.("(pointer: coarse)")?.matches || navigator.maxTouchPoints > 0) && Math.min(window.innerWidth, window.innerHeight) <= 900;
 
     this.scene = new THREE.Scene();
@@ -96,6 +80,7 @@ export class Game {
       onContinueSave: () => this.continueSavedGame(),
       onBomb: () => this.useBomb(),
       onPause: () => this.togglePause(),
+      onDevSecretTap: () => this.handleDeveloperSecretTap(),
       onPurchase: (type) => this.purchase(type),
       onAssign: (system, delta) => this.assignBoundSoul(system, delta),
       onOvercharge: () => this.chargeOvercharge(),
@@ -126,8 +111,6 @@ export class Game {
     this.trackCampaignClick = this.trackCampaignClick.bind(this);
     this.animate = this.animate.bind(this);
     window.addEventListener("resize", this.onResize);
-    // Capture phase plus a keyup fallback makes Ctrl + Shift + D more
-    // reliable inside Portals/browser iframes.
     window.addEventListener("keydown", this.onKeyDown, true);
     document.addEventListener("pointerdown", this.focusGameCanvas, true);
     document.addEventListener("pointerdown", this.trackCampaignClick, true);
@@ -158,6 +141,7 @@ export class Game {
       occult: 0
     };
     this.tutorialsSeen = {
+      firstWave: false,
       demolition: false,
       undercroft: false,
       occult: false,
@@ -178,7 +162,6 @@ export class Game {
     this.endingDawnMusicStarted = false;
     this.endingDawnMusicDelay = 4.15;
     this.paused = false;
-    this.lastUISyncState = null;
   }
 
   async start() {
@@ -216,8 +199,9 @@ export class Game {
       onEnemyImpact: (data) => this.handleEnemyImpact(data),
       onEnemyExtracted: (enemy) => this.handleEnemyExtracted(enemy),
       onWaveComplete: () => this.handleWaveComplete(),
-      onSiegeClick: (enemy) => this.handleSiegeClick(enemy)
+      onSiegeClick: (enemy) => this.handleHeavyPush(enemy)
     });
+    this.waveManager.setMobileDifficulty?.(this.mobileOptimized);
 
     await this.waveManager.preparePools((progress) => this.setLoadingProgress(52 + progress * 23));
 
@@ -226,13 +210,13 @@ export class Game {
       domElement: this.renderer.domElement,
       getEnemies: () => this.waveManager.getAliveEnemies(),
       onRelease: (data) => this.handleRelease(data),
-      onDirectClick: (enemy) => this.handleSiegeClick(enemy)
+      onDirectClick: (enemy) => this.handleHeavyPush(enemy)
     });
 
     this.defence = new DefenceSystem(
       this.scene,
       this.world,
-      () => this.waveManager.enemies,
+      () => this.waveManager.getActiveCombatEnemies(),
       (enemy, reason, amount) => this.damageEnemy(enemy, reason, amount),
       (enemy) => this.grabSystem?.isHolding(enemy) ?? false,
       () => this.audio.play("crossbowFire", {
@@ -271,42 +255,15 @@ export class Game {
     return new Promise((resolve) => requestAnimationFrame(resolve));
   }
 
-  primeRendererTextures() {
-    if (typeof this.renderer.initTexture !== "function") return 0;
-    const textures = new Set();
-    this.scene.traverse((object) => {
-      const materials = object.material
-        ? (Array.isArray(object.material) ? object.material : [object.material])
-        : [];
-      for (const material of materials) {
-        for (const value of Object.values(material)) {
-          if (value?.isTexture) textures.add(value);
-        }
-      }
-    });
-    textures.forEach((texture) => {
-      try {
-        this.renderer.initTexture(texture);
-      } catch (error) {
-        console.warn("Texture pre-upload skipped", texture?.name || texture?.uuid, error);
-      }
-    });
-    return textures.size;
-  }
-
   async preWarmEverything() {
     const allEnemies = this.waveManager.getAllPooledEnemies();
     this.effectPool.preWarm();
     this.defence.preWarm();
-    this.world.setUpgradeState({ extraction: true, extractionLevel: 3, demolition: true, undercroft: true, occult: true, fortifyLevel: 10 });
+    this.world.setUpgradeState({ extraction: true, extractionLevel: CONFIG.extraction.maxLevel, demolition: true, undercroft: true, occult: true, fortifyLevel: 10 });
     this.world.setTurretLevel(3);
     this.world.setNewGamePlusMode?.(true);
     this.world.prepareDawnAssets?.();
     this.world.setDawnPrewarmVisible?.(true);
-
-    // Explicitly upload every scene/GLB texture while the loading screen is up.
-    // This avoids a first-visible-frame texture upload on later enemy types.
-    this.primeRendererTextures();
 
     // Force every transient system visible before play: all extraction slots,
     // several occult strikes and both light/heavy manor-damage dust variants.
@@ -314,8 +271,7 @@ export class Game {
       this.world.startExtractionBeam?.(CONFIG.extraction.maxConcurrent);
     }
     this.world.triggerOccultStrike?.(new THREE.Vector3(-8, 0, -2));
-    this.world.triggerOccultStrike?.(new THREE.Vector3(-2, 0, 1));
-    this.world.triggerOccultStrike?.(new THREE.Vector3(5, 0, 3));
+    this.world.triggerOccultStrike?.(new THREE.Vector3(3, 0, 2));
     this.world.triggerManorDamageDust?.(new THREE.Vector3(this.world.manorBarrierX, 0, -3), "husk");
     this.world.triggerManorDamageDust?.(new THREE.Vector3(this.world.manorBarrierX, 0, 0), "brute");
     this.world.triggerManorDamageDust?.(new THREE.Vector3(this.world.manorBarrierX, 0, 3), "siege");
@@ -454,7 +410,6 @@ export class Game {
     await this.primeRuntimeAfterUnlock();
     this.resetState({ newGamePlus });
     this.campaignTrackingActive = true;
-    this.world.setLateGameVisualMode?.(false, 0);
     this.world.setNewGamePlusMode?.(this.newGamePlus);
     this.world.resetNight?.();
     if (!this.developerMode) this.clearSave();
@@ -493,7 +448,6 @@ export class Game {
     }
     this.restoreState(save);
     this.campaignTrackingActive = true;
-    this.world.setLateGameVisualMode?.(false, 0);
     this.world.setNewGamePlusMode?.(this.newGamePlus);
     this.world.resetNight?.();
     this.applyUpgradeState();
@@ -539,7 +493,11 @@ export class Game {
     this.manorHealth = Math.min(this.manorHealth, this.manorMaxHealth);
     this.demonDeaths = Math.max(0, Number(data.demonDeaths) || 0);
     this.boundSouls = Math.max(0, Number(data.boundSouls) || 0);
-    this.bombs = THREE.MathUtils.clamp(Number(data.bombs) || 0, 0, CONFIG.defence.bombMaxCharges);
+    this.bombs = THREE.MathUtils.clamp(
+      Number(data.bombs) || 0,
+      0,
+      CONFIG.defence.bombOverchargeMaxCharges ?? CONFIG.defence.bombMaxCharges
+    );
     this.fortifyLevel = THREE.MathUtils.clamp(Number(data.fortifyLevel) || 0, 0, CONFIG.manor.maxFortifyLevel);
     this.extractionLevel = THREE.MathUtils.clamp(
       Number(data.extractionLevel) || (data.buildings?.extraction ? 1 : 0),
@@ -663,46 +621,52 @@ export class Game {
     // Hell Bombs are wave ammunition, not a stockpile. Every wave starts with
     // exactly the capacity purchased through Bound Soul assignment. Unused
     // charges from the previous wave are deliberately discarded.
-    this.bombs = this.buildings.demolition
-      ? Math.min(
-          CONFIG.defence.bombMaxCharges,
-          Math.floor((this.assignments.demolition ?? 0) / CONFIG.defence.bombSoulsPerCharge)
-        )
-      : 0;
-
-    const waveNumber = this.waveIndex + 1;
-    const enteringLateGameVisuals = !this.newGamePlus && waveNumber === 40;
-    if (!this.newGamePlus) {
-      if (waveNumber >= 40) {
-        this.world.setLateGameVisualMode?.(true, enteringLateGameVisuals ? 4.0 : 0);
-      } else {
-        this.world.setLateGameVisualMode?.(false, 0);
-      }
+    const demolitionSouls = this.assignments.demolition ?? 0;
+    const baseBombs = !this.buildings.demolition
+      ? 0
+      : demolitionSouls >= (CONFIG.defence.bombSecondSoulCost ?? 50)
+        ? 2
+        : demolitionSouls >= (CONFIG.defence.bombFirstSoulCost ?? 25)
+          ? 1
+          : 0;
+    this.bombs = baseBombs;
+    if (this.overchargeActive && baseBombs >= CONFIG.defence.bombMaxCharges) {
+      this.bombs = Math.min(
+        CONFIG.defence.bombOverchargeMaxCharges ?? 3,
+        baseBombs + 1
+      );
     }
-
-    // Waves 40 and 50 get deliberate presentation windows before enemies arrive.
-    // Wave 40 uses the pause for the visual Hell transition; Wave 50 lets the
-    // dedicated final-wave music establish itself before the last assault.
-    const openingDelay = waveNumber === 50 ? 5.0 : (enteringLateGameVisuals ? 4.0 : 0);
 
     this.waveStartSnapshot = this.snapshotState();
     this.waveManager.setNewGamePlus?.(this.newGamePlus);
-    this.waveManager.startWave(this.waveIndex, openingDelay);
+    this.waveManager.setMobileDifficulty?.(this.mobileOptimized);
+    this.waveManager.startWave(this.waveIndex);
     this.defence.resetCooldown();
-    this.audio.setMusicLevel(waveNumber === 50 ? 0.425 : 0.34, 0.3);
-    this.audio.playMusic(
-      waveNumber === 50 ? "level50" : (this.waveIndex % 2 === 0 ? "background1" : "background2"),
-      waveNumber === 50 ? 1.15 : 0.7
+    this.audio.setMusicLevel(0.34, 0.3);
+    this.audio.setSfxLevel(
+      this.waveIndex === CONFIG.waves.length - 1 ? (CONFIG.finalWaveAudio?.sfxLevel ?? 0.58) : 0.95,
+      0.25
     );
+    this.audio.playMusic(this.waveIndex % 2 === 0 ? "background1" : "background2", 0.7);
     this.audio.play("waveStart", { volume: 0.72, pitchMin: 0.97, pitchMax: 1.03 });
     this.ui.setMode("playing");
     this.ui.showBanner(
-      `WAVE ${waveNumber}`,
+      `WAVE ${this.waveIndex + 1}`,
       this.newGamePlus
         ? "NEW GAME+ — HELL HAS RETURNED"
-        : (waveNumber === 40 ? "HELL DEEPENS" : (this.waveIndex === 0 ? "THE FIRST DEMONS ARE COMING" : "DEFEND THE MANOR")),
-      waveNumber === 40 ? 3.6 : 2.6
+        : (this.waveIndex === 0 ? "THE FIRST DEMONS ARE COMING" : "DEFEND THE MANOR"),
+      2.6
     );
+    if (this.waveIndex === 0 && !this.newGamePlus && !this.tutorialsSeen.firstWave) {
+      this.tutorialsSeen.firstWave = true;
+      this.paused = true;
+      this.grabSystem.setEnabled(false);
+      this.ui.showFirstWaveTutorial?.(() => {
+        if (!this.gameplayActive || this.ui.mode !== "playing") return;
+        this.paused = false;
+        this.grabSystem.setEnabled(true);
+      });
+    }
     this.saveGame(this.waveIndex);
     this.syncUI();
   }
@@ -781,12 +745,12 @@ export class Game {
     enemy.applyDamage(amount, reason, reason === "bomb" ? 15 : 11);
   }
 
-  handleSiegeClick(enemy) {
+  handleHeavyPush(enemy) {
     if (!this.gameplayActive || !enemy?.canDirectClick?.()) return;
-    const worked = enemy.staggerSiege(1);
+    const worked = enemy.pushHeavy?.(1);
     if (worked) {
-      this.audio.playBodyImpact(9);
-      this.cameraShake = Math.max(this.cameraShake, 0.08);
+      this.audio.playBodyImpact(enemy.type === "brute" ? 11 : 9);
+      this.cameraShake = Math.max(this.cameraShake, enemy.type === "brute" ? 0.10 : 0.08);
     }
   }
 
@@ -821,10 +785,10 @@ export class Game {
     const waveDeaths = Math.max(0, this.demonDeaths - (snapshot.demonDeaths ?? 0));
     const waveDamage = Math.max(0, (snapshot.manorHealth ?? this.manorHealth) - this.manorHealth);
 
-    // Undercroft repairs 50 HP per assigned Bound Soul, up to 1500 HP
-    // after a wave at the 30-soul cap, never exceeding current max health.
+    // Undercroft remains useful without erasing most late-wave damage: 25 HP
+    // per assigned Bound Soul, up to 750 HP at the 30-soul cap.
     if (this.buildings.undercroft && this.assignments.undercroft > 0) {
-      const repair = this.assignments.undercroft * (CONFIG.defence.undercroftRepairPerSoul ?? 50);
+      const repair = this.assignments.undercroft * (CONFIG.defence.undercroftRepairPerSoul ?? 25);
       this.manorHealth = Math.min(this.manorMaxHealth, this.manorHealth + repair);
     }
 
@@ -911,15 +875,17 @@ export class Game {
     this.grabSystem?.setEnabled(false);
     this.audio.stopLoop("soul-binding", 0.35);
     this.audio.stopMusic(0.45);
+    this.audio.setSfxLevel(0.95, 0.18);
     this.audio.play("endgameBang", {
       volume: 0.96,
       rate: 1,
       cooldown: 0,
       maxInstances: 1
     });
-    // THE NIGHT IS OVER begins fading in at 5 seconds on the ending UI.
-    // Start the dawn score at that exact moment so the music arrives with the title.
-    this.endingDawnMusicDelay = 5.0;
+    const endingBangDuration = this.audio.getDuration?.("endgameBang") ?? 0;
+    // Let the bang/wind sting finish before the dawn score enters. The old
+    // 4.15 second transition remains the minimum if the clip is unavailable.
+    this.endingDawnMusicDelay = Math.max(4.15, endingBangDuration + 0.18);
     this.defence.clearForDawn?.();
     this.world.startVictorySequence?.();
     this.ui.startEndingSequence(result);
@@ -930,10 +896,18 @@ export class Game {
     this.ui.setMode("intermission");
     this.syncUI();
     const overchargeUnlockWave = CONFIG.overcharge?.unlockWave ?? 40;
-    if (this.waveIndex + 1 >= overchargeUnlockWave && !this.tutorialsSeen.overcharge) {
+    if (this.getPreparingWaveNumber() >= overchargeUnlockWave && !this.tutorialsSeen.overcharge) {
       this.tutorialsSeen.overcharge = true;
       this.ui.showOverchargeTutorial?.();
+      this.saveGame(this.getIntermissionResumeWaveIndex());
     }
+  }
+
+  getPreparingWaveNumber() {
+    if (this.retryingWave || (this.developerMode && this.developerShop)) {
+      return Math.min(this.waveIndex + 1, CONFIG.waves.length);
+    }
+    return Math.min(this.waveIndex + 2, CONFIG.waves.length);
   }
 
   getIntermissionResumeWaveIndex() {
@@ -975,9 +949,7 @@ export class Game {
       extraction: CONFIG.buildings.extraction.cost,
       extractionUpgrade: this.extractionLevel === 1
         ? CONFIG.buildings.extractionUpgrade2.cost
-        : this.extractionLevel === 2
-          ? CONFIG.buildings.extractionUpgrade3.cost
-          : null,
+        : null,
       hellfire: CONFIG.buildings.hellfire.cost,
       demolition: CONFIG.buildings.demolition.cost,
       undercroft: CONFIG.buildings.undercroft.cost,
@@ -1016,9 +988,15 @@ export class Game {
     if (type === "majorFortify" && this.fortifyLevel + CONFIG.manor.majorFortify.levels > CONFIG.manor.maxFortifyLevel) {
       return this.playDeniedPurchase();
     }
+    if (
+      type === "extractionUpgrade" &&
+      this.getPreparingWaveNumber() < (CONFIG.buildings.extractionUpgrade2.unlockWave ?? 35)
+    ) {
+      return this.playDeniedPurchase();
+    }
 
     const buildingType = type === "extractionUpgrade" ? "extraction" : type;
-    if (CONFIG.buildings[buildingType]?.unlockWave && this.waveIndex + 1 < this.getUnlockWave(buildingType)) {
+    if (CONFIG.buildings[buildingType]?.unlockWave && this.getPreparingWaveNumber() < this.getUnlockWave(buildingType)) {
       return this.playDeniedPurchase();
     }
     if (["hellfire", "demolition", "undercroft", "occult"].includes(type) && !this.buildings.extraction) {
@@ -1067,11 +1045,7 @@ export class Game {
   }
 
   getUnassignedSouls() {
-    const assigned = (this.assignments.hellfire ?? 0)
-      + (this.assignments.demolition ?? 0)
-      + (this.assignments.undercroft ?? 0)
-      + (this.assignments.occult ?? 0);
-    return Math.max(0, this.boundSouls - this.overchargeReserve - assigned);
+    return Math.max(0, this.boundSouls - this.overchargeReserve - Object.values(this.assignments).reduce((sum, value) => sum + value, 0));
   }
 
   normaliseAssignments() {
@@ -1118,7 +1092,7 @@ export class Game {
 
   chargeOvercharge() {
     if (this.ui.mode !== "intermission") return;
-    if (this.waveIndex + 1 < (CONFIG.overcharge?.unlockWave ?? 40)) return this.playDeniedPurchase();
+    if (this.getPreparingWaveNumber() < (CONFIG.overcharge?.unlockWave ?? 40)) return this.playDeniedPurchase();
     if (this.overchargeReady || this.overchargeReserve > 0) return this.playDeniedPurchase();
     const cost = CONFIG.overcharge?.cost ?? 50;
     if (this.getUnassignedSouls() < cost) return this.playDeniedPurchase();
@@ -1180,6 +1154,7 @@ export class Game {
     this.grabSystem.setEnabled(false);
     this.waveManager.stop();
     this.audio.stopMusic(0.45);
+    this.audio.setSfxLevel(0.95, 0.16);
     this.audio.play("gameOver", { volume: 0.78 });
     this.ui.setContinueState({
       canRetry: this.continuesUsed < 3,
@@ -1298,29 +1273,30 @@ export class Game {
     }
   }
 
-  isDeveloperShortcut(event) {
-    return false;
+  handleDeveloperSecretTap() {
+    if (this.ui.mode !== "paused" || this.developerPanelOpen) return;
+    const now = performance.now();
+    if (!this.developerSecretTapStartedAt || now - this.developerSecretTapStartedAt > 5000) {
+      this.developerSecretTapStartedAt = now;
+      this.developerSecretTapCount = 1;
+      return;
+    }
+    this.developerSecretTapCount += 1;
+    if (this.developerSecretTapCount >= 10) {
+      this.developerSecretTapCount = 0;
+      this.developerSecretTapStartedAt = 0;
+      this.openDeveloperPanel();
+    }
   }
 
-  triggerDeveloperShortcut(event) {
-    event.preventDefault();
-    event.stopPropagation();
-    if (event.repeat) return;
-    if (this.developerPanelOpen) this.closeDeveloperPanel();
-    else this.openDeveloperPanel();
+  resetDeveloperSecretTap() {
+    this.developerSecretTapCount = 0;
+    this.developerSecretTapStartedAt = 0;
   }
 
   onKeyDown(event) {
-    if (this.isDeveloperShortcut(event)) {
-      // Latch the keydown so the matching keyup cannot immediately toggle the
-      // developer panel closed. If a browser swallows keydown, keyup remains a
-      // fallback route below.
-      this.developerShortcutLatch = true;
-      this.triggerDeveloperShortcut(event);
-      return;
-    }
-
     if (event.key !== "Escape") return;
+    if (this.ui.tutorial) return;
     if (this.developerPanelOpen) {
       event.preventDefault();
       this.closeDeveloperPanel();
@@ -1331,20 +1307,11 @@ export class Game {
     this.togglePause();
   }
 
-  onKeyUp(event) {
-    if (!this.isDeveloperShortcut(event)) return;
-    event.preventDefault();
-    event.stopPropagation();
-    if (this.developerShortcutLatch) {
-      this.developerShortcutLatch = false;
-      return;
-    }
-    this.triggerDeveloperShortcut(event);
-  }
+  onKeyUp() {}
 
   openDeveloperPanel() {
     if (this.developerPanelOpen) return;
-    // Opening the desktop developer panel switches this browser session into
+    // Opening the hidden developer panel switches this browser session into
     // test mode. Normal local save data is left untouched and no further
     // autosaves are written until the page is refreshed.
     this.developerMode = true;
@@ -1453,6 +1420,7 @@ export class Game {
 
   togglePause() {
     if (!this.gameplayActive) return;
+    this.resetDeveloperSecretTap();
     this.paused = !this.paused;
     if (this.paused) {
       this.grabSystem?.setEnabled(false);
@@ -1465,52 +1433,21 @@ export class Game {
     }
   }
 
-  syncUI(force = false) {
-    const unassignedSouls = this.getUnassignedSouls();
-    const b = this.buildings;
-    const a = this.assignments;
-    const last = this.lastUISyncState;
-    const changed = force || !last
-      || last.waveIndex !== this.waveIndex
-      || last.souls !== this.souls
-      || last.manorHealth !== this.manorHealth
-      || last.manorMaxHealth !== this.manorMaxHealth
-      || last.demonDeaths !== this.demonDeaths
-      || last.boundSouls !== this.boundSouls
-      || last.unassignedSouls !== unassignedSouls
-      || last.bombs !== this.bombs
-      || last.fortifyLevel !== this.fortifyLevel
-      || last.extractionLevel !== this.extractionLevel
-      || last.extraction !== b.extraction
-      || last.hellfire !== b.hellfire
-      || last.demolition !== b.demolition
-      || last.undercroft !== b.undercroft
-      || last.occult !== b.occult
-      || last.aHellfire !== a.hellfire
-      || last.aDemolition !== a.demolition
-      || last.aUndercroft !== a.undercroft
-      || last.aOccult !== a.occult
-      || last.newGamePlus !== this.newGamePlus
-      || last.totalManorDamageTaken !== this.totalManorDamageTaken
-      || last.overchargeReserve !== this.overchargeReserve
-      || last.overchargeReady !== this.overchargeReady
-      || last.totalClicks !== this.totalClicks;
-
-    if (!changed) return;
-
+  syncUI() {
     this.ui.setHUD({
       wave: Math.min(this.waveIndex + 1, CONFIG.waves.length),
+      preparingWave: this.getPreparingWaveNumber(),
       souls: this.souls,
       health: this.manorHealth,
       maxHealth: this.manorMaxHealth,
       deaths: this.demonDeaths,
       boundSouls: this.boundSouls,
-      unassignedSouls,
+      unassignedSouls: this.getUnassignedSouls(),
       bombs: this.bombs,
       fortifyLevel: this.fortifyLevel,
       extractionLevel: this.extractionLevel,
-      buildings: { ...b },
-      assignments: { ...a },
+      buildings: { ...this.buildings },
+      assignments: { ...this.assignments },
       purchaseCosts: {
         fortify: this.getFortifyCost(),
         majorFortify: this.getMajorFortifyCost(),
@@ -1521,54 +1458,12 @@ export class Game {
       overchargeReserve: this.overchargeReserve,
       overchargeReady: this.overchargeReady,
       totalClicks: this.totalClicks,
-      unlockWaves: this.uiUnlockWaves
+      unlockWaves: Object.fromEntries(
+        Object.entries(CONFIG.buildings)
+          .filter(([, value]) => value.unlockWave)
+          .map(([key, value]) => [key, value.unlockWave])
+      )
     });
-
-    this.lastUISyncState = {
-      waveIndex: this.waveIndex,
-      souls: this.souls,
-      manorHealth: this.manorHealth,
-      manorMaxHealth: this.manorMaxHealth,
-      demonDeaths: this.demonDeaths,
-      boundSouls: this.boundSouls,
-      unassignedSouls,
-      bombs: this.bombs,
-      fortifyLevel: this.fortifyLevel,
-      extractionLevel: this.extractionLevel,
-      extraction: b.extraction,
-      hellfire: b.hellfire,
-      demolition: b.demolition,
-      undercroft: b.undercroft,
-      occult: b.occult,
-      aHellfire: a.hellfire,
-      aDemolition: a.demolition,
-      aUndercroft: a.undercroft,
-      aOccult: a.occult,
-      newGamePlus: this.newGamePlus,
-      totalManorDamageTaken: this.totalManorDamageTaken,
-      overchargeReserve: this.overchargeReserve,
-      overchargeReady: this.overchargeReady,
-      totalClicks: this.totalClicks
-    };
-  }
-
-  updatePerformanceDiagnostics(dt) {
-    this.perfElapsed += dt;
-    this.perfFrames += 1;
-    if (this.perfElapsed < 0.5) return;
-
-    const info = this.renderer.info;
-    const poolMisses = this.waveManager?.poolMisses ?? this.performanceStats.poolMisses;
-    this.performanceStats.fps = Math.round(this.perfFrames / Math.max(this.perfElapsed, 0.001));
-    this.performanceStats.calls = info.render.calls;
-    this.performanceStats.triangles = info.render.triangles;
-    this.performanceStats.geometries = info.memory.geometries;
-    this.performanceStats.textures = info.memory.textures;
-    this.performanceStats.programs = info.programs?.length ?? 0;
-    this.performanceStats.poolMisses = poolMisses;
-    this.ui.setPerformanceStats?.(this.performanceStats);
-    this.perfElapsed = 0;
-    this.perfFrames = 0;
   }
 
   isMobileLandscapeView() {
@@ -1643,8 +1538,7 @@ export class Game {
   animate() {
     if (!this.running) return;
     requestAnimationFrame(this.animate);
-    const rawDt = this.clock.getDelta();
-    const dt = Math.min(rawDt, 1 / 30);
+    const dt = Math.min(this.clock.getDelta(), 1 / 30);
     const elapsed = this.clock.elapsedTime;
     this.ui.update(dt);
 
