@@ -169,14 +169,13 @@ export class Husk {
       !this.dead &&
       !this.removed &&
       this.type !== "siege" &&
-      this.type !== "brute" &&
       (this.state === "walking" || this.state === "attacking")
     );
   }
 
   canDirectClick() {
     return (
-      (this.type === "siege" || this.type === "brute") &&
+      this.type === "siege" &&
       !this.dead &&
       !this.removed &&
       (this.state === "walking" || this.state === "siegeCharging" || this.state === "attacking")
@@ -202,11 +201,17 @@ export class Husk {
 
   launch(velocity) {
     if (this.dead || this.removed || this.state === "extracting") return;
-    const maxVelocity = this.type === "brute" ? 29 : 42;
+    const maxVelocity = this.type === "brute" ? 4.2 : 42;
     this.velocity
       .copy(velocity)
       .multiplyScalar(1.12 * this.definition.throwScale)
       .clampLength(0, maxVelocity);
+    if (this.type === "brute") {
+      // The Brute is movable, not throwable: cap its lift so even a fast touch
+      // flick produces a short heavy shove rather than a Husk-style arc.
+      this.position.y = Math.min(this.position.y, 0.75);
+      this.velocity.y = THREE.MathUtils.clamp(this.velocity.y, -2.6, 0.65);
+    }
     this.state = "airborne";
     this.peakScreenY = Math.min(this.peakScreenY, this.getScreenY());
     this.peakWorldY = Math.max(this.peakWorldY, this.position.y);
@@ -262,34 +267,11 @@ export class Husk {
         return true;
       }
 
-      // Siege demons are too large to knock over. A hit now slows them while
-      // they keep advancing instead of completely freezing them in place.
-      this.position.x -= 0.30;
-      this.siegeResumeCharging = false;
-      this.state = "siegeSlowed";
-      this.siegeSlowTimer = 0.72;
-      this.velocity.set(0, 0, 0);
-      return false;
-    }
-
-    if (this.type === "brute") {
-      this.durability -= amount;
-      if (this.durability <= 0) {
-        this.onDeath?.({
-          enemy: this,
-          reason,
-          position: this.position.clone().add(new THREE.Vector3(0, this.definition.height * 0.30, 0)),
-          impactStrength
-        });
-        return true;
-      }
-
-      // Brutes cannot be lifted. Damage physically shoves them back and makes
-      // them brace/shake for a moment before they start advancing again.
-      this.position.x -= 0.72;
-      this.state = "bruteStunned";
-      this.bruteStunTimer = 0.68;
-      this.attackTimer = 0;
+      // The tall Siege Demon never falls over. It freezes in place and shudders
+      // briefly, which suits the wiry model much better than a knock-down pose.
+      this.state = "siegeStunned";
+      this.siegeStunTimer = 1.15;
+      this.siegeResumeCharging = this.position.x >= (this.lastManorBarrierX ?? 13) - (this.definition.siegeStopOffset ?? 0) - 0.2;
       this.velocity.set(0, 0, 0);
       if (this.currentAction) this.currentAction.paused = true;
       return false;
@@ -330,15 +312,12 @@ export class Husk {
     return true;
   }
 
-  pushHeavy(amount = 1) {
-    if (!this.canDirectClick()) return false;
-    this.applyDamage(amount, this.type === "brute" ? "brute-push" : "siege-push", 12);
-    return true;
-  }
-
   staggerSiege(amount = 1) {
-    if (this.type !== "siege") return false;
-    return this.pushHeavy(amount);
+    if (this.type !== "siege" || this.dead || this.removed || this.state === "siegeStunned") {
+      return false;
+    }
+    this.applyDamage(amount, "siege-stagger", 12);
+    return true;
   }
 
   reachManor(manorBarrierX) {
@@ -452,43 +431,17 @@ export class Husk {
       return;
     }
 
-    if (this.state === "bruteStunned") {
-      this.bruteStunTimer -= dt;
-      this.modelRoot.position.x = Math.sin(elapsed * 31 + this.id) * 0.045;
-      this.modelRoot.position.z = Math.cos(elapsed * 27 + this.id) * 0.035;
-      if (this.bruteStunTimer <= 0) {
-        this.modelRoot.position.set(0, 0, 0);
-        this.state = "walking";
-        if (this.currentAction) this.currentAction.paused = false;
-        this.playAction("walk", 0.12);
-        if (this.actions.walk) this.actions.walk.timeScale = this.walkAnimationSpeed;
-      }
-      return;
-    }
-
-    if (this.state === "siegeSlowed") {
-      this.siegeSlowTimer -= dt;
-      this.modelRoot.position.x = Math.sin(elapsed * 30 + this.id) * 0.028;
-      this.modelRoot.position.z = Math.cos(elapsed * 25 + this.id) * 0.020;
-      if (this.siegeResumeCharging) {
-        this.attackTimer -= dt * 0.32;
-        if (this.attackTimer <= 0) {
-          this.onAttack?.(this);
-          this.attackTimer = this.attackInterval;
-        }
-      } else {
-        this.position.x += this.walkSpeed * 0.36 * dt;
-        const slowedStopX = manorBarrierX - (this.definition.siegeStopOffset ?? 0);
-        if (this.position.x >= slowedStopX) {
-          this.position.x = slowedStopX;
-          this.siegeResumeCharging = true;
-          this.attackTimer = Math.max(this.attackTimer, 2.2);
-        }
-      }
-      if (this.siegeSlowTimer <= 0) {
+    if (this.state === "siegeStunned") {
+      this.siegeStunTimer -= dt;
+      const shake = Math.sin(elapsed * 34 + this.id) * 0.035;
+      this.modelRoot.position.x = shake;
+      this.modelRoot.position.z = Math.cos(elapsed * 29 + this.id) * 0.025;
+      if (this.siegeStunTimer <= 0) {
         this.modelRoot.position.set(0, 0, 0);
         this.state = this.siegeResumeCharging ? "siegeCharging" : "walking";
+        if (this.currentAction) this.currentAction.paused = false;
         if (this.state === "siegeCharging") {
+          this.attackTimer = Math.max(this.attackTimer, 2.2);
           this.playAction(this.actions.attack ? "attack" : "walk", 0.12);
         } else {
           this.playAction("walk", 0.12);
@@ -549,8 +502,7 @@ export class Husk {
     this.getUpTimer = 0;
     this.extractionTimer = 0;
     this.extractionDuration = 0;
-    this.siegeSlowTimer = 0;
-    this.bruteStunTimer = 0;
+    this.siegeStunTimer = 0;
     this.siegeResumeCharging = false;
     this.modelRoot.position.set(0, 0, 0);
     this.extractionBase = this.extractionBase ?? new THREE.Vector3();

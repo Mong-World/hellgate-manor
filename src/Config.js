@@ -221,8 +221,10 @@ export const CONFIG = Object.freeze({
       attackInterval: 1.75,
       grabBox: [2.05, 5.4, 2.05],
       grabY: 2.45,
-      throwScale: 0,
-      durability: 4,
+      // Brutes can still be grabbed, but are far too heavy to properly throw.
+      // The tiny release scale makes them shift only a short distance.
+      throwScale: 0.12,
+      durability: 2,
       convertible: false
     },
     siege: {
@@ -283,7 +285,14 @@ export const CONFIG = Object.freeze({
     spawnGapMultiplier: 0.92
   },
 
+  lateGameVisuals: {
+    unlockWave: 40
+  },
+
   finalWaveAudio: {
+    musicKey: "background2",
+    musicDelay: 0.55,
+    musicLevel: 0.40,
     sfxLevel: 0.58
   },
 

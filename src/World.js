@@ -263,6 +263,7 @@ export class World {
     this.dawnLight = null;
     this.dawnBirds = [];
     this.newGamePlus = false;
+    this.lateGameMode = false;
     this.ngPlusEmbers = null;
     this.ngPlusEmberBase = null;
     this.ngPlusSkyGlow = null;
@@ -1537,17 +1538,21 @@ export class World {
     mount.pivot.rotation.x = THREE.MathUtils.clamp(pitch, -0.25, 0.28);
   }
 
+  getHellVisualLevel() {
+    if (this.newGamePlus) return 2;
+    if (this.lateGameMode) return 1;
+    return 0;
+  }
+
+  setLateGameMode(enabled) {
+    const next = !!enabled;
+    if (this.lateGameMode === next) return;
+    this.lateGameMode = next;
+    if (!this.dawnActive && !this.victoryClosing) this.resetNight();
+  }
+
   setNewGamePlusMode(enabled) {
     this.newGamePlus = !!enabled;
-    if (this.ngPlusEmbers) this.ngPlusEmbers.visible = this.newGamePlus && !this.dawnActive;
-    if (this.ngPlusSkyGlow) {
-      this.ngPlusSkyGlow.visible = this.newGamePlus && !this.dawnActive;
-      this.ngPlusSkyGlow.material.opacity = this.newGamePlus ? 0.42 : 0;
-    }
-    if (this.riftGroup && !this.dawnActive && !this.victoryClosing) {
-      const scale = this.newGamePlus ? 1.34 : 1;
-      this.riftGroup.scale.set(scale, 1, scale);
-    }
     this.resetNight();
   }
 
@@ -1689,14 +1694,16 @@ export class World {
     this.victoryDawnStarted = false;
     this.dawnActive = false;
     this.dawnProgress = 0;
-    this.scene.background.set(this.newGamePlus ? 0x120407 : 0x050609);
+    const hellVisualLevel = this.getHellVisualLevel();
+    const hellVisuals = hellVisualLevel > 0;
+    this.scene.background.set(hellVisualLevel === 2 ? 0x120407 : hellVisualLevel === 1 ? 0x0d0406 : 0x050609);
     if (this.scene.fog?.color) {
-      this.scene.fog.color.set(this.newGamePlus ? 0x170609 : 0x08090d);
-      this.scene.fog.density = this.newGamePlus ? 0.020 : 0.018;
+      this.scene.fog.color.set(hellVisualLevel === 2 ? 0x170609 : hellVisualLevel === 1 ? 0x120608 : 0x08090d);
+      this.scene.fog.density = hellVisualLevel === 2 ? 0.020 : hellVisualLevel === 1 ? 0.019 : 0.018;
     }
     if (this.riftGroup) {
       this.riftGroup.visible = true;
-      const scale = this.newGamePlus ? 1.34 : 1;
+      const scale = hellVisualLevel === 2 ? 1.34 : hellVisualLevel === 1 ? 1.18 : 1;
       this.riftGroup.scale.set(scale, 1, scale);
     }
     this.materials.rift.opacity = 0.86;
@@ -1709,19 +1716,19 @@ export class World {
       inner.visible = true;
       light.intensity = 10;
     });
-    if (this.ngPlusEmbers) this.ngPlusEmbers.visible = this.newGamePlus;
+    if (this.ngPlusEmbers) this.ngPlusEmbers.visible = hellVisuals;
     if (this.ngPlusSkyGlow) {
-      this.ngPlusSkyGlow.visible = this.newGamePlus;
-      this.ngPlusSkyGlow.material.opacity = this.newGamePlus ? 0.42 : 0;
+      this.ngPlusSkyGlow.visible = hellVisuals;
+      this.ngPlusSkyGlow.material.opacity = hellVisualLevel === 2 ? 0.42 : hellVisualLevel === 1 ? 0.30 : 0;
     }
     if (this.moon?.material) this.moon.material.opacity = 0.78;
     if (this.stars?.material) this.stars.material.opacity = 0.86;
     if (this.moonLight) this.moonLight.intensity = 3.25;
     if (this.rimLight) this.rimLight.intensity = 1.2;
     if (this.huskFillLight) this.huskFillLight.intensity = 0.75;
-    if (this.riftLight) this.riftLight.intensity = this.newGamePlus ? 155 : 92;
-    if (this.riftWalkLight) this.riftWalkLight.intensity = this.newGamePlus ? 74 : 38;
-    if (this.hellGlow) this.hellGlow.intensity = this.newGamePlus ? 48 : 33;
+    if (this.riftLight) this.riftLight.intensity = hellVisualLevel === 2 ? 155 : hellVisualLevel === 1 ? 126 : 92;
+    if (this.riftWalkLight) this.riftWalkLight.intensity = hellVisualLevel === 2 ? 74 : hellVisualLevel === 1 ? 56 : 38;
+    if (this.hellGlow) this.hellGlow.intensity = hellVisualLevel === 2 ? 48 : hellVisualLevel === 1 ? 42 : 33;
 
     this.flames.forEach(({ flames, light, sparks }) => {
       flames?.forEach(({ flame }) => { flame.visible = true; });
@@ -1813,8 +1820,9 @@ export class World {
       this.victoryTimer += dt;
       const closeT = THREE.MathUtils.clamp(this.victoryTimer / 4.2, 0, 1);
       const remaining = 1 - closeT;
+      const hellVisualLevel = this.getHellVisualLevel();
       if (this.riftGroup) {
-        const baseScale = this.newGamePlus ? 1.34 : 1;
+        const baseScale = hellVisualLevel === 2 ? 1.34 : hellVisualLevel === 1 ? 1.18 : 1;
         this.riftGroup.scale.set(
           baseScale * THREE.MathUtils.lerp(1, 0.55, closeT),
           THREE.MathUtils.lerp(1, 0.72, closeT),
@@ -1824,8 +1832,14 @@ export class World {
       this.materials.rift.opacity = 0.86 * remaining;
       this.materials.riftHot.opacity = 0.96 * remaining;
       if (this.riftEmbers?.material) this.riftEmbers.material.opacity = 0.96 * remaining;
-      if (this.riftLight) this.riftLight.intensity = (this.newGamePlus ? 155 : 92) * remaining;
-      if (this.riftWalkLight) this.riftWalkLight.intensity = (this.newGamePlus ? 74 : 38) * remaining;
+      if (this.riftLight) {
+        const riftBase = hellVisualLevel === 2 ? 155 : hellVisualLevel === 1 ? 126 : 92;
+        this.riftLight.intensity = riftBase * remaining;
+      }
+      if (this.riftWalkLight) {
+        const walkBase = hellVisualLevel === 2 ? 74 : hellVisualLevel === 1 ? 56 : 38;
+        this.riftWalkLight.intensity = walkBase * remaining;
+      }
       this.riftFlames?.forEach(({ outer, inner, light }) => {
         outer.material.opacity = 0.72 * remaining;
         inner.material.opacity = 0.88 * remaining;
@@ -1847,13 +1861,15 @@ export class World {
       this.dawnProgress = Math.min(1, this.dawnProgress + dt / 15);
       const t = this.dawnProgress;
       const eased = t * t * (3 - 2 * t);
-      const night = new THREE.Color(this.newGamePlus ? 0x120407 : 0x050609);
+      const hellVisualLevel = this.getHellVisualLevel();
+      const night = new THREE.Color(hellVisualLevel === 2 ? 0x120407 : hellVisualLevel === 1 ? 0x0d0406 : 0x050609);
       const morning = new THREE.Color(0x8ea7b4);
       this.scene.background.copy(night).lerp(morning, eased);
       if (this.scene.fog?.color) {
-        const nightFog = new THREE.Color(this.newGamePlus ? 0x170609 : 0x08090d);
+        const nightFog = new THREE.Color(hellVisualLevel === 2 ? 0x170609 : hellVisualLevel === 1 ? 0x120608 : 0x08090d);
         this.scene.fog.color.copy(nightFog.lerp(new THREE.Color(0xa5a7a0), eased));
-        this.scene.fog.density = THREE.MathUtils.lerp(this.newGamePlus ? 0.020 : 0.018, 0.0075, eased);
+        const nightDensity = hellVisualLevel === 2 ? 0.020 : hellVisualLevel === 1 ? 0.019 : 0.018;
+        this.scene.fog.density = THREE.MathUtils.lerp(nightDensity, 0.0075, eased);
       }
       if (this.dawnSun) {
         this.dawnSun.position.y = THREE.MathUtils.lerp(1.0, 14.5, eased);
@@ -1935,7 +1951,11 @@ export class World {
         arr[idx + 2] = this.ngPlusEmberBase[idx + 2] + Math.cos(elapsed * 0.42 + i) * 0.24;
       }
       attr.needsUpdate = true;
-      if (this.ngPlusSkyGlow) this.ngPlusSkyGlow.material.opacity = 0.38 + Math.sin(elapsed * 0.55) * 0.06;
+      if (this.ngPlusSkyGlow) {
+        const baseOpacity = this.newGamePlus ? 0.38 : 0.27;
+        const pulseAmount = this.newGamePlus ? 0.06 : 0.045;
+        this.ngPlusSkyGlow.material.opacity = baseOpacity + Math.sin(elapsed * 0.55) * pulseAmount;
+      }
     }
 
     if (this.dawnActive && this.dawnBirds.length > 0) {
@@ -2068,15 +2088,21 @@ export class World {
     });
 
     if (!this.dawnActive && !this.victoryClosing) {
-      const riftBase = this.newGamePlus ? 155 : 92;
-      const walkBase = this.newGamePlus ? 74 : 38;
-      this.riftLight.intensity = riftBase + Math.sin(elapsed * 4.2) * (this.newGamePlus ? 24 : 14);
-      if (this.riftWalkLight) this.riftWalkLight.intensity = walkBase + Math.sin(elapsed * 2.7 + 0.6) * (this.newGamePlus ? 10 : 5);
-      this.hellGlow.intensity = (this.newGamePlus ? 48 : 33) + Math.sin(elapsed * 2.1) * 2;
+      const hellVisualLevel = this.getHellVisualLevel();
+      const riftBase = hellVisualLevel === 2 ? 155 : hellVisualLevel === 1 ? 126 : 92;
+      const walkBase = hellVisualLevel === 2 ? 74 : hellVisualLevel === 1 ? 56 : 38;
+      const riftPulse = hellVisualLevel === 2 ? 24 : hellVisualLevel === 1 ? 19 : 14;
+      const walkPulse = hellVisualLevel === 2 ? 10 : hellVisualLevel === 1 ? 7 : 5;
+      this.riftLight.intensity = riftBase + Math.sin(elapsed * 4.2) * riftPulse;
+      if (this.riftWalkLight) this.riftWalkLight.intensity = walkBase + Math.sin(elapsed * 2.7 + 0.6) * walkPulse;
+      const baseHellGlow = hellVisualLevel === 2 ? 48 : hellVisualLevel === 1 ? 42 : 33;
+      this.hellGlow.intensity = baseHellGlow + Math.sin(elapsed * 2.1) * 2;
     } else if (this.dawnActive) {
       this.riftLight.intensity = 0;
       if (this.riftWalkLight) this.riftWalkLight.intensity = 0;
-      this.hellGlow.intensity = Math.max(0, (this.newGamePlus ? 48 : 33) * (1 - this.dawnProgress));
+      const hellVisualLevel = this.getHellVisualLevel();
+      const baseHellGlow = hellVisualLevel === 2 ? 48 : hellVisualLevel === 1 ? 42 : 33;
+      this.hellGlow.intensity = Math.max(0, baseHellGlow * (1 - this.dawnProgress));
     }
   }
 

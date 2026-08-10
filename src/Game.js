@@ -38,6 +38,8 @@ export class Game {
     this.endingTimer = 0;
     this.endingDawnMusicStarted = false;
     this.endingDawnMusicDelay = 4.15;
+    this.finalWaveMusicPending = false;
+    this.finalWaveMusicDelay = 0;
     this.runtimePrimed = false;
     this.mobileOptimized = (window.matchMedia?.("(pointer: coarse)")?.matches || navigator.maxTouchPoints > 0) && Math.min(window.innerWidth, window.innerHeight) <= 900;
 
@@ -147,6 +149,8 @@ export class Game {
       occult: false,
       overcharge: false
     };
+    this.firstWaveTutorialPending = false;
+    this.firstWaveTutorialVisibleTimer = 0;
     this.waveStartSnapshot = null;
     this.continuesUsed = 0;
     this.totalManorDamageTaken = 0;
@@ -199,7 +203,7 @@ export class Game {
       onEnemyImpact: (data) => this.handleEnemyImpact(data),
       onEnemyExtracted: (enemy) => this.handleEnemyExtracted(enemy),
       onWaveComplete: () => this.handleWaveComplete(),
-      onSiegeClick: (enemy) => this.handleHeavyPush(enemy)
+      onSiegeClick: (enemy) => this.handleSiegeClick(enemy)
     });
     this.waveManager.setMobileDifficulty?.(this.mobileOptimized);
 
@@ -210,7 +214,7 @@ export class Game {
       domElement: this.renderer.domElement,
       getEnemies: () => this.waveManager.getAliveEnemies(),
       onRelease: (data) => this.handleRelease(data),
-      onDirectClick: (enemy) => this.handleHeavyPush(enemy)
+      onDirectClick: (enemy) => this.handleSiegeClick(enemy)
     });
 
     this.defence = new DefenceSystem(
@@ -411,11 +415,13 @@ export class Game {
     this.resetState({ newGamePlus });
     this.campaignTrackingActive = true;
     this.world.setNewGamePlusMode?.(this.newGamePlus);
+    this.syncLateGameVisualState(this.waveIndex + 1);
     this.world.resetNight?.();
     if (!this.developerMode) this.clearSave();
 
     if (this.developerMode) {
       this.waveIndex = this.developerWave - 1;
+      this.syncLateGameVisualState(this.developerWave);
       this.souls = 50000;
       this.boundSouls = 160;
       this.manorMaxHealth = 5000;
@@ -449,6 +455,7 @@ export class Game {
     this.restoreState(save);
     this.campaignTrackingActive = true;
     this.world.setNewGamePlusMode?.(this.newGamePlus);
+    this.syncLateGameVisualState(this.waveIndex + 1);
     this.world.resetNight?.();
     this.applyUpgradeState();
     this.startCurrentWave();
@@ -613,6 +620,7 @@ export class Game {
     }
     this.world.setOverchargeActive?.(this.overchargeActive);
     this.defence.setOvercharge?.(this.overchargeActive);
+    this.syncLateGameVisualState(this.waveIndex + 1);
 
     this.gameplayActive = true;
     this.paused = false;
@@ -642,13 +650,25 @@ export class Game {
     this.waveManager.setMobileDifficulty?.(this.mobileOptimized);
     this.waveManager.startWave(this.waveIndex);
     this.defence.resetCooldown();
-    this.audio.setMusicLevel(0.34, 0.3);
-    this.audio.setSfxLevel(
-      this.waveIndex === CONFIG.waves.length - 1 ? (CONFIG.finalWaveAudio?.sfxLevel ?? 0.58) : 0.95,
-      0.25
-    );
-    this.audio.playMusic(this.waveIndex % 2 === 0 ? "background1" : "background2", 0.7);
-    this.audio.play("waveStart", { volume: 0.72, pitchMin: 0.97, pitchMax: 1.03 });
+    const finalWave = this.waveIndex === CONFIG.waves.length - 1;
+    this.finalWaveMusicPending = false;
+    this.finalWaveMusicDelay = 0;
+
+    if (finalWave) {
+      // Wave 50 deliberately breaks from the normal alternating soundtrack.
+      // Fade the Wave 49 track out, leave a short beat, then bring in the
+      // dedicated final-wave background track before the first enemies arrive.
+      this.audio.stopMusic(0.28);
+      this.audio.setMusicLevel(CONFIG.finalWaveAudio?.musicLevel ?? 0.40, 0.20);
+      this.audio.setSfxLevel(CONFIG.finalWaveAudio?.sfxLevel ?? 0.58, 0.25);
+      this.finalWaveMusicPending = true;
+      this.finalWaveMusicDelay = CONFIG.finalWaveAudio?.musicDelay ?? 0.55;
+    } else {
+      this.audio.setMusicLevel(0.34, 0.3);
+      this.audio.setSfxLevel(0.95, 0.25);
+      this.audio.playMusic(this.waveIndex % 2 === 0 ? "background1" : "background2", 0.7);
+    }
+    this.audio.play("waveStart", { volume: finalWave ? 0.48 : 0.72, pitchMin: 0.97, pitchMax: 1.03 });
     this.ui.setMode("playing");
     this.ui.showBanner(
       `WAVE ${this.waveIndex + 1}`,
@@ -658,14 +678,13 @@ export class Game {
       2.6
     );
     if (this.waveIndex === 0 && !this.newGamePlus && !this.tutorialsSeen.firstWave) {
-      this.tutorialsSeen.firstWave = true;
-      this.paused = true;
-      this.grabSystem.setEnabled(false);
-      this.ui.showFirstWaveTutorial?.(() => {
-        if (!this.gameplayActive || this.ui.mode !== "playing") return;
-        this.paused = false;
-        this.grabSystem.setEnabled(true);
-      });
+      // Wait until the first demon is actually visible, then give the player
+      // one second to register it before pausing for the grab/throw tutorial.
+      this.firstWaveTutorialPending = true;
+      this.firstWaveTutorialVisibleTimer = 0;
+    } else {
+      this.firstWaveTutorialPending = false;
+      this.firstWaveTutorialVisibleTimer = 0;
     }
     this.saveGame(this.waveIndex);
     this.syncUI();
@@ -745,12 +764,12 @@ export class Game {
     enemy.applyDamage(amount, reason, reason === "bomb" ? 15 : 11);
   }
 
-  handleHeavyPush(enemy) {
+  handleSiegeClick(enemy) {
     if (!this.gameplayActive || !enemy?.canDirectClick?.()) return;
-    const worked = enemy.pushHeavy?.(1);
+    const worked = enemy.staggerSiege(1);
     if (worked) {
-      this.audio.playBodyImpact(enemy.type === "brute" ? 11 : 9);
-      this.cameraShake = Math.max(this.cameraShake, enemy.type === "brute" ? 0.10 : 0.08);
+      this.audio.playBodyImpact(9);
+      this.cameraShake = Math.max(this.cameraShake, 0.08);
     }
   }
 
@@ -778,7 +797,13 @@ export class Game {
     if (!this.gameplayActive) return;
     this.gameplayActive = false;
     this.grabSystem.setEnabled(false);
-    this.audio.setMusicLevel(0.22, 0.45);
+    if (this.waveIndex === CONFIG.waves.length - 2) {
+      // End Wave 49 on silence so Wave 50 can introduce its own background
+      // track cleanly instead of crossfading from the regular rotation.
+      this.audio.stopMusic(0.45);
+    } else {
+      this.audio.setMusicLevel(0.22, 0.45);
+    }
 
     const snapshot = this.waveStartSnapshot ?? this.snapshotState();
     const waveSouls = Math.max(0, this.souls - (snapshot.souls ?? 0));
@@ -873,6 +898,8 @@ export class Game {
     this.endingTimer = 0;
     this.endingDawnMusicStarted = false;
     this.grabSystem?.setEnabled(false);
+    this.finalWaveMusicPending = false;
+    this.finalWaveMusicDelay = 0;
     this.audio.stopLoop("soul-binding", 0.35);
     this.audio.stopMusic(0.45);
     this.audio.setSfxLevel(0.95, 0.18);
@@ -891,9 +918,16 @@ export class Game {
     this.ui.startEndingSequence(result);
   }
 
+  syncLateGameVisualState(waveNumber = this.waveIndex + 1) {
+    const unlockWave = CONFIG.lateGameVisuals?.unlockWave ?? 40;
+    this.world?.setLateGameMode?.(waveNumber >= unlockWave);
+  }
+
   openIntermission() {
     if (this.ui.mode !== "results") return;
     this.ui.setMode("intermission");
+    const preparingWave = this.getPreparingWaveNumber();
+    this.syncLateGameVisualState(preparingWave);
     this.syncUI();
     const overchargeUnlockWave = CONFIG.overcharge?.unlockWave ?? 40;
     if (this.getPreparingWaveNumber() >= overchargeUnlockWave && !this.tutorialsSeen.overcharge) {
@@ -1153,6 +1187,8 @@ export class Game {
     this.gameplayActive = false;
     this.grabSystem.setEnabled(false);
     this.waveManager.stop();
+    this.finalWaveMusicPending = false;
+    this.finalWaveMusicDelay = 0;
     this.audio.stopMusic(0.45);
     this.audio.setSfxLevel(0.95, 0.16);
     this.audio.play("gameOver", { volume: 0.78 });
@@ -1336,7 +1372,10 @@ export class Game {
     if (this.gameplayActive && previous === "playing") {
       this.paused = false;
       this.grabSystem?.setEnabled(true);
-      this.audio.setMusicLevel(0.34, 0.2);
+      const resumeMusicLevel = this.waveIndex === CONFIG.waves.length - 1
+        ? (CONFIG.finalWaveAudio?.musicLevel ?? 0.40)
+        : 0.34;
+      this.audio.setMusicLevel(resumeMusicLevel, 0.2);
       this.ui.setMode("playing");
     } else if (this.gameplayActive && previous === "paused") {
       this.paused = true;
@@ -1364,6 +1403,7 @@ export class Game {
     this.grabSystem?.setEnabled(false);
     this.waveManager?.clear();
     this.waveIndex = this.developerWave - 1;
+    this.syncLateGameVisualState(this.developerWave);
   }
 
   startDeveloperWave() {
@@ -1378,6 +1418,11 @@ export class Game {
     this.applyUpgradeState();
     this.syncUI();
     this.ui.setMode("intermission");
+    const overchargeUnlockWave = CONFIG.overcharge?.unlockWave ?? 40;
+    if (this.developerWave >= overchargeUnlockWave && !this.tutorialsSeen.overcharge) {
+      this.tutorialsSeen.overcharge = true;
+      this.ui.showOverchargeTutorial?.();
+    }
   }
 
   addDeveloperSouls(amount) {
@@ -1414,6 +1459,7 @@ export class Game {
     this.newGamePlus = !this.newGamePlus;
     this.waveManager?.setNewGamePlus?.(this.newGamePlus);
     this.world?.setNewGamePlusMode?.(this.newGamePlus);
+    this.syncLateGameVisualState(this.waveIndex + 1);
     this.ui.setDeveloperPanel(true, this.developerWave);
     this.syncUI();
   }
@@ -1428,7 +1474,10 @@ export class Game {
       this.ui.setMode("paused");
     } else {
       this.grabSystem?.setEnabled(true);
-      this.audio.setMusicLevel(0.34, 0.22);
+      const resumeMusicLevel = this.waveIndex === CONFIG.waves.length - 1
+        ? (CONFIG.finalWaveAudio?.musicLevel ?? 0.40)
+        : 0.34;
+      this.audio.setMusicLevel(resumeMusicLevel, 0.22);
       this.ui.setMode("playing");
     }
   }
@@ -1535,6 +1584,51 @@ export class Game {
     this.camera.lookAt(this.cameraTarget);
   }
 
+  updateFinalWaveMusic(dt) {
+    if (!this.finalWaveMusicPending || !this.gameplayActive || this.paused || this.ui.mode !== "playing") return;
+    this.finalWaveMusicDelay -= dt;
+    if (this.finalWaveMusicDelay > 0) return;
+    this.finalWaveMusicPending = false;
+    this.finalWaveMusicDelay = 0;
+    this.audio.playMusic(CONFIG.finalWaveAudio?.musicKey ?? "background2", 0.9);
+  }
+
+  updateFirstWaveTutorial(dt) {
+    if (!this.firstWaveTutorialPending || !this.gameplayActive || this.paused || this.ui.mode !== "playing") return;
+
+    let visible = false;
+    const projected = new THREE.Vector3();
+    for (const enemy of this.waveManager?.getAliveEnemies?.() ?? []) {
+      if (!enemy || enemy.dead || enemy.removed) continue;
+      projected.copy(enemy.position);
+      projected.y += Math.max(0.8, (enemy.definition?.height ?? 2) * 0.45);
+      projected.project(this.camera);
+      if (projected.z >= -1 && projected.z <= 1 && projected.x >= -0.96 && projected.x <= 0.96 && projected.y >= -0.96 && projected.y <= 0.96) {
+        visible = true;
+        break;
+      }
+    }
+
+    if (!visible) {
+      this.firstWaveTutorialVisibleTimer = 0;
+      return;
+    }
+
+    this.firstWaveTutorialVisibleTimer += dt;
+    if (this.firstWaveTutorialVisibleTimer < 1) return;
+
+    this.firstWaveTutorialPending = false;
+    this.firstWaveTutorialVisibleTimer = 0;
+    this.tutorialsSeen.firstWave = true;
+    this.paused = true;
+    this.grabSystem?.setEnabled(false);
+    this.ui.showFirstWaveTutorial?.(() => {
+      if (!this.gameplayActive || this.ui.mode !== "playing") return;
+      this.paused = false;
+      this.grabSystem?.setEnabled(true);
+    });
+  }
+
   animate() {
     if (!this.running) return;
     requestAnimationFrame(this.animate);
@@ -1561,6 +1655,8 @@ export class Game {
           this.world.manorBarrierX
         );
       }
+      this.updateFinalWaveMusic(simulationActive ? dt : 0);
+      this.updateFirstWaveTutorial(simulationActive ? dt : 0);
       if (simulationActive) {
         this.checkWorldCollisions();
       }

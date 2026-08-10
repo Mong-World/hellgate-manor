@@ -190,6 +190,7 @@ export class UI {
   showFirstWaveTutorial(onClose = null) {
     this.tutorial = {
       simple: true,
+      compact: true,
       title: "DEFEND THE MANOR",
       lines: [
         "Grab demons and throw them to destroy them.",
@@ -1609,8 +1610,11 @@ export class UI {
     const mobile = width < 700 || height < 620;
 
     if (this.tutorial.simple) {
-      const panelWidth = Math.min(mobile ? width - 28 : 510, width - 28);
-      const panelHeight = mobile ? 190 : 210;
+      const compact = !!this.tutorial.compact;
+      const panelWidth = compact
+        ? Math.min(mobile ? 560 : 500, width - 40)
+        : Math.min(mobile ? width - 28 : 510, width - 28);
+      const panelHeight = compact ? (mobile ? 176 : 190) : (mobile ? 190 : 210);
       const x = (width - panelWidth) / 2;
       const y = (height - panelHeight) / 2;
       this.panel(x, y, panelWidth, panelHeight, C.panel, 14);

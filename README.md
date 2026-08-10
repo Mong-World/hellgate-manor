@@ -1,13 +1,19 @@
-# Hellgate Manor v1.9.3 — mobile balance test
+# Hellgate Manor v1.9.6 — v1.9.2 baseline + approved mobile/final-wave pass
 
-- Soul Extraction now has a maximum of 2 slots; slot 2 unlocks at Wave 35 for 10,000 Souls.
-- Brutes are non-grabbable heavy enemies and are pushed/staggered by taps/clicks; Siege Demons are pushed and slowed rather than fully frozen.
-- Bomb Forge now grants 1 bomb at 25 assigned Bound Souls and 2 at 50; a charged Overcharge adds a third bomb for that wave.
-- Undercroft repair reduced to 25 HP per assigned Bound Soul; Occult has a maximum of 2 simultaneous strike centres, with the second at 25 assigned souls.
-- Late-wave active enemy pressure rises gradually from Wave 35; mobile receives a small additional late-game pressure increase.
-- Wave 50 combat SFX are reduced so its battle music remains prominent; ending audio is unchanged.
-- First-wave tutorial added, tutorial body text uses sentence case, and the upgrade menu now shows the wave being prepared for.
-- Developer panel is hidden behind 10 taps/clicks on the HELLGATE MANOR title in the Pause menu within 5 seconds; the panel has a compact mobile layout.
+- Rebuilt from the known-good v1.9.2 baseline, preserving its existing gameplay, ending and presentation unless explicitly changed below.
+- Soul Extraction is capped at two slots, with slot 2 unlocking at Wave 35 for 10,000 Souls; the invisible roof capture zone is larger.
+- Brutes remain grabbable but can only be heaved a short distance. Siege Demons require 8 hits and briefly stop on each successful hit.
+- Strong Husk/Brute/Siege Manor damage, late-wave enemy pressure, Bomb Forge, Undercroft and Occult balancing use the approved mobile-test values.
+- The Wave 40 late-game Hell visuals now apply in normal play and developer wave/shop jumps.
+- Wave 50 cleanly introduces its background track after Wave 49 and lowers combat SFX for that wave only; ending audio remains unchanged.
+- The Wave 1 tutorial waits until the first demon is visible for one second, uses sentence case and a tighter panel.
+- Developer access is hidden behind 10 taps/clicks on the Pause-menu HELLGATE MANOR title within 5 seconds; the old Ctrl + Shift + D shortcut is disabled.
+
+# Hellgate Manor v1.8.7
+
+- Locked Systems upgrades now state the exact wave they unlock on, both in the row text and locked button.
+- Developer panel now opens directly with **Ctrl + Shift + D**; password protection has been removed for testing.
+- The game canvas is focused from any pointer interaction inside the game iframe to improve keyboard shortcut reliability in Portals.
 
 # Hellgate Manor — Full Game First Draft v1.0
 
@@ -366,17 +372,3 @@ The GitHub Action builds `main`, copies `assets/`, `fonts/`, and `sounds/` into 
 - Extraction slots cost 5,000 / 10,000; Undercroft repairs 50 HP per assigned soul.
 - Retry returns to upgrades with failed-wave earnings rolled back.
 - Fortify economy, ending defence score, click counter, occult area, dust/embers, crossbow/shed placement and preload paths polished.
-
-
-## v1.9.3 mobile balance / hidden developer access
-- Maximum Soul Extraction capacity reduced to 2; the second slot unlocks at Wave 35 and costs 10,000 Souls.
-- Enlarged the invisible Soul Extraction drop target above the Manor while leaving the portal artwork unchanged.
-- Strong Husk, Brute and Siege Manor damage increased; Brutes now require pushes instead of grabs and Siege Demons keep moving slowly after hits.
-- Bomb progression changed to 25/50 assigned Bound Souls for 1/2 bombs, with a third bomb available only from an active Overcharge when the normal 2-bomb capacity is powered.
-- Undercroft repair reduced to 25 HP per assigned Bound Soul.
-- Occult now has at most 2 strike centres; the second arrives at 25 assigned Bound Souls.
-- Base active-enemy cap rises from 25 at Wave 34 to 35 by Wave 50; mobile adds +2 active enemies and slightly faster spawn pacing from Wave 35.
-- Wave 50 SFX bus is lowered during combat only, restoring normal SFX for game-over/ending audio.
-- Added the first-wave grab/throw/push tutorial and converted tutorial instructions to sentence case.
-- Upgrade screens display the upcoming wave.
-- Developer controls now use the hidden Pause-title 10-tap/click gesture and fit landscape mobile screens.
