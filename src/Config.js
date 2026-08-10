@@ -108,6 +108,7 @@ export const CONFIG = Object.freeze({
     gameOver: "./sounds/game-over-sound.mp3",
     endgameBang: "./assets/endgamebang.mp3",
     level50: "./assets/level50music.mp3",
+    lightning: "./sounds/lightning.mp3",
     newDawn: "./assets/newdawnmusic.mp3",
     purchase: "./sounds/purchasesound.mp3",
     soulBinding: "./assets/soulmusic.mp3",

@@ -394,3 +394,16 @@ Developer keyboard access and developer-panel rendering are disabled in this rel
 - Wave 1 displays a compact grab/throw tutorial one second after the first demon becomes visible. Tutorial body copy uses sentence case.
 - The upgrade screen shows the wave being prepared for and uses upcoming-wave unlock checks.
 - Developer tools are hidden behind 10 taps/clicks on the Pause-menu HELLGATE MANOR title within 5 seconds; the old keyboard shortcut is removed, with a compact landscape-mobile dev layout.
+
+## v1.9.9 presentation polish
+
+Built directly on v1.9.8 without changing the established core mechanics.
+
+- Loading screen title uses `Hellgate Manor` casing and adds subtle falling embers.
+- Start and pause titles use `Hellgate Manor` casing in the Lansbury title font.
+- Lower-horizon star coverage is slightly increased.
+- Wave 45+ adds occasional red lightning, becoming somewhat more frequent toward Wave 50.
+- `sounds/lightning.mp3` is synchronized shortly after each lightning flash; Wave 50's existing reduced SFX mix still applies.
+- Overcharge now adds a third Occult strike when Occult is already at its normal two-strike power level.
+- Wave 40 Overcharge tutorial wording now explains the shield, extra Hellfire bolts, extra Hell Bomb, and third Occult strike.
+- First-wave compact tutorial has more vertical clearance above the `GOT IT` button.

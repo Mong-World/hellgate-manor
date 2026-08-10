@@ -360,7 +360,10 @@ export class DefenceSystem {
       [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
     }
 
-    const strikeCount = this.occultSouls >= (CONFIG.defence.occultSecondStrikeSouls ?? 25) ? 2 : 1;
+    const baseStrikeCount = this.occultSouls >= (CONFIG.defence.occultSecondStrikeSouls ?? 25) ? 2 : 1;
+    // A fully powered Occult defence gains one extra strike while Manor
+    // Overcharge is active, taking the normal two-strike pulse to three.
+    const strikeCount = baseStrikeCount + (this.overchargeActive && baseStrikeCount >= 2 ? 1 : 0);
     const targetCount = Math.min(strikeCount, candidates.length);
     const damaged = this.occultDamaged;
     damaged.clear();

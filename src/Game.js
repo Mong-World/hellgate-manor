@@ -38,6 +38,8 @@ export class Game {
     this.endingTimer = 0;
     this.endingDawnMusicStarted = false;
     this.endingDawnMusicDelay = 4.15;
+    this.lightningStrikeTimer = Infinity;
+    this.lightningThunderTimer = -1;
     this.runtimePrimed = false;
     this.lastUISyncState = null;
     this.uiUnlockWaves = Object.fromEntries(
@@ -702,6 +704,13 @@ export class Game {
     // Wave 40 uses the pause for the visual Hell transition; Wave 50 lets the
     // dedicated final-wave music establish itself before the last assault.
     const openingDelay = waveNumber === 50 ? 5.0 : (enteringLateGameVisuals ? 4.0 : 0);
+
+    // Red lightning is a late-night atmosphere layer only. It starts at Wave 45
+    // and becomes a little more frequent as the final wave approaches.
+    this.lightningThunderTimer = -1;
+    this.lightningStrikeTimer = waveNumber >= 45
+      ? THREE.MathUtils.randFloat(4.0, 8.0)
+      : Infinity;
 
     this.waveStartSnapshot = this.snapshotState();
     this.waveManager.setNewGamePlus?.(this.newGamePlus);
@@ -1675,6 +1684,37 @@ export class Game {
     this.camera.lookAt(this.cameraTarget);
   }
 
+  updateLateGameLightning(dt) {
+    if (dt <= 0 || !this.gameplayActive) return;
+    const waveNumber = this.waveIndex + 1;
+    if (waveNumber < 45) return;
+
+    if (this.lightningThunderTimer >= 0) {
+      this.lightningThunderTimer -= dt;
+      if (this.lightningThunderTimer <= 0) {
+        this.lightningThunderTimer = -1;
+        this.audio.play("lightning", {
+          volume: 0.78,
+          pitchMin: 0.96,
+          pitchMax: 1.04,
+          cooldown: 0.8,
+          maxInstances: 1
+        });
+      }
+    }
+
+    this.lightningStrikeTimer -= dt;
+    if (this.lightningStrikeTimer > 0) return;
+
+    this.world.triggerRedLightning?.();
+    // The visual flash arrives first, followed by a short distance-based delay.
+    this.lightningThunderTimer = THREE.MathUtils.randFloat(0.22, 1.05);
+    const progress = THREE.MathUtils.clamp((waveNumber - 45) / 5, 0, 1);
+    const minGap = THREE.MathUtils.lerp(12.0, 7.0, progress);
+    const maxGap = THREE.MathUtils.lerp(20.0, 12.0, progress);
+    this.lightningStrikeTimer = THREE.MathUtils.randFloat(minGap, maxGap);
+  }
+
   updateFirstWaveTutorial(dt) {
     if (!this.firstWaveTutorialPending || !this.gameplayActive || this.paused || this.ui.mode !== "playing") return;
 
@@ -1744,6 +1784,7 @@ export class Game {
         );
       }
       this.updateFirstWaveTutorial(simulationActive ? dt : 0);
+      this.updateLateGameLightning(simulationActive ? dt : 0);
       if (simulationActive) {
         this.checkWorldCollisions();
       }

@@ -241,6 +241,9 @@ export class World {
     this.manorBarrierX = 13;
     this.turretMounts = [];
     this.skyClouds = [];
+    this.lightningBolt = null;
+    this.lightningLight = null;
+    this.lightningTimer = 0;
     this.groundFog = [];
     this.riftEmbers = null;
     this.riftEmberBase = null;
@@ -344,11 +347,15 @@ export class World {
   }
 
   createSky() {
-    const starCount = this.mobile ? 130 : 190;
+    const starCount = this.mobile ? 150 : 220;
     const starPositions = new Float32Array(starCount * 3);
     for (let i = 0; i < starCount; i += 1) {
       starPositions[i * 3] = THREE.MathUtils.randFloat(-38, 38);
-      starPositions[i * 3 + 1] = THREE.MathUtils.randFloat(10, 27);
+      // Keep the original upper sky, but add a quieter band of stars close to
+      // the horizon so the lower sky does not feel empty.
+      starPositions[i * 3 + 1] = Math.random() < 0.30
+        ? THREE.MathUtils.randFloat(7.4, 11.2)
+        : THREE.MathUtils.randFloat(10.5, 27);
       starPositions[i * 3 + 2] = THREE.MathUtils.randFloat(-48, -32);
     }
 
@@ -366,6 +373,30 @@ export class World {
     this.stars.renderOrder = -5;
     this.scene.add(this.stars);
     this.disposables.push(starGeometry, starMaterial);
+
+    // Pre-created late-game lightning so strikes do not allocate geometry during play.
+    const lightningPositions = new Float32Array(14 * 3);
+    const lightningGeometry = new THREE.BufferGeometry();
+    const lightningAttribute = new THREE.BufferAttribute(lightningPositions, 3);
+    lightningAttribute.setUsage(THREE.DynamicDrawUsage);
+    lightningGeometry.setAttribute("position", lightningAttribute);
+    const lightningMaterial = new THREE.LineBasicMaterial({
+      color: 0xff2d24,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      fog: false
+    });
+    const lightning = new THREE.Line(lightningGeometry, lightningMaterial);
+    lightning.visible = false;
+    lightning.renderOrder = -1;
+    this.scene.add(lightning);
+    this.lightningBolt = { line: lightning, geometry: lightningGeometry, material: lightningMaterial, attribute: lightningAttribute };
+    this.lightningLight = new THREE.PointLight(0xff2a20, 0, 95, 1.6);
+    this.lightningLight.position.set(-10, 18, -16);
+    this.scene.add(this.lightningLight);
+    this.disposables.push(lightningGeometry, lightningMaterial);
 
     const moonTexture = makeMoonTexture();
     const moonMaterial = new THREE.SpriteMaterial({
@@ -1549,6 +1580,30 @@ export class World {
     mount.pivot.rotation.x = THREE.MathUtils.clamp(pitch, -0.25, 0.28);
   }
 
+  triggerRedLightning() {
+    if (!this.lightningBolt || this.dawnActive || this.victoryClosing) return;
+    const points = this.lightningBolt.attribute.array;
+    const startX = THREE.MathUtils.randFloat(-20, 7);
+    const endY = THREE.MathUtils.randFloat(7.8, 10.5);
+    const topY = THREE.MathUtils.randFloat(25, 29);
+    const baseZ = THREE.MathUtils.randFloat(-38, -33);
+    for (let i = 0; i < 14; i += 1) {
+      const t = i / 13;
+      const taper = Math.sin(t * Math.PI);
+      points[i * 3] = startX + THREE.MathUtils.randFloatSpread(2.8) * taper + t * THREE.MathUtils.randFloat(-2.4, 2.4);
+      points[i * 3 + 1] = THREE.MathUtils.lerp(topY, endY, t);
+      points[i * 3 + 2] = baseZ + THREE.MathUtils.randFloatSpread(0.7);
+    }
+    this.lightningBolt.attribute.needsUpdate = true;
+    this.lightningBolt.line.visible = true;
+    this.lightningBolt.material.opacity = 1;
+    this.lightningTimer = 0.46;
+    if (this.lightningLight) {
+      this.lightningLight.position.set(startX, 17, -15);
+      this.lightningLight.intensity = 22;
+    }
+  }
+
   setHellVisualTarget(target, duration = 0) {
     this.hellVisualTarget = THREE.MathUtils.clamp(target, 0, 1);
     if (duration <= 0) {
@@ -2135,6 +2190,21 @@ export class World {
       const manorHeight = Math.max(8, this.manorBounds.max.y - this.manorBounds.min.y);
       const manorDepth = Math.max(8, this.manorBounds.max.z - this.manorBounds.min.z);
       this.overchargeShield.mesh.scale.set(3.7 * scalePulse, manorHeight * 0.60 * scalePulse, manorDepth * 0.61 * scalePulse);
+    }
+
+    if (this.lightningTimer > 0) {
+      this.lightningTimer = Math.max(0, this.lightningTimer - dt);
+      const t = this.lightningTimer / 0.46;
+      // A quick double-pulse reads as lightning without becoming distracting.
+      const flash = t > 0.72 ? 1 : t > 0.52 ? 0.18 : t > 0.27 ? 0.72 : t * 1.3;
+      if (this.lightningBolt) {
+        this.lightningBolt.line.visible = this.lightningTimer > 0;
+        this.lightningBolt.material.opacity = Math.max(0, flash);
+      }
+      if (this.lightningLight) this.lightningLight.intensity = 22 * Math.max(0, flash);
+    } else {
+      if (this.lightningBolt) this.lightningBolt.line.visible = false;
+      if (this.lightningLight) this.lightningLight.intensity = 0;
     }
 
     if (this.upgradeGroups.occult?.group.visible) {
