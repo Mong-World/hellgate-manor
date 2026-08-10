@@ -223,7 +223,7 @@ canvas {
   #rotate-device { display: grid; }
 }
 
-/* Subtle drifting embers behind the loading panel. */
+/* Ember drift behind the loading panel: denser and rising upward like heat from a fire. */
 .loading-embers {
   position: absolute;
   inset: 0;
@@ -234,11 +234,11 @@ canvas {
 .loading-embers span {
   position: absolute;
   left: var(--x);
-  top: -4%;
+  bottom: -6%;
   width: 3px;
   height: 3px;
   border-radius: 50%;
-  background: rgba(255, 111, 42, 0.88);
+  background: rgba(255, 111, 42, 0.92);
   box-shadow: 0 0 8px rgba(255, 68, 18, 0.8);
   opacity: 0;
   animation: loading-ember-rise var(--dur) linear infinite;
@@ -257,10 +257,10 @@ canvas {
 }
 
 @keyframes loading-ember-rise {
-  0% { transform: translate3d(0, 0, 0) scale(0.45); opacity: 0; }
-  10% { opacity: 0.82; }
-  72% { opacity: 0.48; }
-  100% { transform: translate3d(var(--drift), 108vh, 0) scale(0.18); opacity: 0; }
+  0% { transform: translate3d(0, 0, 0) scale(0.35); opacity: 0; }
+  8% { opacity: 0.90; }
+  68% { opacity: 0.58; }
+  100% { transform: translate3d(var(--drift), -112vh, 0) scale(0.18); opacity: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -353,9 +353,9 @@ export class World {
       starPositions[i * 3] = THREE.MathUtils.randFloat(-38, 38);
       // Keep the original upper sky, but add a quieter band of stars close to
       // the horizon so the lower sky does not feel empty.
-      starPositions[i * 3 + 1] = Math.random() < 0.30
-        ? THREE.MathUtils.randFloat(7.4, 11.2)
-        : THREE.MathUtils.randFloat(10.5, 27);
+      starPositions[i * 3 + 1] = Math.random() < 0.42
+        ? THREE.MathUtils.randFloat(6.6, 11.8)
+        : THREE.MathUtils.randFloat(10.2, 27);
       starPositions[i * 3 + 2] = THREE.MathUtils.randFloat(-48, -32);
     }
 
@@ -380,23 +380,26 @@ export class World {
     const lightningAttribute = new THREE.BufferAttribute(lightningPositions, 3);
     lightningAttribute.setUsage(THREE.DynamicDrawUsage);
     lightningGeometry.setAttribute("position", lightningAttribute);
-    const lightningMaterial = new THREE.LineBasicMaterial({
-      color: 0xff2d24,
-      transparent: true,
-      opacity: 0,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      fog: false
+    const lightningRoot = new THREE.Group();
+    lightningRoot.visible = false;
+    lightningRoot.renderOrder = -1;
+    const lightningMaterials = [
+      new THREE.LineBasicMaterial({ color: 0xff8a72, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }),
+      new THREE.LineBasicMaterial({ color: 0xff4e35, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }),
+      new THREE.LineBasicMaterial({ color: 0xff2418, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false })
+    ];
+    const lightningLines = lightningMaterials.map((material) => {
+      const line = new THREE.Line(lightningGeometry, material);
+      line.visible = true;
+      lightningRoot.add(line);
+      return line;
     });
-    const lightning = new THREE.Line(lightningGeometry, lightningMaterial);
-    lightning.visible = false;
-    lightning.renderOrder = -1;
-    this.scene.add(lightning);
-    this.lightningBolt = { line: lightning, geometry: lightningGeometry, material: lightningMaterial, attribute: lightningAttribute };
+    this.scene.add(lightningRoot);
+    this.lightningBolt = { root: lightningRoot, lines: lightningLines, geometry: lightningGeometry, materials: lightningMaterials, attribute: lightningAttribute };
     this.lightningLight = new THREE.PointLight(0xff2a20, 0, 95, 1.6);
     this.lightningLight.position.set(-10, 18, -16);
     this.scene.add(this.lightningLight);
-    this.disposables.push(lightningGeometry, lightningMaterial);
+    this.disposables.push(lightningGeometry, ...lightningMaterials);
 
     const moonTexture = makeMoonTexture();
     const moonMaterial = new THREE.SpriteMaterial({
@@ -1583,23 +1586,39 @@ export class World {
   triggerRedLightning() {
     if (!this.lightningBolt || this.dawnActive || this.victoryClosing) return;
     const points = this.lightningBolt.attribute.array;
-    const startX = THREE.MathUtils.randFloat(-20, 7);
-    const endY = THREE.MathUtils.randFloat(7.8, 10.5);
-    const topY = THREE.MathUtils.randFloat(25, 29);
+    const sideStrike = Math.random() < 0.42;
+    const startX = sideStrike ? THREE.MathUtils.randFloat(-31, -22) : THREE.MathUtils.randFloat(-20, 7);
+    const endX = sideStrike ? THREE.MathUtils.randFloat(-7, 4) : startX + THREE.MathUtils.randFloat(-4.5, 4.5);
+    const endY = THREE.MathUtils.randFloat(7.4, 10.8);
+    const topY = THREE.MathUtils.randFloat(24.5, 29.5);
     const baseZ = THREE.MathUtils.randFloat(-38, -33);
+    let currentX = startX;
+    let currentY = topY;
     for (let i = 0; i < 14; i += 1) {
       const t = i / 13;
       const taper = Math.sin(t * Math.PI);
-      points[i * 3] = startX + THREE.MathUtils.randFloatSpread(2.8) * taper + t * THREE.MathUtils.randFloat(-2.4, 2.4);
-      points[i * 3 + 1] = THREE.MathUtils.lerp(topY, endY, t);
-      points[i * 3 + 2] = baseZ + THREE.MathUtils.randFloatSpread(0.7);
+      const targetX = THREE.MathUtils.lerp(startX, endX, t);
+      currentX += (targetX - currentX) * 0.62 + THREE.MathUtils.randFloatSpread(sideStrike ? 3.8 : 2.8) * (0.55 + taper * 0.55);
+      currentY = THREE.MathUtils.lerp(topY, endY, t) + THREE.MathUtils.randFloatSpread(0.6);
+      points[i * 3] = currentX;
+      points[i * 3 + 1] = currentY;
+      points[i * 3 + 2] = baseZ + THREE.MathUtils.randFloatSpread(1.0);
     }
     this.lightningBolt.attribute.needsUpdate = true;
-    this.lightningBolt.line.visible = true;
-    this.lightningBolt.material.opacity = 1;
-    this.lightningTimer = 0.46;
+    if (this.lightningBolt.root) {
+      this.lightningBolt.root.visible = true;
+      if (this.lightningBolt.lines?.length >= 3) {
+        this.lightningBolt.lines[0].position.set(-0.18, 0, 0);
+        this.lightningBolt.lines[1].position.set(0, 0, 0);
+        this.lightningBolt.lines[2].position.set(0.18, 0, 0);
+      }
+      this.lightningBolt.materials?.forEach((material, index) => {
+        material.opacity = index === 1 ? 1 : 0.62;
+      });
+    }
+    this.lightningTimer = 0.52;
     if (this.lightningLight) {
-      this.lightningLight.position.set(startX, 17, -15);
+      this.lightningLight.position.set((startX + endX) * 0.5, 17, -15);
       this.lightningLight.intensity = 22;
     }
   }
@@ -2198,12 +2217,18 @@ export class World {
       // A quick double-pulse reads as lightning without becoming distracting.
       const flash = t > 0.72 ? 1 : t > 0.52 ? 0.18 : t > 0.27 ? 0.72 : t * 1.3;
       if (this.lightningBolt) {
-        this.lightningBolt.line.visible = this.lightningTimer > 0;
-        this.lightningBolt.material.opacity = Math.max(0, flash);
+        if (this.lightningBolt.root) this.lightningBolt.root.visible = this.lightningTimer > 0;
+        const intensity = Math.max(0, flash);
+        this.lightningBolt.materials?.forEach((material, index) => {
+          material.opacity = intensity * (index === 1 ? 1 : 0.62);
+        });
       }
       if (this.lightningLight) this.lightningLight.intensity = 22 * Math.max(0, flash);
     } else {
-      if (this.lightningBolt) this.lightningBolt.line.visible = false;
+      if (this.lightningBolt) {
+        if (this.lightningBolt.root) this.lightningBolt.root.visible = false;
+        this.lightningBolt.materials?.forEach((material) => { material.opacity = 0; });
+      }
       if (this.lightningLight) this.lightningLight.intensity = 0;
     }
 

@@ -395,6 +395,17 @@ export class Game {
       await this.waitForFrame();
     }
 
+    // Pre-warm the late-game lightning visuals and thunder sound so the first
+    // strike in Waves 45-50 does not hitch.
+    this.world.triggerRedLightning?.();
+    for (let frame = 0; frame < 10; frame += 1) {
+      const dt = 1 / 30;
+      this.world.update(20 + frame * dt, dt);
+      this.renderer.render(this.scene, this.camera);
+      await this.waitForFrame();
+    }
+    this.audio.prime?.("lightning");
+
     this.setLoadingProgress(96);
     if (typeof this.renderer.compileAsync === "function") {
       await this.renderer.compileAsync(this.scene, this.camera);

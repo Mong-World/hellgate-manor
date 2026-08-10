@@ -594,7 +594,7 @@ export class UI {
     ctx.shadowColor = "rgba(255,80,24,.7)";
     ctx.shadowBlur = 12;
     const titleY = y + (mobileLandscape ? 32 : (mobile ? 43 : 48));
-    ctx.fillText("Hellgate Manor", width / 2, titleY);
+    ctx.fillText("HELLGATE MANOR", width / 2, titleY);
     ctx.shadowBlur = 0;
 
     // Small production credit immediately beneath the title.
@@ -962,7 +962,7 @@ export class UI {
     ctx.shadowColor = "rgba(255,80,24,.55)";
     ctx.shadowBlur = 9;
     const titleY = y + (mobileLandscape ? 32 : (mobile ? 38 : 41));
-    ctx.fillText("Hellgate Manor", width / 2, titleY);
+    ctx.fillText("HELLGATE MANOR", width / 2, titleY);
     ctx.shadowBlur = 0;
 
     // Invisible developer gesture: 10 taps/clicks on the pause title within
@@ -1672,7 +1672,7 @@ export class UI {
       const panelWidth = compact
         ? Math.min(mobile ? 460 : 470, width - 32)
         : Math.min(mobile ? width - 28 : 510, width - 28);
-      const panelHeight = compact ? (mobile ? 210 : 222) : (mobile ? 190 : 210);
+      const panelHeight = compact ? (mobile ? 226 : 236) : (mobile ? 190 : 210);
       const x = (width - panelWidth) / 2;
       const y = (height - panelHeight) / 2;
       this.panel(x, y, panelWidth, panelHeight, C.panel, 14);
@@ -1689,7 +1689,7 @@ export class UI {
         ctx.fillText(line, width / 2, lineY + index * (mobile ? 18 : 21));
       });
 
-      this.button("GOT IT", width / 2 - 90, y + panelHeight - 48, 180, 38, () => {
+      this.button("GOT IT", width / 2 - 90, y + panelHeight - 42, 180, 38, () => {
         const onClose = this.tutorial?.onClose;
         this.tutorial = null;
         onClose?.();
