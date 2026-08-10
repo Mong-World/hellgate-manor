@@ -43,6 +43,7 @@ export class UI {
     this.bannerSubtitle = "";
     this.bannerTimer = 0;
     this.healthFlash = 0;
+    this.uiTime = 0;
     this.soulPulse = 0;
     this.boundPulse = 0;
     this.soulFlights = [];
@@ -66,6 +67,15 @@ export class UI {
     this.overchargeReserve = 0;
     this.overchargeReady = false;
     this.totalClicks = 0;
+    this.performanceStats = {
+      fps: 0,
+      calls: 0,
+      triangles: 0,
+      geometries: 0,
+      textures: 0,
+      programs: 0,
+      poolMisses: { husk: 0, strong: 0, runner: 0, brute: 0, siege: 0 }
+    };
 
     this.touchDevice = window.matchMedia?.("(pointer: coarse)")?.matches || navigator.maxTouchPoints > 0;
     this.shopScroll = 0;
@@ -154,6 +164,10 @@ export class UI {
 
   setHUD(data) {
     Object.assign(this, data);
+  }
+
+  setPerformanceStats(stats) {
+    this.performanceStats = stats;
   }
 
   setHasSave(hasSave) {
@@ -381,6 +395,7 @@ export class UI {
   }
 
   update(dt) {
+    this.uiTime += dt;
     if (this.mode === "ending") this.endingElapsed += dt;
     this.bannerTimer = Math.max(0, this.bannerTimer - dt);
     this.healthFlash = Math.max(0, this.healthFlash - dt);
@@ -666,10 +681,30 @@ export class UI {
     const ratio = Math.max(0, Math.min(1, this.health / this.maxHealth));
     ctx.fillStyle = "rgba(255,255,255,.07)";
     ctx.fillRect(barX, barY, barWidth, 14);
+    const criticalHealth = ratio > 0 && ratio <= 0.20;
+    const criticalPulse = criticalHealth ? 0.5 + 0.5 * Math.sin(this.uiTime * 7.5) : 0;
+    ctx.save();
     ctx.fillStyle = this.healthFlash > 0 || ratio <= 0.35 ? C.red : C.orange;
+    if (criticalHealth) {
+      ctx.fillStyle = "#ff3428";
+      ctx.globalAlpha = 0.48 + criticalPulse * 0.52;
+      ctx.shadowColor = "rgba(255,45,32,.95)";
+      ctx.shadowBlur = 5 + criticalPulse * 15;
+    }
     ctx.fillRect(barX, barY, barWidth * ratio, 14);
+    ctx.restore();
     ctx.strokeStyle = "rgba(255,255,255,.18)";
     ctx.strokeRect(barX, barY, barWidth, 14);
+    if (criticalHealth) {
+      ctx.save();
+      ctx.globalAlpha = 0.35 + criticalPulse * 0.60;
+      ctx.strokeStyle = "#ff3b31";
+      ctx.lineWidth = 2;
+      ctx.shadowColor = "rgba(255,45,32,.90)";
+      ctx.shadowBlur = 6 + criticalPulse * 13;
+      ctx.strokeRect(barX - 1, barY - 1, barWidth + 2, 16);
+      ctx.restore();
+    }
     ctx.fillStyle = C.text;
     ctx.font = this.dataFont(compact ? 9 : 10, 850);
     ctx.fillText(`${Math.ceil(this.health)} / ${this.maxHealth}`, width / 2, barY + 12);
@@ -779,10 +814,30 @@ export class UI {
     const ratio = Math.max(0, Math.min(1, this.health / this.maxHealth));
     ctx.fillStyle = "rgba(255,255,255,.07)";
     ctx.fillRect(barX, barY, barW, 8);
+    const criticalHealth = ratio > 0 && ratio <= 0.20;
+    const criticalPulse = criticalHealth ? 0.5 + 0.5 * Math.sin(this.uiTime * 7.5) : 0;
+    ctx.save();
     ctx.fillStyle = this.healthFlash > 0 || ratio <= 0.35 ? C.red : C.orange;
+    if (criticalHealth) {
+      ctx.fillStyle = "#ff3428";
+      ctx.globalAlpha = 0.48 + criticalPulse * 0.52;
+      ctx.shadowColor = "rgba(255,45,32,.95)";
+      ctx.shadowBlur = 4 + criticalPulse * 11;
+    }
     ctx.fillRect(barX, barY, barW * ratio, 8);
+    ctx.restore();
     ctx.strokeStyle = "rgba(255,255,255,.18)";
     ctx.strokeRect(barX, barY, barW, 8);
+    if (criticalHealth) {
+      ctx.save();
+      ctx.globalAlpha = 0.35 + criticalPulse * 0.60;
+      ctx.strokeStyle = "#ff3b31";
+      ctx.lineWidth = 1.5;
+      ctx.shadowColor = "rgba(255,45,32,.90)";
+      ctx.shadowBlur = 4 + criticalPulse * 9;
+      ctx.strokeRect(barX - 1, barY - 1, barW + 2, 10);
+      ctx.restore();
+    }
     ctx.fillStyle = C.text;
     ctx.font = this.dataFont(6, 900);
     ctx.fillText(`${Math.ceil(this.health)} / ${this.maxHealth}`, width / 2, barY + 7);
@@ -1101,6 +1156,7 @@ export class UI {
     ctx.fillStyle = C.text;
     ctx.font = this.font(mobile ? 31 : 43);
     ctx.fillText("MANOR UPGRADES", width / 2, y + (mobile ? 42 : 52));
+
     ctx.textAlign = "left";
     ctx.fillStyle = C.orangeLight;
     ctx.font = this.dataFont(mobile ? 9 : 11, 900);
@@ -1217,6 +1273,7 @@ export class UI {
     ctx.fillStyle = C.text;
     ctx.font = this.font(25);
     ctx.fillText("MANOR UPGRADES", x + 16, y + 31);
+
     ctx.fillStyle = C.orangeLight;
     ctx.font = this.dataFont(8, 900);
     ctx.fillText(`WAVE ${this.preparingWave}`, x + 238, y + 29);
@@ -1612,9 +1669,9 @@ export class UI {
     if (this.tutorial.simple) {
       const compact = !!this.tutorial.compact;
       const panelWidth = compact
-        ? Math.min(mobile ? 560 : 500, width - 40)
+        ? Math.min(mobile ? 460 : 470, width - 32)
         : Math.min(mobile ? width - 28 : 510, width - 28);
-      const panelHeight = compact ? (mobile ? 176 : 190) : (mobile ? 190 : 210);
+      const panelHeight = compact ? (mobile ? 172 : 184) : (mobile ? 190 : 210);
       const x = (width - panelWidth) / 2;
       const y = (height - panelHeight) / 2;
       this.panel(x, y, panelWidth, panelHeight, C.panel, 14);
@@ -1738,8 +1795,8 @@ export class UI {
   }
 
   drawDeveloperPanel(width, height) {
-    // Hidden test controls. This layout deliberately supports the same panel
-    // on desktop and landscape phones.
+    // Modal developer controls for desktop testing. Opening this panel in Game
+    // disables persistence for the remainder of the browser session.
     this.buttons = [];
     const ctx = this.ctx;
     ctx.fillStyle = "rgba(0,0,0,.84)";
@@ -1785,19 +1842,19 @@ export class UI {
       this.button("+10 BOUND", x + panelWidth - 170, resourceY, 150, 34, () => this.callbacks.onDevAddBound?.(10));
       ctx.fillStyle = C.orangeLight;
       ctx.font = this.dataFont(9, 900);
-      ctx.fillText("UNLOCK SYSTEMS", width / 2, resourceY + 26);
+      ctx.fillText("UNLOCK SYSTEMS", width / 2, y + 197);
 
       const unlocks = [["EXTRACT", "extraction"], ["HELLFIRE", "hellfire"], ["BOMBS", "demolition"], ["UNDERCROFT", "undercroft"], ["OCCULT", "occult"]];
       const gap = 5;
       const buttonW = (panelWidth - 40 - gap * 4) / 5;
-      const unlockY = y + 188;
+      const unlockY = y + 205;
       unlocks.forEach(([label, key], index) => {
         this.button(label, x + 20 + index * (buttonW + gap), unlockY, buttonW, 34, () => this.callbacks.onDevUnlock?.(key), false, null, C.purple);
       });
 
       ctx.fillStyle = C.muted;
       ctx.font = this.dataFont(8, 800);
-      ctx.fillText(`${this.souls} SOULS • ${this.boundSouls} BOUND SOULS`, width / 2, y + 240);
+      ctx.fillText(`${this.souls} SOULS • ${this.boundSouls} BOUND SOULS`, width / 2, y + 255);
       this.button("CLOSE", width / 2 - 80, y + panelHeight - 43, 160, 34, () => this.callbacks.onDevClose?.());
       return;
     }
@@ -1825,7 +1882,13 @@ export class UI {
     ctx.font = this.dataFont(12, 900);
     ctx.fillText("UNLOCK SYSTEMS", width / 2, row2 + 78);
 
-    const unlocks = [["EXTRACTION", "extraction"], ["HELLFIRE", "hellfire"], ["BOMB FORGE", "demolition"], ["UNDERCROFT", "undercroft"], ["OCCULT", "occult"]];
+    const unlocks = [
+      ["EXTRACTION", "extraction"],
+      ["HELLFIRE", "hellfire"],
+      ["BOMB FORGE", "demolition"],
+      ["UNDERCROFT", "undercroft"],
+      ["OCCULT", "occult"]
+    ];
     const buttonW = 118;
     const gap = 8;
     const totalW = unlocks.length * buttonW + (unlocks.length - 1) * gap;
@@ -1837,6 +1900,28 @@ export class UI {
     ctx.fillStyle = C.muted;
     ctx.font = this.dataFont(10, 800);
     ctx.fillText(`CURRENT: ${this.souls} SOULS • ${this.boundSouls} BOUND SOULS`, width / 2, row2 + 162);
+
+    const perf = this.performanceStats ?? {};
+    const misses = perf.poolMisses ?? {};
+    ctx.fillStyle = "rgba(181,140,255,.88)";
+    ctx.font = this.dataFont(9, 820);
+    ctx.fillText(
+      `PERF  ${perf.fps ?? 0} FPS • ${perf.calls ?? 0} DRAWS • ${Number(perf.triangles ?? 0).toLocaleString()} TRIANGLES • ${perf.programs ?? 0} PROGRAMS`,
+      width / 2,
+      row2 + 187
+    );
+    ctx.fillStyle = C.muted;
+    ctx.fillText(
+      `GPU  ${perf.geometries ?? 0} GEOMETRIES • ${perf.textures ?? 0} TEXTURES`,
+      width / 2,
+      row2 + 205
+    );
+    ctx.fillText(
+      `POOL MISSES  H:${misses.husk ?? 0}  ST:${misses.strong ?? 0}  R:${misses.runner ?? 0}  B:${misses.brute ?? 0}  SG:${misses.siege ?? 0}`,
+      width / 2,
+      row2 + 223
+    );
+
     this.button("CLOSE", width / 2 - 95, y + panelHeight - 62, 190, 44, () => this.callbacks.onDevClose?.());
   }
 

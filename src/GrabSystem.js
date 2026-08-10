@@ -101,9 +101,8 @@ export class GrabSystem {
     );
 
     if (this.heldEnemy?.type === "brute") {
-      // Brutes can be grabbed, but they should feel far too heavy to lift or
-      // carry across the battlefield. Each grab only lets the player heave the
-      // body a short distance before release.
+      // Brutes can be grabbed, but they are far too heavy to lift or throw
+      // like a Husk. A drag only heaves them a short distance near the ground.
       this.target.x = THREE.MathUtils.clamp(
         this.target.x,
         this.initialGrabPosition.x - 2.4,

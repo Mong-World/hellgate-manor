@@ -129,7 +129,7 @@ export class AudioManager {
   }
 
   primeAllPlaybackPaths() {
-    const musicKeys = new Set(["background1", "background2", "newDawn"]);
+    const musicKeys = new Set(["background1", "background2", "level50", "newDawn"]);
     for (const key of this.buffers.keys()) {
       this.prime(key, { music: musicKeys.has(key) });
     }
@@ -287,7 +287,6 @@ export class AudioManager {
       try { loop.gain.disconnect(); } catch {}
     }, Math.ceil((fadeSeconds + 0.08) * 1000));
   }
-
 
   setSfxLevel(level, seconds = 0.25) {
     if (!this.context || !this.sfxGain) return;

@@ -107,6 +107,7 @@ export const CONFIG = Object.freeze({
     deniedPurchase: "./sounds/denied-purchase-sound.mp3",
     gameOver: "./sounds/game-over-sound.mp3",
     endgameBang: "./assets/endgamebang.mp3",
+    level50: "./assets/level50music.mp3",
     newDawn: "./assets/newdawnmusic.mp3",
     purchase: "./sounds/purchasesound.mp3",
     soulBinding: "./assets/soulmusic.mp3",
@@ -221,8 +222,6 @@ export const CONFIG = Object.freeze({
       attackInterval: 1.75,
       grabBox: [2.05, 5.4, 2.05],
       grabY: 2.45,
-      // Brutes can still be grabbed, but are far too heavy to properly throw.
-      // The tiny release scale makes them shift only a short distance.
       throwScale: 0.12,
       durability: 2,
       convertible: false
@@ -271,29 +270,22 @@ export const CONFIG = Object.freeze({
   },
 
   pool: {
-    husk: 30,
-    strong: 19,
-    runner: 22,
-    brute: 12,
-    siege: 6,
+    // Pools cover the absolute live-enemy cap (plus the 3 simultaneous
+    // extraction slots for convertible Husk-family types) so gameplay never
+    // has to clone a skinned GLB or create an AnimationMixer mid-wave.
+    husk: 33,
+    strong: 33,
+    runner: 33,
+    brute: 30,
+    siege: 26,
     effects: 44
   },
+
 
   mobileDifficulty: {
     lateWaveStart: 35,
     maxActiveBonus: 2,
     spawnGapMultiplier: 0.92
-  },
-
-  lateGameVisuals: {
-    unlockWave: 40
-  },
-
-  finalWaveAudio: {
-    musicKey: "background2",
-    musicDelay: 0.55,
-    musicLevel: 0.40,
-    sfxLevel: 0.58
   },
 
   newGamePlus: {

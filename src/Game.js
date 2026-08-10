@@ -38,9 +38,24 @@ export class Game {
     this.endingTimer = 0;
     this.endingDawnMusicStarted = false;
     this.endingDawnMusicDelay = 4.15;
-    this.finalWaveMusicPending = false;
-    this.finalWaveMusicDelay = 0;
     this.runtimePrimed = false;
+    this.lastUISyncState = null;
+    this.uiUnlockWaves = Object.fromEntries(
+      Object.entries(CONFIG.buildings)
+        .filter(([, value]) => value.unlockWave)
+        .map(([key, value]) => [key, value.unlockWave])
+    );
+    this.perfElapsed = 0;
+    this.perfFrames = 0;
+    this.performanceStats = {
+      fps: 0,
+      calls: 0,
+      triangles: 0,
+      geometries: 0,
+      textures: 0,
+      programs: 0,
+      poolMisses: { husk: 0, strong: 0, runner: 0, brute: 0, siege: 0 }
+    };
     this.mobileOptimized = (window.matchMedia?.("(pointer: coarse)")?.matches || navigator.maxTouchPoints > 0) && Math.min(window.innerWidth, window.innerHeight) <= 900;
 
     this.scene = new THREE.Scene();
@@ -108,11 +123,12 @@ export class Game {
     this.resetState({ newGamePlus: false });
     this.onResize = this.onResize.bind(this);
     this.onKeyDown = this.onKeyDown.bind(this);
-    this.onKeyUp = this.onKeyUp.bind(this);
     this.focusGameCanvas = this.focusGameCanvas.bind(this);
     this.trackCampaignClick = this.trackCampaignClick.bind(this);
     this.animate = this.animate.bind(this);
     window.addEventListener("resize", this.onResize);
+    // Escape remains the normal pause key. Developer access is handled only
+    // by the hidden pause-title tap/click gesture.
     window.addEventListener("keydown", this.onKeyDown, true);
     document.addEventListener("pointerdown", this.focusGameCanvas, true);
     document.addEventListener("pointerdown", this.trackCampaignClick, true);
@@ -166,6 +182,7 @@ export class Game {
     this.endingDawnMusicStarted = false;
     this.endingDawnMusicDelay = 4.15;
     this.paused = false;
+    this.lastUISyncState = null;
   }
 
   async start() {
@@ -220,7 +237,7 @@ export class Game {
     this.defence = new DefenceSystem(
       this.scene,
       this.world,
-      () => this.waveManager.getActiveCombatEnemies(),
+      () => this.waveManager.enemies,
       (enemy, reason, amount) => this.damageEnemy(enemy, reason, amount),
       (enemy) => this.grabSystem?.isHolding(enemy) ?? false,
       () => this.audio.play("crossbowFire", {
@@ -259,15 +276,42 @@ export class Game {
     return new Promise((resolve) => requestAnimationFrame(resolve));
   }
 
+  primeRendererTextures() {
+    if (typeof this.renderer.initTexture !== "function") return 0;
+    const textures = new Set();
+    this.scene.traverse((object) => {
+      const materials = object.material
+        ? (Array.isArray(object.material) ? object.material : [object.material])
+        : [];
+      for (const material of materials) {
+        for (const value of Object.values(material)) {
+          if (value?.isTexture) textures.add(value);
+        }
+      }
+    });
+    textures.forEach((texture) => {
+      try {
+        this.renderer.initTexture(texture);
+      } catch (error) {
+        console.warn("Texture pre-upload skipped", texture?.name || texture?.uuid, error);
+      }
+    });
+    return textures.size;
+  }
+
   async preWarmEverything() {
     const allEnemies = this.waveManager.getAllPooledEnemies();
     this.effectPool.preWarm();
     this.defence.preWarm();
-    this.world.setUpgradeState({ extraction: true, extractionLevel: CONFIG.extraction.maxLevel, demolition: true, undercroft: true, occult: true, fortifyLevel: 10 });
+    this.world.setUpgradeState({ extraction: true, extractionLevel: 3, demolition: true, undercroft: true, occult: true, fortifyLevel: 10 });
     this.world.setTurretLevel(3);
     this.world.setNewGamePlusMode?.(true);
     this.world.prepareDawnAssets?.();
     this.world.setDawnPrewarmVisible?.(true);
+
+    // Explicitly upload every scene/GLB texture while the loading screen is up.
+    // This avoids a first-visible-frame texture upload on later enemy types.
+    this.primeRendererTextures();
 
     // Force every transient system visible before play: all extraction slots,
     // several occult strikes and both light/heavy manor-damage dust variants.
@@ -275,7 +319,8 @@ export class Game {
       this.world.startExtractionBeam?.(CONFIG.extraction.maxConcurrent);
     }
     this.world.triggerOccultStrike?.(new THREE.Vector3(-8, 0, -2));
-    this.world.triggerOccultStrike?.(new THREE.Vector3(3, 0, 2));
+    this.world.triggerOccultStrike?.(new THREE.Vector3(-2, 0, 1));
+    this.world.triggerOccultStrike?.(new THREE.Vector3(5, 0, 3));
     this.world.triggerManorDamageDust?.(new THREE.Vector3(this.world.manorBarrierX, 0, -3), "husk");
     this.world.triggerManorDamageDust?.(new THREE.Vector3(this.world.manorBarrierX, 0, 0), "brute");
     this.world.triggerManorDamageDust?.(new THREE.Vector3(this.world.manorBarrierX, 0, 3), "siege");
@@ -414,14 +459,13 @@ export class Game {
     await this.primeRuntimeAfterUnlock();
     this.resetState({ newGamePlus });
     this.campaignTrackingActive = true;
+    this.world.setLateGameVisualMode?.(false, 0);
     this.world.setNewGamePlusMode?.(this.newGamePlus);
-    this.syncLateGameVisualState(this.waveIndex + 1);
     this.world.resetNight?.();
     if (!this.developerMode) this.clearSave();
 
     if (this.developerMode) {
       this.waveIndex = this.developerWave - 1;
-      this.syncLateGameVisualState(this.developerWave);
       this.souls = 50000;
       this.boundSouls = 160;
       this.manorMaxHealth = 5000;
@@ -454,8 +498,8 @@ export class Game {
     }
     this.restoreState(save);
     this.campaignTrackingActive = true;
+    this.world.setLateGameVisualMode?.(false, 0);
     this.world.setNewGamePlusMode?.(this.newGamePlus);
-    this.syncLateGameVisualState(this.waveIndex + 1);
     this.world.resetNight?.();
     this.applyUpgradeState();
     this.startCurrentWave();
@@ -620,7 +664,6 @@ export class Game {
     }
     this.world.setOverchargeActive?.(this.overchargeActive);
     this.defence.setOvercharge?.(this.overchargeActive);
-    this.syncLateGameVisualState(this.waveIndex + 1);
 
     this.gameplayActive = true;
     this.paused = false;
@@ -645,37 +688,40 @@ export class Game {
       );
     }
 
+    const waveNumber = this.waveIndex + 1;
+    const enteringLateGameVisuals = !this.newGamePlus && waveNumber === 40;
+    if (!this.newGamePlus) {
+      if (waveNumber >= 40) {
+        this.world.setLateGameVisualMode?.(true, enteringLateGameVisuals ? 4.0 : 0);
+      } else {
+        this.world.setLateGameVisualMode?.(false, 0);
+      }
+    }
+
+    // Waves 40 and 50 get deliberate presentation windows before enemies arrive.
+    // Wave 40 uses the pause for the visual Hell transition; Wave 50 lets the
+    // dedicated final-wave music establish itself before the last assault.
+    const openingDelay = waveNumber === 50 ? 5.0 : (enteringLateGameVisuals ? 4.0 : 0);
+
     this.waveStartSnapshot = this.snapshotState();
     this.waveManager.setNewGamePlus?.(this.newGamePlus);
     this.waveManager.setMobileDifficulty?.(this.mobileOptimized);
-    this.waveManager.startWave(this.waveIndex);
+    this.waveManager.startWave(this.waveIndex, openingDelay);
     this.defence.resetCooldown();
-    const finalWave = this.waveIndex === CONFIG.waves.length - 1;
-    this.finalWaveMusicPending = false;
-    this.finalWaveMusicDelay = 0;
-
-    if (finalWave) {
-      // Wave 50 deliberately breaks from the normal alternating soundtrack.
-      // Fade the Wave 49 track out, leave a short beat, then bring in the
-      // dedicated final-wave background track before the first enemies arrive.
-      this.audio.stopMusic(0.28);
-      this.audio.setMusicLevel(CONFIG.finalWaveAudio?.musicLevel ?? 0.40, 0.20);
-      this.audio.setSfxLevel(CONFIG.finalWaveAudio?.sfxLevel ?? 0.58, 0.25);
-      this.finalWaveMusicPending = true;
-      this.finalWaveMusicDelay = CONFIG.finalWaveAudio?.musicDelay ?? 0.55;
-    } else {
-      this.audio.setMusicLevel(0.34, 0.3);
-      this.audio.setSfxLevel(0.95, 0.25);
-      this.audio.playMusic(this.waveIndex % 2 === 0 ? "background1" : "background2", 0.7);
-    }
-    this.audio.play("waveStart", { volume: finalWave ? 0.48 : 0.72, pitchMin: 0.97, pitchMax: 1.03 });
+    this.audio.setMusicLevel(waveNumber === 50 ? 0.425 : 0.34, 0.3);
+    this.audio.setSfxLevel(waveNumber === 50 ? 0.58 : 0.95, 0.25);
+    this.audio.playMusic(
+      waveNumber === 50 ? "level50" : (this.waveIndex % 2 === 0 ? "background1" : "background2"),
+      waveNumber === 50 ? 1.15 : 0.7
+    );
+    this.audio.play("waveStart", { volume: 0.72, pitchMin: 0.97, pitchMax: 1.03 });
     this.ui.setMode("playing");
     this.ui.showBanner(
-      `WAVE ${this.waveIndex + 1}`,
+      `WAVE ${waveNumber}`,
       this.newGamePlus
         ? "NEW GAME+ — HELL HAS RETURNED"
-        : (this.waveIndex === 0 ? "THE FIRST DEMONS ARE COMING" : "DEFEND THE MANOR"),
-      2.6
+        : (waveNumber === 40 ? "HELL DEEPENS" : (this.waveIndex === 0 ? "THE FIRST DEMONS ARE COMING" : "DEFEND THE MANOR")),
+      waveNumber === 40 ? 3.6 : 2.6
     );
     if (this.waveIndex === 0 && !this.newGamePlus && !this.tutorialsSeen.firstWave) {
       // Wait until the first demon is actually visible, then give the player
@@ -797,21 +843,16 @@ export class Game {
     if (!this.gameplayActive) return;
     this.gameplayActive = false;
     this.grabSystem.setEnabled(false);
-    if (this.waveIndex === CONFIG.waves.length - 2) {
-      // End Wave 49 on silence so Wave 50 can introduce its own background
-      // track cleanly instead of crossfading from the regular rotation.
-      this.audio.stopMusic(0.45);
-    } else {
-      this.audio.setMusicLevel(0.22, 0.45);
-    }
+    this.audio.setMusicLevel(0.22, 0.45);
+    this.audio.setSfxLevel(0.95, 0.18);
 
     const snapshot = this.waveStartSnapshot ?? this.snapshotState();
     const waveSouls = Math.max(0, this.souls - (snapshot.souls ?? 0));
     const waveDeaths = Math.max(0, this.demonDeaths - (snapshot.demonDeaths ?? 0));
     const waveDamage = Math.max(0, (snapshot.manorHealth ?? this.manorHealth) - this.manorHealth);
 
-    // Undercroft remains useful without erasing most late-wave damage: 25 HP
-    // per assigned Bound Soul, up to 750 HP at the 30-soul cap.
+    // Undercroft repairs 25 HP per assigned Bound Soul, up to 750 HP
+    // after a wave at the 30-soul cap, never exceeding current max health.
     if (this.buildings.undercroft && this.assignments.undercroft > 0) {
       const repair = this.assignments.undercroft * (CONFIG.defence.undercroftRepairPerSoul ?? 25);
       this.manorHealth = Math.min(this.manorMaxHealth, this.manorHealth + repair);
@@ -898,37 +939,27 @@ export class Game {
     this.endingTimer = 0;
     this.endingDawnMusicStarted = false;
     this.grabSystem?.setEnabled(false);
-    this.finalWaveMusicPending = false;
-    this.finalWaveMusicDelay = 0;
     this.audio.stopLoop("soul-binding", 0.35);
     this.audio.stopMusic(0.45);
-    this.audio.setSfxLevel(0.95, 0.18);
+    this.audio.setSfxLevel(0.95, 0.08);
     this.audio.play("endgameBang", {
       volume: 0.96,
       rate: 1,
       cooldown: 0,
       maxInstances: 1
     });
-    const endingBangDuration = this.audio.getDuration?.("endgameBang") ?? 0;
-    // Let the bang/wind sting finish before the dawn score enters. The old
-    // 4.15 second transition remains the minimum if the clip is unavailable.
-    this.endingDawnMusicDelay = Math.max(4.15, endingBangDuration + 0.18);
+    // THE NIGHT IS OVER begins fading in at 5 seconds on the ending UI.
+    // Start the dawn score at that exact moment so the music arrives with the title.
+    this.endingDawnMusicDelay = 5.0;
     this.defence.clearForDawn?.();
     this.world.startVictorySequence?.();
     this.ui.startEndingSequence(result);
   }
 
-  syncLateGameVisualState(waveNumber = this.waveIndex + 1) {
-    const unlockWave = CONFIG.lateGameVisuals?.unlockWave ?? 40;
-    this.world?.setLateGameMode?.(waveNumber >= unlockWave);
-  }
-
   openIntermission() {
     if (this.ui.mode !== "results") return;
     this.ui.setMode("intermission");
-    const preparingWave = this.getPreparingWaveNumber();
-    this.syncLateGameVisualState(preparingWave);
-    this.syncUI();
+    this.syncUI(true);
     const overchargeUnlockWave = CONFIG.overcharge?.unlockWave ?? 40;
     if (this.getPreparingWaveNumber() >= overchargeUnlockWave && !this.tutorialsSeen.overcharge) {
       this.tutorialsSeen.overcharge = true;
@@ -938,14 +969,12 @@ export class Game {
   }
 
   getPreparingWaveNumber() {
-    if (this.retryingWave || (this.developerMode && this.developerShop)) {
-      return Math.min(this.waveIndex + 1, CONFIG.waves.length);
-    }
-    return Math.min(this.waveIndex + 2, CONFIG.waves.length);
+    return Math.min(this.getIntermissionResumeWaveIndex() + 1, CONFIG.waves.length);
   }
 
   getIntermissionResumeWaveIndex() {
-    return this.retryingWave ? this.waveIndex : Math.min(this.waveIndex + 1, CONFIG.waves.length - 1);
+    if (this.retryingWave || (this.developerMode && this.developerShop)) return this.waveIndex;
+    return Math.min(this.waveIndex + 1, CONFIG.waves.length - 1);
   }
 
   manualSave() {
@@ -1022,15 +1051,13 @@ export class Game {
     if (type === "majorFortify" && this.fortifyLevel + CONFIG.manor.majorFortify.levels > CONFIG.manor.maxFortifyLevel) {
       return this.playDeniedPurchase();
     }
-    if (
-      type === "extractionUpgrade" &&
-      this.getPreparingWaveNumber() < (CONFIG.buildings.extractionUpgrade2.unlockWave ?? 35)
-    ) {
+
+    const shopWave = this.getPreparingWaveNumber();
+    const buildingType = type === "extractionUpgrade" ? "extraction" : type;
+    if (CONFIG.buildings[buildingType]?.unlockWave && shopWave < this.getUnlockWave(buildingType)) {
       return this.playDeniedPurchase();
     }
-
-    const buildingType = type === "extractionUpgrade" ? "extraction" : type;
-    if (CONFIG.buildings[buildingType]?.unlockWave && this.getPreparingWaveNumber() < this.getUnlockWave(buildingType)) {
+    if (type === "extractionUpgrade" && shopWave < (CONFIG.buildings.extractionUpgrade2.unlockWave ?? 35)) {
       return this.playDeniedPurchase();
     }
     if (["hellfire", "demolition", "undercroft", "occult"].includes(type) && !this.buildings.extraction) {
@@ -1079,7 +1106,11 @@ export class Game {
   }
 
   getUnassignedSouls() {
-    return Math.max(0, this.boundSouls - this.overchargeReserve - Object.values(this.assignments).reduce((sum, value) => sum + value, 0));
+    const assigned = (this.assignments.hellfire ?? 0)
+      + (this.assignments.demolition ?? 0)
+      + (this.assignments.undercroft ?? 0)
+      + (this.assignments.occult ?? 0);
+    return Math.max(0, this.boundSouls - this.overchargeReserve - assigned);
   }
 
   normaliseAssignments() {
@@ -1187,10 +1218,8 @@ export class Game {
     this.gameplayActive = false;
     this.grabSystem.setEnabled(false);
     this.waveManager.stop();
-    this.finalWaveMusicPending = false;
-    this.finalWaveMusicDelay = 0;
     this.audio.stopMusic(0.45);
-    this.audio.setSfxLevel(0.95, 0.16);
+    this.audio.setSfxLevel(0.95, 0.08);
     this.audio.play("gameOver", { volume: 0.78 });
     this.ui.setContinueState({
       canRetry: this.continuesUsed < 3,
@@ -1343,8 +1372,6 @@ export class Game {
     this.togglePause();
   }
 
-  onKeyUp() {}
-
   openDeveloperPanel() {
     if (this.developerPanelOpen) return;
     // Opening the hidden developer panel switches this browser session into
@@ -1372,10 +1399,7 @@ export class Game {
     if (this.gameplayActive && previous === "playing") {
       this.paused = false;
       this.grabSystem?.setEnabled(true);
-      const resumeMusicLevel = this.waveIndex === CONFIG.waves.length - 1
-        ? (CONFIG.finalWaveAudio?.musicLevel ?? 0.40)
-        : 0.34;
-      this.audio.setMusicLevel(resumeMusicLevel, 0.2);
+      this.audio.setMusicLevel(this.waveIndex === CONFIG.waves.length - 1 ? 0.425 : 0.34, 0.2);
       this.ui.setMode("playing");
     } else if (this.gameplayActive && previous === "paused") {
       this.paused = true;
@@ -1403,7 +1427,6 @@ export class Game {
     this.grabSystem?.setEnabled(false);
     this.waveManager?.clear();
     this.waveIndex = this.developerWave - 1;
-    this.syncLateGameVisualState(this.developerWave);
   }
 
   startDeveloperWave() {
@@ -1418,11 +1441,6 @@ export class Game {
     this.applyUpgradeState();
     this.syncUI();
     this.ui.setMode("intermission");
-    const overchargeUnlockWave = CONFIG.overcharge?.unlockWave ?? 40;
-    if (this.developerWave >= overchargeUnlockWave && !this.tutorialsSeen.overcharge) {
-      this.tutorialsSeen.overcharge = true;
-      this.ui.showOverchargeTutorial?.();
-    }
   }
 
   addDeveloperSouls(amount) {
@@ -1459,7 +1477,6 @@ export class Game {
     this.newGamePlus = !this.newGamePlus;
     this.waveManager?.setNewGamePlus?.(this.newGamePlus);
     this.world?.setNewGamePlusMode?.(this.newGamePlus);
-    this.syncLateGameVisualState(this.waveIndex + 1);
     this.ui.setDeveloperPanel(true, this.developerWave);
     this.syncUI();
   }
@@ -1474,29 +1491,60 @@ export class Game {
       this.ui.setMode("paused");
     } else {
       this.grabSystem?.setEnabled(true);
-      const resumeMusicLevel = this.waveIndex === CONFIG.waves.length - 1
-        ? (CONFIG.finalWaveAudio?.musicLevel ?? 0.40)
-        : 0.34;
-      this.audio.setMusicLevel(resumeMusicLevel, 0.22);
+      this.audio.setMusicLevel(this.waveIndex === CONFIG.waves.length - 1 ? 0.425 : 0.34, 0.22);
       this.ui.setMode("playing");
     }
   }
 
-  syncUI() {
+  syncUI(force = false) {
+    const unassignedSouls = this.getUnassignedSouls();
+    const preparingWave = this.getPreparingWaveNumber();
+    const b = this.buildings;
+    const a = this.assignments;
+    const last = this.lastUISyncState;
+    const changed = force || !last
+      || last.waveIndex !== this.waveIndex
+      || last.preparingWave !== preparingWave
+      || last.souls !== this.souls
+      || last.manorHealth !== this.manorHealth
+      || last.manorMaxHealth !== this.manorMaxHealth
+      || last.demonDeaths !== this.demonDeaths
+      || last.boundSouls !== this.boundSouls
+      || last.unassignedSouls !== unassignedSouls
+      || last.bombs !== this.bombs
+      || last.fortifyLevel !== this.fortifyLevel
+      || last.extractionLevel !== this.extractionLevel
+      || last.extraction !== b.extraction
+      || last.hellfire !== b.hellfire
+      || last.demolition !== b.demolition
+      || last.undercroft !== b.undercroft
+      || last.occult !== b.occult
+      || last.aHellfire !== a.hellfire
+      || last.aDemolition !== a.demolition
+      || last.aUndercroft !== a.undercroft
+      || last.aOccult !== a.occult
+      || last.newGamePlus !== this.newGamePlus
+      || last.totalManorDamageTaken !== this.totalManorDamageTaken
+      || last.overchargeReserve !== this.overchargeReserve
+      || last.overchargeReady !== this.overchargeReady
+      || last.totalClicks !== this.totalClicks;
+
+    if (!changed) return;
+
     this.ui.setHUD({
       wave: Math.min(this.waveIndex + 1, CONFIG.waves.length),
-      preparingWave: this.getPreparingWaveNumber(),
+      preparingWave,
       souls: this.souls,
       health: this.manorHealth,
       maxHealth: this.manorMaxHealth,
       deaths: this.demonDeaths,
       boundSouls: this.boundSouls,
-      unassignedSouls: this.getUnassignedSouls(),
+      unassignedSouls,
       bombs: this.bombs,
       fortifyLevel: this.fortifyLevel,
       extractionLevel: this.extractionLevel,
-      buildings: { ...this.buildings },
-      assignments: { ...this.assignments },
+      buildings: { ...b },
+      assignments: { ...a },
       purchaseCosts: {
         fortify: this.getFortifyCost(),
         majorFortify: this.getMajorFortifyCost(),
@@ -1507,12 +1555,55 @@ export class Game {
       overchargeReserve: this.overchargeReserve,
       overchargeReady: this.overchargeReady,
       totalClicks: this.totalClicks,
-      unlockWaves: Object.fromEntries(
-        Object.entries(CONFIG.buildings)
-          .filter(([, value]) => value.unlockWave)
-          .map(([key, value]) => [key, value.unlockWave])
-      )
+      unlockWaves: this.uiUnlockWaves
     });
+
+    this.lastUISyncState = {
+      waveIndex: this.waveIndex,
+      preparingWave,
+      souls: this.souls,
+      manorHealth: this.manorHealth,
+      manorMaxHealth: this.manorMaxHealth,
+      demonDeaths: this.demonDeaths,
+      boundSouls: this.boundSouls,
+      unassignedSouls,
+      bombs: this.bombs,
+      fortifyLevel: this.fortifyLevel,
+      extractionLevel: this.extractionLevel,
+      extraction: b.extraction,
+      hellfire: b.hellfire,
+      demolition: b.demolition,
+      undercroft: b.undercroft,
+      occult: b.occult,
+      aHellfire: a.hellfire,
+      aDemolition: a.demolition,
+      aUndercroft: a.undercroft,
+      aOccult: a.occult,
+      newGamePlus: this.newGamePlus,
+      totalManorDamageTaken: this.totalManorDamageTaken,
+      overchargeReserve: this.overchargeReserve,
+      overchargeReady: this.overchargeReady,
+      totalClicks: this.totalClicks
+    };
+  }
+
+  updatePerformanceDiagnostics(dt) {
+    this.perfElapsed += dt;
+    this.perfFrames += 1;
+    if (this.perfElapsed < 0.5) return;
+
+    const info = this.renderer.info;
+    const poolMisses = this.waveManager?.poolMisses ?? this.performanceStats.poolMisses;
+    this.performanceStats.fps = Math.round(this.perfFrames / Math.max(this.perfElapsed, 0.001));
+    this.performanceStats.calls = info.render.calls;
+    this.performanceStats.triangles = info.render.triangles;
+    this.performanceStats.geometries = info.memory.geometries;
+    this.performanceStats.textures = info.memory.textures;
+    this.performanceStats.programs = info.programs?.length ?? 0;
+    this.performanceStats.poolMisses = poolMisses;
+    this.ui.setPerformanceStats?.(this.performanceStats);
+    this.perfElapsed = 0;
+    this.perfFrames = 0;
   }
 
   isMobileLandscapeView() {
@@ -1584,15 +1675,6 @@ export class Game {
     this.camera.lookAt(this.cameraTarget);
   }
 
-  updateFinalWaveMusic(dt) {
-    if (!this.finalWaveMusicPending || !this.gameplayActive || this.paused || this.ui.mode !== "playing") return;
-    this.finalWaveMusicDelay -= dt;
-    if (this.finalWaveMusicDelay > 0) return;
-    this.finalWaveMusicPending = false;
-    this.finalWaveMusicDelay = 0;
-    this.audio.playMusic(CONFIG.finalWaveAudio?.musicKey ?? "background2", 0.9);
-  }
-
   updateFirstWaveTutorial(dt) {
     if (!this.firstWaveTutorialPending || !this.gameplayActive || this.paused || this.ui.mode !== "playing") return;
 
@@ -1603,7 +1685,11 @@ export class Game {
       projected.copy(enemy.position);
       projected.y += Math.max(0.8, (enemy.definition?.height ?? 2) * 0.45);
       projected.project(this.camera);
-      if (projected.z >= -1 && projected.z <= 1 && projected.x >= -0.96 && projected.x <= 0.96 && projected.y >= -0.96 && projected.y <= 0.96) {
+      if (
+        projected.z >= -1 && projected.z <= 1 &&
+        projected.x >= -0.96 && projected.x <= 0.96 &&
+        projected.y >= -0.96 && projected.y <= 0.96
+      ) {
         visible = true;
         break;
       }
@@ -1620,6 +1706,7 @@ export class Game {
     this.firstWaveTutorialPending = false;
     this.firstWaveTutorialVisibleTimer = 0;
     this.tutorialsSeen.firstWave = true;
+    this.saveGame(this.waveIndex);
     this.paused = true;
     this.grabSystem?.setEnabled(false);
     this.ui.showFirstWaveTutorial?.(() => {
@@ -1632,7 +1719,8 @@ export class Game {
   animate() {
     if (!this.running) return;
     requestAnimationFrame(this.animate);
-    const dt = Math.min(this.clock.getDelta(), 1 / 30);
+    const rawDt = this.clock.getDelta();
+    const dt = Math.min(rawDt, 1 / 30);
     const elapsed = this.clock.elapsedTime;
     this.ui.update(dt);
 
@@ -1655,7 +1743,6 @@ export class Game {
           this.world.manorBarrierX
         );
       }
-      this.updateFinalWaveMusic(simulationActive ? dt : 0);
       this.updateFirstWaveTutorial(simulationActive ? dt : 0);
       if (simulationActive) {
         this.checkWorldCollisions();
@@ -1687,6 +1774,7 @@ export class Game {
     this.applyResponsiveCamera(true);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.mobileOptimized ? 1.35 : 2));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.waveManager?.setMobileDifficulty?.(this.mobileOptimized);
   }
 
   dispose() {

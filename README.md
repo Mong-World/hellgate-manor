@@ -1,14 +1,3 @@
-# Hellgate Manor v1.9.6 — v1.9.2 baseline + approved mobile/final-wave pass
-
-- Rebuilt from the known-good v1.9.2 baseline, preserving its existing gameplay, ending and presentation unless explicitly changed below.
-- Soul Extraction is capped at two slots, with slot 2 unlocking at Wave 35 for 10,000 Souls; the invisible roof capture zone is larger.
-- Brutes remain grabbable but can only be heaved a short distance. Siege Demons require 8 hits and briefly stop on each successful hit.
-- Strong Husk/Brute/Siege Manor damage, late-wave enemy pressure, Bomb Forge, Undercroft and Occult balancing use the approved mobile-test values.
-- The Wave 40 late-game Hell visuals now apply in normal play and developer wave/shop jumps.
-- Wave 50 cleanly introduces its background track after Wave 49 and lowers combat SFX for that wave only; ending audio remains unchanged.
-- The Wave 1 tutorial waits until the first demon is visible for one second, uses sentence case and a tighter panel.
-- Developer access is hidden behind 10 taps/clicks on the Pause-menu HELLGATE MANOR title within 5 seconds; the old Ctrl + Shift + D shortcut is disabled.
-
 # Hellgate Manor v1.8.7
 
 - Locked Systems upgrades now state the exact wave they unlock on, both in the row text and locked button.
@@ -372,3 +361,36 @@ The GitHub Action builds `main`, copies `assets/`, `fonts/`, and `sounds/` into 
 - Extraction slots cost 5,000 / 10,000; Undercroft repairs 50 HP per assigned soul.
 - Retry returns to upgrades with failed-wave earnings rolled back.
 - Fortify economy, ending defence score, click counter, occult area, dust/embers, crossbow/shed placement and preload paths polished.
+
+## v1.9.4 final polish
+- Manor HUD now pulses when health reaches 10% or less on desktop and mobile.
+- Normal campaign transitions into the existing Hell/NG+ atmosphere visually at Wave 40 only, with a 4-second opening window and no gameplay modifier changes.
+- The late-game Hell atmosphere fades away during the Wave 50 victory sequence before dawn.
+- Wave 50 uses `assets/level50music.mp3` instead of the normal rotating background tracks and holds enemy spawning for at least 5 seconds.
+
+## v1.9.7 performance pass
+- Gameplay, wave balance, controls and intended visuals unchanged.
+- Enemy pools now cover the full live-enemy cap (plus extraction slots) so no skinned GLB/AnimationMixer is constructed during a wave.
+- Strong Husk and Siege materials are shared across pooled rigs while preserving the previous final tint/emissive appearance.
+- GLB/scene textures are explicitly uploaded to the renderer during loading.
+- Occult strike pool reduced to the maximum three simultaneous strikes; its PointLights stay in a stable renderer light set while inactive flames are hidden.
+- Extraction beam cylinder segment counts reduced with the same glow/scale presentation.
+- HUD state sync, WaveManager filtering, Hellfire projectile math and Occult targeting now reuse state/scratch objects to reduce garbage-collection spikes.
+- Developer panel includes FPS/draw/GPU/program and enemy-pool-miss diagnostics for testing.
+
+
+## Release build
+Developer keyboard access and developer-panel rendering are disabled in this release build. Gameplay and performance logic are unchanged from the tested v1.9.5 base.
+
+## v1.9.8 approved mobile balance / test pass
+
+- Built directly from the known-good v1.9.7 release baseline; existing core gameplay, Wave 40 Hell transition, Wave 50 `assets/level50music.mp3` sequence, and ending sequence are retained.
+- Soul Extraction is capped at two slots; slot two unlocks for Wave 35 at 10,000 Souls, and the invisible roof drop target is larger.
+- Brutes remain grabbable but are extremely heavy/short-throw; Siege Demons take 8 hits and retain their brief stop/stagger.
+- Strong Husk, Brute and Siege manor damage is increased. Hell Bomb thresholds are 25/50 Bound Souls for one/two bombs, with Overcharge adding one extra bomb when the two-bomb capacity is powered.
+- Undercroft repairs 25 HP per assigned Bound Soul; Occult has two strike centres with the second at 25 assigned souls.
+- From Wave 35 the normal live-enemy cap rises progressively from 25 toward 35; mobile gets +2 late-wave capacity and slightly faster spawning.
+- Wave 50 keeps the dedicated level50 music and opening pause while combat SFX are reduced for that wave only.
+- Wave 1 displays a compact grab/throw tutorial one second after the first demon becomes visible. Tutorial body copy uses sentence case.
+- The upgrade screen shows the wave being prepared for and uses upcoming-wave unlock checks.
+- Developer tools are hidden behind 10 taps/clicks on the Pause-menu HELLGATE MANOR title within 5 seconds; the old keyboard shortcut is removed, with a compact landscape-mobile dev layout.
