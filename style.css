@@ -60,6 +60,8 @@ canvas {
 }
 
 .loading-panel {
+  position: relative;
+  z-index: 2;
   width: min(520px, calc(100vw - 42px));
   padding: 30px 34px 26px;
   text-align: center;
@@ -226,6 +228,7 @@ canvas {
 /* Ember drift behind the loading panel: denser and rising upward like heat from a fire. */
 .loading-embers {
   position: absolute;
+  z-index: 3;
   inset: 0;
   overflow: hidden;
   pointer-events: none;
@@ -238,8 +241,8 @@ canvas {
   width: 3px;
   height: 3px;
   border-radius: 50%;
-  background: rgba(255, 111, 42, 0.92);
-  box-shadow: 0 0 8px rgba(255, 68, 18, 0.8);
+  background: rgba(255, 111, 42, 0.86);
+  box-shadow: 0 0 8px rgba(255, 68, 18, 0.72);
   opacity: 0;
   animation: loading-ember-rise var(--dur) linear infinite;
   animation-delay: var(--delay);
