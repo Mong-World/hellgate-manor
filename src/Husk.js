@@ -375,6 +375,14 @@ export class Husk {
         );
         this.onImpact?.({ enemy: this, reason: "ground", impactStrength });
 
+        // Brutes deliberately cannot be lifted high enough to satisfy the normal
+        // screen-height slam threshold. Treat a meaningful heavy shove/short
+        // throw into the ground as one durability hit instead, so repeated player
+        // interaction can still destroy them without relying on bombs/crossbows.
+        if (this.type === "brute" && impactStrength >= 1.15) {
+          this.applyDamage(1, "ground", impactStrength);
+          return;
+        }
         if (this.getGroundDropFraction() >= CONFIG.enemy.groundDeathScreenFraction) {
           this.applyDamage(1, "ground", impactStrength);
           return;

@@ -224,7 +224,7 @@ export const CONFIG = Object.freeze({
       grabBox: [2.05, 5.4, 2.05],
       grabY: 2.45,
       throwScale: 0.12,
-      durability: 2,
+      durability: 4,
       convertible: false
     },
     siege: {

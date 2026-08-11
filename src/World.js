@@ -353,9 +353,9 @@ export class World {
       starPositions[i * 3] = THREE.MathUtils.randFloat(-38, 38);
       // Keep the original upper sky, but add a quieter band of stars close to
       // the horizon so the lower sky does not feel empty.
-      starPositions[i * 3 + 1] = Math.random() < 0.42
-        ? THREE.MathUtils.randFloat(6.6, 11.8)
-        : THREE.MathUtils.randFloat(10.2, 27);
+      starPositions[i * 3 + 1] = Math.random() < 0.52
+        ? THREE.MathUtils.randFloat(4.8, 8.6)
+        : THREE.MathUtils.randFloat(9.6, 27);
       starPositions[i * 3 + 2] = THREE.MathUtils.randFloat(-48, -32);
     }
 
