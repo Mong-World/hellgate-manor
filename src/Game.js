@@ -40,9 +40,9 @@ export class Game {
     this.endingDawnMusicDelay = 4.15;
     this.lightningStrikeTimer = Infinity;
     this.lightningThunderTimer = -1;
+    this.wave50MidpointEvent = null;
     this.runtimePrimed = false;
     this.lastUISyncState = null;
-    this.wave50MidpointEvent = null;
     this.uiUnlockWaves = Object.fromEntries(
       Object.entries(CONFIG.buildings)
         .filter(([, value]) => value.unlockWave)
@@ -184,9 +184,9 @@ export class Game {
     this.endingTimer = 0;
     this.endingDawnMusicStarted = false;
     this.endingDawnMusicDelay = 4.15;
+    this.wave50MidpointEvent = null;
     this.paused = false;
     this.lastUISyncState = null;
-    this.wave50MidpointEvent = null;
   }
 
   async start() {
@@ -224,7 +224,8 @@ export class Game {
       onEnemyImpact: (data) => this.handleEnemyImpact(data),
       onEnemyExtracted: (enemy) => this.handleEnemyExtracted(enemy),
       onWaveComplete: () => this.handleWaveComplete(),
-      onSiegeClick: (enemy) => this.handleSiegeClick(enemy)
+      onSiegeClick: (enemy) => this.handleSiegeClick(enemy),
+      onWaveMidpoint: (index) => this.handleWaveMidpoint(index)
     });
     this.waveManager.setMobileDifficulty?.(this.mobileOptimized);
 
@@ -1698,46 +1699,47 @@ export class Game {
     this.camera.lookAt(this.cameraTarget);
   }
 
-  handleWaveMidpoint(index, reached, total) {
+  handleWaveMidpoint(index) {
     if ((index + 1) !== 50 || this.wave50MidpointEvent) return;
     this.wave50MidpointEvent = {
       timer: 0,
       duration: 5.0,
-      strikes: [0.18, 0.55, 0.92, 1.32, 1.78, 2.22, 2.72, 3.22, 3.74, 4.26, 4.72],
+      strikeTimes: [0.12, 0.48, 0.86, 1.30, 1.78, 2.24, 2.76, 3.28, 3.82, 4.34, 4.76],
       nextStrike: 0
     };
+    // Suppress the normal atmospheric scheduler during the scripted burst.
     this.lightningThunderTimer = -1;
-    this.lightningStrikeTimer = 9.5;
+    this.lightningStrikeTimer = 20;
     this.ui.showBanner(
       "DAWN IS COMING",
-      "ONE FINAL ONSLAUGHT SURGES FROM THE HELLGATE",
-      4.2
+      "SURVIVE HELL'S FINAL ONSLAUGHT",
+      4.6
     );
   }
 
-  updateWave50MidpointSequence(dt) {
-    const seq = this.wave50MidpointEvent;
-    if (!seq || dt <= 0 || !this.gameplayActive) return;
-    seq.timer += dt;
-    while (seq.nextStrike < seq.strikes.length && seq.timer >= seq.strikes[seq.nextStrike]) {
-      seq.nextStrike += 1;
+  updateWave50Midpoint(dt) {
+    const event = this.wave50MidpointEvent;
+    if (!event || dt <= 0 || !this.gameplayActive) return;
+    event.timer += dt;
+    while (event.nextStrike < event.strikeTimes.length && event.timer >= event.strikeTimes[event.nextStrike]) {
+      event.nextStrike += 1;
       this.world.triggerRedLightning?.();
       this.audio.play("lightning", {
-        volume: 0.82,
-        pitchMin: 0.78,
-        pitchMax: 1.28,
+        volume: 0.80,
+        pitchMin: 0.72,
+        pitchMax: 1.34,
         cooldown: 0,
         maxInstances: 2
       });
     }
-    if (seq.timer >= seq.duration) {
+    if (event.timer >= event.duration) {
       this.wave50MidpointEvent = null;
-      this.lightningStrikeTimer = THREE.MathUtils.randFloat(6.0, 10.0);
+      this.lightningStrikeTimer = THREE.MathUtils.randFloat(6.5, 10.5);
     }
   }
 
   updateLateGameLightning(dt) {
-    if (dt <= 0 || !this.gameplayActive) return;
+    if (dt <= 0 || !this.gameplayActive || this.wave50MidpointEvent) return;
     const waveNumber = this.waveIndex + 1;
     if (waveNumber < 45) return;
 
@@ -1837,7 +1839,7 @@ export class Game {
       }
       this.updateFirstWaveTutorial(simulationActive ? dt : 0);
       this.updateLateGameLightning(simulationActive ? dt : 0);
-      this.updateWave50MidpointSequence(simulationActive ? dt : 0);
+      this.updateWave50Midpoint(simulationActive ? dt : 0);
       if (simulationActive) {
         this.checkWorldCollisions();
       }

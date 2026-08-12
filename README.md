@@ -1,11 +1,13 @@
-# Hellgate Manor v1.9.12
+# Hellgate Manor v1.9.13
 
-- Set manor shadow-map resolution to **1024x1024 on both desktop and mobile** for visual consistency and lighter rendering.
-- Loading embers now render on desktop as well as mobile; removed the reduced-motion rule that hid them entirely.
-- Added a **pulsing hidden-fire glow** along the bottom of the loading screen behind the ember drift.
-- Wave 50 is extended to a **two-phase final siege** with roughly **800 total enemies** and a **mid-wave 5 second pause** at the halfway point.
-- The Wave 50 midpoint now triggers a **burst of red lightning and thunder** plus a banner warning that dawn is coming and the final onslaught is beginning.
-- Relaxed end-of-run **Defence** star thresholds so about **40,000 total manor damage now scores 4 stars** instead of 1.
+- Built from the v1.9.11 gameplay baseline.
+- Late-wave totals: W45 365, W46 390, W47 420, W48 475, W49 550, W50 800.
+- Wave 50 is split into two 400-enemy phases. Phase 2 cannot spawn until all Phase 1 enemies are resolved, followed by a real 5-second lightning/message break.
+- Desktop Waves 45-50 reduce Brute/Siege counts progressively and replace them with lighter demons; mobile retains the heavier composition.
+- Wave 50 mobile/base targets are about 50 Brutes / 18 Siege; desktop about 34 Brutes / 12 Siege.
+- Defence scoring adjusted so ~40,000 total manor damage earns 4 stars.
+- Shadow maps are 1024x1024 on both desktop and mobile.
+- Loading embers are enabled on desktop and mobile; the bottom fire glow is now a cheap opacity-only CSS gradient.
 
 # Hellgate Manor v1.8.7
 

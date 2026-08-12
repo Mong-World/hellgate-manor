@@ -45,6 +45,7 @@ export class WaveManager {
     this.poolMisses = Object.fromEntries(TYPES.map((type) => [type, 0]));
     this.aliveScratch = [];
     this.combatScratch = [];
+    this.midpointCount = 0;
     this.midpointTriggered = false;
     this.midpointPauseTimer = 0;
   }
@@ -69,7 +70,24 @@ export class WaveManager {
   getWaveConfig(index) {
     const base = CONFIG.waves[index];
     const wave = index + 1;
-    if (!this.newGamePlus) return this.applyDeviceDifficulty(base, wave);
+    if (!this.newGamePlus) {
+      let normal = base;
+      // Mouse input makes repeated Brute/Siege interactions slower than
+      // multitouch. From Wave 45 onward desktop keeps the same total siege
+      // size but swaps some heavy demons for lighter types.
+      if (!this.mobileDifficulty && wave >= 45) {
+        const reduction = { 45: 0.95, 46: 0.90, 47: 0.85, 48: 0.80, 49: 0.75, 50: 0.68 }[wave] ?? 1;
+        const counts = { ...base.counts };
+        const originalBrute = counts.brute ?? 0;
+        const originalSiege = counts.siege ?? 0;
+        counts.brute = Math.max(0, Math.round(originalBrute * reduction));
+        counts.siege = Math.max(0, Math.round(originalSiege * reduction));
+        const returned = (originalBrute - counts.brute) + (originalSiege - counts.siege);
+        counts.husk = (counts.husk ?? 0) + returned;
+        normal = { ...base, counts };
+      }
+      return this.applyDeviceDifficulty(normal, wave);
+    }
 
     const settings = CONFIG.newGamePlus;
     const total = Math.max(12, Math.ceil(base.total * settings.waveCountMultiplier));
@@ -200,10 +218,24 @@ export class WaveManager {
     this.clearActiveOnly();
     this.waveIndex = index;
     this.config = this.getWaveConfig(index);
-    this.queue = this.makeQueue(this.config.counts);
+    if (index === CONFIG.waves.length - 1) {
+      // Build each half independently so Brutes/Siege and the lighter roster
+      // are distributed across both halves instead of clustering by chance.
+      const firstHalf = {};
+      const secondHalf = {};
+      for (const type of TYPES) {
+        const count = this.config.counts[type] ?? 0;
+        firstHalf[type] = Math.floor(count / 2);
+        secondHalf[type] = count - firstHalf[type];
+      }
+      this.queue = [...this.makeQueue(firstHalf), ...this.makeQueue(secondHalf)];
+    } else {
+      this.queue = this.makeQueue(this.config.counts);
+    }
     this.spawned = 0;
     this.resolved = 0;
     this.spawnTimer = Math.max(this.config.initialDelay, minimumInitialDelay);
+    this.midpointCount = index === CONFIG.waves.length - 1 ? Math.floor(this.queue.length / 2) : 0;
     this.midpointTriggered = false;
     this.midpointPauseTimer = 0;
     this.running = true;
@@ -221,11 +253,37 @@ export class WaveManager {
     }
     this.enemies.length = write;
 
+    // Wave 50 is a true two-phase siege. Phase 2 cannot begin until the
+    // first half has spawned AND every Phase 1 demon has been resolved.
     if (this.midpointPauseTimer > 0) {
       this.midpointPauseTimer = Math.max(0, this.midpointPauseTimer - dt);
+      if (this.midpointPauseTimer <= 0) {
+        this.spawnTimer = 0.15;
+      }
     }
 
-    if (this.spawned < this.queue.length && this.midpointPauseTimer <= 0) {
+    const waitingForMidpointClear =
+      this.midpointCount > 0 &&
+      !this.midpointTriggered &&
+      this.spawned >= this.midpointCount;
+
+    if (
+      waitingForMidpointClear &&
+      this.resolved >= this.midpointCount &&
+      this.countActiveCombatEnemies() === 0
+    ) {
+      this.midpointTriggered = true;
+      this.midpointPauseTimer = 5.0;
+      this.spawnTimer = 5.0;
+      this.onWaveMidpoint?.(this.waveIndex);
+    }
+
+    const canSpawn =
+      this.midpointPauseTimer <= 0 &&
+      !waitingForMidpointClear &&
+      this.spawned < this.queue.length;
+
+    if (canSpawn) {
       this.spawnTimer -= dt;
       if (this.spawnTimer <= 0) {
         const available = Math.max(0, this.config.maxActive - this.countActiveCombatEnemies());
@@ -235,30 +293,21 @@ export class WaveManager {
             burst = THREE.MathUtils.randInt(2, this.config.burstMax);
           }
           burst = Math.min(burst, available, this.queue.length - this.spawned);
+          if (this.midpointCount > 0 && !this.midpointTriggered) {
+            burst = Math.min(burst, this.midpointCount - this.spawned);
+          }
           let spawnedNow = 0;
           for (let i = 0; i < burst; i += 1) {
             if (!this.spawnEnemy(i, burst)) break;
             spawnedNow += 1;
           }
           if (spawnedNow > 0) {
-            if (
-              this.waveIndex === CONFIG.waves.length - 1 &&
-              !this.midpointTriggered &&
-              this.spawned >= Math.floor(this.queue.length / 2)
-            ) {
-              this.midpointTriggered = true;
-              this.midpointPauseTimer = 5.0;
-              this.spawnTimer = 5.0;
-              this.onWaveMidpoint?.(this.waveIndex, Math.floor(this.queue.length / 2), this.queue.length);
-            } else {
-              const jitter = THREE.MathUtils.randFloat(0.78, 1.22);
-              this.spawnTimer = this.config.spawnGap * jitter;
-            }
+            const jitter = THREE.MathUtils.randFloat(0.78, 1.22);
+            this.spawnTimer = this.config.spawnGap * jitter;
           } else {
             this.spawnTimer = 0.08;
           }
         } else {
-          // The 25-enemy cap is the only thing that pauses spawning.
           this.spawnTimer = 0.2;
         }
       }

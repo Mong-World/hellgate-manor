@@ -59,6 +59,28 @@ canvas {
   pointer-events: none;
 }
 
+
+/* Cheap fire-bed glow: a static gradient with opacity-only animation. No blur,
+   filter or transform animation, keeping the loading screen light on the GPU. */
+#loading::before {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 30vh;
+  pointer-events: none;
+  background: radial-gradient(ellipse 72% 100% at 50% 112%, rgba(255,132,50,.38) 0%, rgba(255,76,18,.20) 32%, rgba(140,24,5,.08) 52%, rgba(0,0,0,0) 74%);
+  opacity: .62;
+  animation: loading-fire-pulse 3.4s ease-in-out infinite;
+}
+
+@keyframes loading-fire-pulse {
+  0%, 100% { opacity: .52; }
+  50% { opacity: .84; }
+}
+
 .loading-panel {
   position: relative;
   z-index: 2;
@@ -226,25 +248,6 @@ canvas {
 }
 
 /* Ember drift behind the loading panel: denser and rising upward like heat from a fire. */
-#loading::before {
-  content: "";
-  position: absolute;
-  left: 50%;
-  bottom: -4vh;
-  transform: translateX(-50%);
-  width: min(1100px, 120vw);
-  height: 28vh;
-  background:
-    radial-gradient(ellipse at center bottom, rgba(255,118,36,0.34) 0%, rgba(255,88,18,0.18) 26%, rgba(255,54,10,0.08) 46%, rgba(255,24,0,0.00) 72%),
-    radial-gradient(ellipse at 35% 100%, rgba(255,168,84,0.18) 0%, rgba(255,120,36,0.00) 60%),
-    radial-gradient(ellipse at 65% 100%, rgba(255,145,60,0.16) 0%, rgba(255,92,20,0.00) 58%);
-  filter: blur(18px);
-  opacity: 0.9;
-  pointer-events: none;
-  z-index: 1;
-  animation: loading-fire-pulse 3.2s ease-in-out infinite;
-}
-
 .loading-embers {
   position: absolute;
   z-index: 3;
@@ -283,10 +286,5 @@ canvas {
   8% { opacity: 0.90; }
   68% { opacity: 0.58; }
   100% { transform: translate3d(var(--drift), -112vh, 0) scale(0.18); opacity: 0; }
-}
-
-@keyframes loading-fire-pulse {
-  0%, 100% { opacity: 0.62; transform: translateX(-50%) scale(0.98); }
-  50% { opacity: 1; transform: translateX(-50%) scale(1.06); }
 }
 

@@ -21,7 +21,11 @@ function makeWave(wave) {
   else if (wave <= 34) total = 195 + (wave - 30) * 10;
   else if (wave <= 39) total = 245 + (wave - 35) * 11;
   else if (wave <= 44) total = 300 + (wave - 40) * 13;
-  else if (wave <= 49) total = 365 + (wave - 45) * 15;
+  else if (wave === 45) total = 365;
+  else if (wave === 46) total = 390;
+  else if (wave === 47) total = 420;
+  else if (wave === 48) total = 475;
+  else if (wave === 49) total = 550;
   else total = 800;
 
   let runner = 0;
@@ -45,6 +49,22 @@ function makeWave(wave) {
   if (wave >= 35) {
     const ratio = Math.min(0.032, 0.008 + (wave - 35) * 0.0015);
     siege = Math.max(1, Math.round(total * ratio));
+  }
+
+  // Waves 45-50 are intentionally longer, but heavy enemies do not scale in
+  // direct proportion to the larger total. These are the mobile/base targets;
+  // desktop applies a further accessibility reduction in WaveManager.
+  if (wave >= 45) {
+    const lateHeavy = {
+      45: { brute: 38, siege: 8 },
+      46: { brute: 41, siege: 10 },
+      47: { brute: 44, siege: 12 },
+      48: { brute: 46, siege: 14 },
+      49: { brute: 48, siege: 16 },
+      50: { brute: 50, siege: 18 }
+    }[wave];
+    brute = lateHeavy.brute;
+    siege = lateHeavy.siege;
   }
 
   const husk = Math.max(8, total - runner - strong - brute - siege);
