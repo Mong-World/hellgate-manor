@@ -450,6 +450,27 @@ export class WaveManager {
     return this.activeExtractions.size;
   }
 
+  prepareFinaleMidpointTest(remaining = 10) {
+    if (this.waveIndex !== CONFIG.waves.length - 1 || !this.running || this.midpointCount <= 0) return false;
+
+    // Clear any live test enemies, then simulate all but the final N enemies of
+    // Phase 1 having already been spawned and resolved. The remaining queue is
+    // untouched, so the real midpoint and full Phase 2 still execute normally.
+    for (const enemy of this.enemies) this.releaseEnemy(enemy);
+    this.enemies.length = 0;
+    this.activeExtractions.clear();
+
+    const left = THREE.MathUtils.clamp(Math.floor(Number(remaining) || 10), 1, this.midpointCount);
+    const completed = this.midpointCount - left;
+    this.spawned = completed;
+    this.resolved = completed;
+    this.midpointTriggered = false;
+    this.midpointHold = false;
+    this.midpointPauseTimer = 0;
+    this.spawnTimer = 0.25;
+    return true;
+  }
+
   releaseMidpoint() {
     if (!this.midpointHold) return;
     this.midpointHold = false;

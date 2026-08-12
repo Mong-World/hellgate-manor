@@ -1,3 +1,9 @@
+# Hellgate Manor v1.9.17
+
+- Fixed retry Overcharge UI/purchase logic: a paid charge restored for the same-wave Continue now displays ACTIVE and cannot be purchased again. Bound Souls are not refunded on death; the original paid charge is retained.
+- Added two hidden developer-panel finale test buttons: Wave 50 midpoint at 40% Manor health and at 100% Manor health.
+- Each midpoint test starts Wave 50 with exactly 10 Phase 1 enemies left; clearing them triggers the real midpoint sequence, including the conditional House Blessing at 40%, then leaves the full Phase 2 intact.
+
 # Hellgate Manor v1.9.16
 
 - Paid 50-Bound-Soul Manor Overcharge now persists across a Continue/Retry of the same wave; the player is not charged again.

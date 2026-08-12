@@ -67,6 +67,7 @@ export class UI {
     this.endingElapsed = 0;
     this.overchargeReserve = 0;
     this.overchargeReady = false;
+    this.overchargeActive = false;
     this.totalClicks = 0;
     this.performanceStats = {
       fps: 0,
@@ -1618,22 +1619,27 @@ export class UI {
       ctx.fillText("ONE WAVE • 20% LESS MANOR DAMAGE • EXTRA HELLFIRE BOLTS", x + 16, rowY + 50);
       ctx.fillStyle = C.muted;
       ctx.font = this.dataFont(mobile ? 8 : 9, 800);
-      const status = this.overchargeReady ? "50 / 50 RESERVED — READY FOR NEXT WAVE" : "COST: 50 UNASSIGNED BOUND SOULS";
+      const status = this.overchargeActive
+        ? "PAID — ACTIVE FOR THIS WAVE / RETRY"
+        : this.overchargeReady
+          ? "50 / 50 RESERVED — READY FOR NEXT WAVE"
+          : "COST: 50 UNASSIGNED BOUND SOULS";
       ctx.fillText(status, x + 16, rowY + 68);
 
       const buttonW = mobile ? 118 : 146;
       const buttonH = mobile ? 44 : 48;
       const bx = x + width - buttonW - 12;
       const by = rowY + (rowH - buttonH) / 2;
-      const cannotAfford = !this.overchargeReady && this.unassignedSouls < (CONFIG.overcharge?.cost ?? 50);
+      const cannotAfford = !this.overchargeActive && !this.overchargeReady && this.unassignedSouls < (CONFIG.overcharge?.cost ?? 50);
+      const lockedByActive = this.overchargeActive || this.overchargeReady;
       this.button(
-        this.overchargeReady ? "READY" : "CHARGE 50",
+        this.overchargeActive ? "ACTIVE" : (this.overchargeReady ? "READY" : "CHARGE 50"),
         bx, by, buttonW, buttonH,
         () => this.callbacks.onOvercharge?.(),
-        this.overchargeReady || cannotAfford,
+        lockedByActive || cannotAfford,
         () => this.callbacks.onDeniedPurchase?.(),
         C.red,
-        this.overchargeReady ? "available" : (cannotAfford ? "unaffordable" : "available")
+        lockedByActive ? "available" : (cannotAfford ? "unaffordable" : "available")
       );
     }
 
@@ -1902,9 +1908,15 @@ export class UI {
         this.button(label, x + 20 + index * (buttonW + gap), unlockY, buttonW, 34, () => this.callbacks.onDevUnlock?.(key), false, null, C.purple);
       });
 
+      const midpointY = y + 247;
+      const midpointGap = 6;
+      const midpointW = (panelWidth - 40 - midpointGap) / 2;
+      this.button("W50 MID 40%", x + 20, midpointY, midpointW, 34, () => this.callbacks.onDevMidpoint40?.(), false, null, C.purple);
+      this.button("W50 MID 100%", x + 20 + midpointW + midpointGap, midpointY, midpointW, 34, () => this.callbacks.onDevMidpoint100?.(), false, null, C.purple);
+
       ctx.fillStyle = C.muted;
       ctx.font = this.dataFont(8, 800);
-      ctx.fillText(`${this.souls} SOULS • ${this.boundSouls} BOUND SOULS`, width / 2, y + 255);
+      ctx.fillText(`${this.souls} SOULS • ${this.boundSouls} BOUND SOULS`, width / 2, y + 292);
       this.button("CLOSE", width / 2 - 80, y + panelHeight - 43, 160, 34, () => this.callbacks.onDevClose?.());
       return;
     }
@@ -1928,9 +1940,13 @@ export class UI {
     this.button(this.newGamePlus ? "NG+ ON" : "NG+ OFF", width / 2 - 88, row2, 176, 44, () => this.callbacks.onDevToggleNGPlus?.(), false, null, this.newGamePlus ? C.red : C.purple);
     this.button("+10 BOUND SOULS", x + panelWidth - 228, row2, 190, 44, () => this.callbacks.onDevAddBound?.(10));
 
+    const midpointY = row2 + 58;
+    this.button("W50 MIDPOINT — 40% HEALTH", x + 92, midpointY, 250, 42, () => this.callbacks.onDevMidpoint40?.(), false, null, C.purple);
+    this.button("W50 MIDPOINT — 100% HEALTH", x + panelWidth - 342, midpointY, 250, 42, () => this.callbacks.onDevMidpoint100?.(), false, null, C.purple);
+
     ctx.fillStyle = C.orangeLight;
     ctx.font = this.dataFont(12, 900);
-    ctx.fillText("UNLOCK SYSTEMS", width / 2, row2 + 78);
+    ctx.fillText("UNLOCK SYSTEMS", width / 2, row2 + 124);
 
     const unlocks = [
       ["EXTRACTION", "extraction"],
@@ -1944,12 +1960,12 @@ export class UI {
     const totalW = unlocks.length * buttonW + (unlocks.length - 1) * gap;
     const startX = width / 2 - totalW / 2;
     unlocks.forEach(([label, key], index) => {
-      this.button(label, startX + index * (buttonW + gap), row2 + 92, buttonW, 42, () => this.callbacks.onDevUnlock?.(key), false, null, C.purple);
+      this.button(label, startX + index * (buttonW + gap), row2 + 138, buttonW, 42, () => this.callbacks.onDevUnlock?.(key), false, null, C.purple);
     });
 
     ctx.fillStyle = C.muted;
     ctx.font = this.dataFont(10, 800);
-    ctx.fillText(`CURRENT: ${this.souls} SOULS • ${this.boundSouls} BOUND SOULS`, width / 2, row2 + 162);
+    ctx.fillText(`CURRENT: ${this.souls} SOULS • ${this.boundSouls} BOUND SOULS`, width / 2, row2 + 208);
 
     const perf = this.performanceStats ?? {};
     const misses = perf.poolMisses ?? {};
@@ -1958,18 +1974,18 @@ export class UI {
     ctx.fillText(
       `PERF  ${perf.fps ?? 0} FPS • ${perf.calls ?? 0} DRAWS • ${Number(perf.triangles ?? 0).toLocaleString()} TRIANGLES • ${perf.programs ?? 0} PROGRAMS`,
       width / 2,
-      row2 + 187
+      row2 + 233
     );
     ctx.fillStyle = C.muted;
     ctx.fillText(
       `GPU  ${perf.geometries ?? 0} GEOMETRIES • ${perf.textures ?? 0} TEXTURES`,
       width / 2,
-      row2 + 205
+      row2 + 251
     );
     ctx.fillText(
       `POOL MISSES  H:${misses.husk ?? 0}  ST:${misses.strong ?? 0}  R:${misses.runner ?? 0}  B:${misses.brute ?? 0}  SG:${misses.siege ?? 0}`,
       width / 2,
-      row2 + 223
+      row2 + 269
     );
 
     this.button("CLOSE", width / 2 - 95, y + panelHeight - 62, 190, 44, () => this.callbacks.onDevClose?.());

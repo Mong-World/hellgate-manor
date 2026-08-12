@@ -119,6 +119,8 @@ export class Game {
       onDevUnlock: (system) => this.unlockDeveloperSystem(system),
       onDevDawn: () => this.testDeveloperDawn(),
       onDevToggleNGPlus: () => this.toggleDeveloperNewGamePlus(),
+      onDevMidpoint40: () => this.startDeveloperMidpointTest(0.40),
+      onDevMidpoint100: () => this.startDeveloperMidpointTest(1.00),
       onDevClose: () => this.closeDeveloperPanel()
     });
 
@@ -1186,7 +1188,7 @@ export class Game {
   chargeOvercharge() {
     if (this.ui.mode !== "intermission") return;
     if (this.getPreparingWaveNumber() < (CONFIG.overcharge?.unlockWave ?? 40)) return this.playDeniedPurchase();
-    if (this.overchargeReady || this.overchargeReserve > 0) return this.playDeniedPurchase();
+    if (this.overchargeActive || this.overchargeReady || this.overchargeReserve > 0) return this.playDeniedPurchase();
     const cost = CONFIG.overcharge?.cost ?? 50;
     if (this.getUnassignedSouls() < cost) return this.playDeniedPurchase();
     this.overchargeReserve = cost;
@@ -1494,6 +1496,29 @@ export class Game {
     this.syncUI();
   }
 
+  startDeveloperMidpointTest(healthRatio = 0.40) {
+    this.developerWave = 50;
+    this.prepareDeveloperTransition();
+    this.waveIndex = CONFIG.waves.length - 1;
+
+    const ratio = THREE.MathUtils.clamp(Number(healthRatio) || 0.40, 0.01, 1);
+    this.manorHealth = Math.max(1, Math.round(this.manorMaxHealth * ratio));
+
+    this.applyUpgradeState();
+    this.startCurrentWave();
+
+    // Skip straight to the final ten enemies of Phase 1. Once those ten are
+    // resolved, the real midpoint logic fires exactly as it would in a normal
+    // Wave 50 run. Phase 2 remains intact after the scripted break.
+    this.waveManager.prepareFinaleMidpointTest?.(10);
+    this.ui.showBanner(
+      ratio < 0.5 ? "MIDPOINT TEST — 40% HEALTH" : "MIDPOINT TEST — 100% HEALTH",
+      "10 PHASE 1 ENEMIES REMAIN",
+      2.4
+    );
+    this.syncUI(true);
+  }
+
   testDeveloperDawn() {
     this.prepareDeveloperTransition();
     this.demonDeaths = Math.max(this.demonDeaths, 700);
@@ -1558,6 +1583,7 @@ export class Game {
       || last.totalManorDamageTaken !== this.totalManorDamageTaken
       || last.overchargeReserve !== this.overchargeReserve
       || last.overchargeReady !== this.overchargeReady
+      || last.overchargeActive !== this.overchargeActive
       || last.totalClicks !== this.totalClicks;
 
     if (!changed) return;
@@ -1585,6 +1611,7 @@ export class Game {
       totalManorDamageTaken: this.totalManorDamageTaken,
       overchargeReserve: this.overchargeReserve,
       overchargeReady: this.overchargeReady,
+      overchargeActive: this.overchargeActive,
       totalClicks: this.totalClicks,
       unlockWaves: this.uiUnlockWaves
     });
