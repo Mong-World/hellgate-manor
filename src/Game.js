@@ -1701,39 +1701,70 @@ export class Game {
 
   handleWaveMidpoint(index) {
     if ((index + 1) !== 50 || this.wave50MidpointEvent) return;
+
+    // Final-wave midpoint sequence:
+    // 0-4s   : completely calm battlefield, final-wave music fades quieter.
+    // 4-6.6s : rapid scripted lightning/thunder burst.
+    // 6.6-9.6s: lightning fades, warning text appears, music rises again.
+    // 9.6s   : Phase 2 spawning is released by WaveManager.
     this.wave50MidpointEvent = {
       timer: 0,
-      duration: 5.0,
-      strikeTimes: [0.12, 0.48, 0.86, 1.30, 1.78, 2.24, 2.76, 3.28, 3.82, 4.34, 4.76],
+      duration: 9.6,
+      lightningStart: 4.0,
+      lightningEnd: 6.6,
+      messageStart: 6.6,
+      messageShown: false,
+      strikeTimes: [4.02, 4.24, 4.46, 4.67, 4.90, 5.12, 5.34, 5.56, 5.80, 6.04, 6.28, 6.50],
       nextStrike: 0
     };
-    // Suppress the normal atmospheric scheduler during the scripted burst.
+
+    // Suppress normal atmospheric lightning during the scripted midpoint.
     this.lightningThunderTimer = -1;
-    this.lightningStrikeTimer = 20;
-    this.ui.showBanner(
-      "DAWN IS COMING",
-      "SURVIVE HELL'S FINAL ONSLAUGHT",
-      4.6
-    );
+    this.lightningStrikeTimer = 30;
+
+    // Keep level50music playing continuously, but lower it during the calm build-up.
+    this.audio.setMusicLevel(0.18, 1.2);
   }
 
   updateWave50Midpoint(dt) {
     const event = this.wave50MidpointEvent;
     if (!event || dt <= 0 || !this.gameplayActive) return;
+
     event.timer += dt;
-    while (event.nextStrike < event.strikeTimes.length && event.timer >= event.strikeTimes[event.nextStrike]) {
-      event.nextStrike += 1;
-      this.world.triggerRedLightning?.();
-      this.audio.play("lightning", {
-        volume: 0.80,
-        pitchMin: 0.72,
-        pitchMax: 1.34,
-        cooldown: 0,
-        maxInstances: 2
-      });
+
+    // The first four seconds intentionally contain no lightning, message or enemies.
+    if (event.timer >= event.lightningStart && event.timer < event.lightningEnd) {
+      while (
+        event.nextStrike < event.strikeTimes.length &&
+        event.timer >= event.strikeTimes[event.nextStrike]
+      ) {
+        event.nextStrike += 1;
+        this.world.triggerRedLightning?.();
+        this.audio.play("lightning", {
+          volume: 0.82,
+          pitchMin: 0.66,
+          pitchMax: 1.42,
+          cooldown: 0,
+          maxInstances: 3
+        });
+      }
     }
+
+    // After the lightning burst, reveal the warning for three seconds while the
+    // last flash fades and the Wave 50 score rises back toward battle volume.
+    if (!event.messageShown && event.timer >= event.messageStart) {
+      event.messageShown = true;
+      this.ui.showBanner(
+        "DAWN IS COMING",
+        "SURVIVE HELL'S FINAL ONSLAUGHT",
+        3.0
+      );
+      this.audio.setMusicLevel(0.425, 2.2);
+    }
+
     if (event.timer >= event.duration) {
       this.wave50MidpointEvent = null;
+      this.audio.setMusicLevel(0.425, 0.35);
       this.lightningStrikeTimer = THREE.MathUtils.randFloat(6.5, 10.5);
     }
   }

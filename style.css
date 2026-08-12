@@ -60,26 +60,6 @@ canvas {
 }
 
 
-/* Cheap fire-bed glow: a static gradient with opacity-only animation. No blur,
-   filter or transform animation, keeping the loading screen light on the GPU. */
-#loading::before {
-  content: "";
-  position: absolute;
-  z-index: 1;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 30vh;
-  pointer-events: none;
-  background: radial-gradient(ellipse 72% 100% at 50% 112%, rgba(255,132,50,.38) 0%, rgba(255,76,18,.20) 32%, rgba(140,24,5,.08) 52%, rgba(0,0,0,0) 74%);
-  opacity: .62;
-  animation: loading-fire-pulse 3.4s ease-in-out infinite;
-}
-
-@keyframes loading-fire-pulse {
-  0%, 100% { opacity: .52; }
-  50% { opacity: .84; }
-}
 
 .loading-panel {
   position: relative;

@@ -273,8 +273,8 @@ export class WaveManager {
       this.countActiveCombatEnemies() === 0
     ) {
       this.midpointTriggered = true;
-      this.midpointPauseTimer = 5.0;
-      this.spawnTimer = 5.0;
+      this.midpointPauseTimer = 9.6;
+      this.spawnTimer = 9.6;
       this.onWaveMidpoint?.(this.waveIndex);
     }
 
