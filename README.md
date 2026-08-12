@@ -1,3 +1,13 @@
+# Hellgate Manor v1.9.15
+
+- Replaced 162 animated loading-screen DOM embers with one low-resolution, ~30fps canvas particle layer to reduce loading hitching while keeping a dense ember field.
+- Preserved the existing full preload/pre-warm path for pooled enemy models, animations, textures, effects, extraction, Occult, Overcharge, lightning and audio.
+- Hell Mode continues to derive from the new Normal Mode wave totals, including the expanded Waves 45-50 and two-phase Wave 50, before applying its existing 25% population and combat multipliers.
+- Added a smaller desktop Brute/Siege reduction to Hell Mode Waves 45-50; removed heavies are naturally replaced by lighter enemies through the fixed total population.
+- Added the conditional Wave 50 midpoint blessing: if Manor health is below 50% after Phase 1, **THE HOUSE HAS BLESSED YOU** appears, green souls fly from the Manor to the health bar, and health slowly rises to exactly 60% maximum.
+- Blessing runs after the initial 4-second calm and extends the midpoint by 4 seconds; the lightning burst and 3-second dawn warning then occur before Phase 2 is explicitly released.
+- No model textures were resized or altered.
+
 # Hellgate Manor v1.9.14
 
 - Removed the loading-screen fire glow to eliminate its remaining animation cost.

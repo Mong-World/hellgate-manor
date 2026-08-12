@@ -1702,27 +1702,34 @@ export class Game {
   handleWaveMidpoint(index) {
     if ((index + 1) !== 50 || this.wave50MidpointEvent) return;
 
-    // Final-wave midpoint sequence:
-    // 0-4s   : completely calm battlefield, final-wave music fades quieter.
-    // 4-6.6s : rapid scripted lightning/thunder burst.
-    // 6.6-9.6s: lightning fades, warning text appears, music rises again.
-    // 9.6s   : Phase 2 spawning is released by WaveManager.
+    const healthRatio = this.manorMaxHealth > 0 ? this.manorHealth / this.manorMaxHealth : 1;
+    const blessing = healthRatio < 0.50;
+    const blessingStart = 4.0;
+    const blessingEnd = blessing ? 8.0 : 4.0;
+    const lightningStart = blessingEnd;
+    const lightningEnd = lightningStart + 2.6;
+    const messageStart = lightningEnd;
+    const duration = messageStart + 3.0;
+
     this.wave50MidpointEvent = {
       timer: 0,
-      duration: 9.6,
-      lightningStart: 4.0,
-      lightningEnd: 6.6,
-      messageStart: 6.6,
+      duration,
+      blessing,
+      blessingStart,
+      blessingEnd,
+      blessingShown: false,
+      healStart: this.manorHealth,
+      healTarget: blessing ? this.manorMaxHealth * 0.60 : this.manorHealth,
+      lightningStart,
+      lightningEnd,
+      messageStart,
       messageShown: false,
-      strikeTimes: [4.02, 4.24, 4.46, 4.67, 4.90, 5.12, 5.34, 5.56, 5.80, 6.04, 6.28, 6.50],
+      strikeOffsets: [0.02, 0.24, 0.46, 0.67, 0.90, 1.12, 1.34, 1.56, 1.80, 2.04, 2.28, 2.50],
       nextStrike: 0
     };
 
-    // Suppress normal atmospheric lightning during the scripted midpoint.
     this.lightningThunderTimer = -1;
     this.lightningStrikeTimer = 30;
-
-    // Keep level50music playing continuously, but lower it during the calm build-up.
     this.audio.setMusicLevel(0.18, 1.2);
   }
 
@@ -1732,11 +1739,36 @@ export class Game {
 
     event.timer += dt;
 
-    // The first four seconds intentionally contain no lightning, message or enemies.
+    // Optional rescue at the midpoint: only when entering the break below 50%.
+    // The house heals deliberately and visibly to exactly 60% maximum health.
+    if (event.blessing && event.timer >= event.blessingStart && event.timer < event.blessingEnd) {
+      if (!event.blessingShown) {
+        event.blessingShown = true;
+        const manorCentre = new THREE.Vector3(
+          (this.world.manorBounds.min.x + this.world.manorBounds.max.x) * 0.5,
+          Math.max(1.2, this.world.manorBounds.max.y * 0.55),
+          0
+        );
+        this.ui.startHouseBlessing?.(this.projectWorldToScreen(manorCentre));
+        this.ui.showBanner("THE HOUSE HAS BLESSED YOU", "THE MANOR ENDURES", 3.8);
+      }
+      const t = THREE.MathUtils.clamp(
+        (event.timer - event.blessingStart) / Math.max(0.01, event.blessingEnd - event.blessingStart),
+        0,
+        1
+      );
+      const eased = t * t * (3 - 2 * t);
+      this.manorHealth = THREE.MathUtils.lerp(event.healStart, event.healTarget, eased);
+      this.syncUI();
+    } else if (event.blessing && event.timer >= event.blessingEnd && this.manorHealth < event.healTarget) {
+      this.manorHealth = event.healTarget;
+      this.syncUI();
+    }
+
     if (event.timer >= event.lightningStart && event.timer < event.lightningEnd) {
       while (
-        event.nextStrike < event.strikeTimes.length &&
-        event.timer >= event.strikeTimes[event.nextStrike]
+        event.nextStrike < event.strikeOffsets.length &&
+        event.timer >= event.lightningStart + event.strikeOffsets[event.nextStrike]
       ) {
         event.nextStrike += 1;
         this.world.triggerRedLightning?.();
@@ -1750,8 +1782,6 @@ export class Game {
       }
     }
 
-    // After the lightning burst, reveal the warning for three seconds while the
-    // last flash fades and the Wave 50 score rises back toward battle volume.
     if (!event.messageShown && event.timer >= event.messageStart) {
       event.messageShown = true;
       this.ui.showBanner(
@@ -1763,9 +1793,12 @@ export class Game {
     }
 
     if (event.timer >= event.duration) {
+      if (event.blessing) this.manorHealth = Math.min(event.healTarget, this.manorMaxHealth * 0.60);
       this.wave50MidpointEvent = null;
       this.audio.setMusicLevel(0.425, 0.35);
       this.lightningStrikeTimer = THREE.MathUtils.randFloat(6.5, 10.5);
+      this.waveManager.releaseMidpoint?.();
+      this.syncUI();
     }
   }
 

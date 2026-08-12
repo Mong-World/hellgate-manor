@@ -47,6 +47,7 @@ export class UI {
     this.soulPulse = 0;
     this.boundPulse = 0;
     this.soulFlights = [];
+    this.blessingEffect = null;
     this.buttons = [];
     this.shopPage = 0;
     this.saveNoticeTimer = 0;
@@ -395,6 +396,49 @@ export class UI {
     event.stopImmediatePropagation();
   }
 
+  startHouseBlessing(origin) {
+    const particles = [];
+    for (let i = 0; i < 24; i += 1) {
+      particles.push({
+        delay: i * 0.105,
+        duration: 1.35 + (i % 5) * 0.09,
+        arc: 22 + (i % 7) * 6,
+        drift: ((i % 2) ? 1 : -1) * (5 + (i % 4) * 4)
+      });
+    }
+    this.blessingEffect = { age: 0, duration: 4.0, origin: { ...origin }, particles };
+  }
+
+  drawHouseBlessing(width, height) {
+    const fx = this.blessingEffect;
+    if (!fx) return;
+    const mobile = this.isMobileLandscape();
+    const targetX = width / 2;
+    const targetY = mobile ? height - 18 : height - (width < 820 ? 43 : 48);
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    for (const particle of fx.particles) {
+      const local = fx.age - particle.delay;
+      if (local < 0 || local > particle.duration) continue;
+      const t = Math.max(0, Math.min(1, local / particle.duration));
+      const eased = t * t * (3 - 2 * t);
+      const x = fx.origin.x + (targetX - fx.origin.x) * eased + Math.sin(t * Math.PI) * particle.drift;
+      const y = fx.origin.y + (targetY - fx.origin.y) * eased - Math.sin(t * Math.PI) * particle.arc;
+      const alpha = Math.sin(t * Math.PI) * 0.86;
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = "#64ff8b";
+      ctx.beginPath();
+      ctx.arc(x, y, mobile ? 2.1 : 2.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = alpha * 0.28;
+      ctx.beginPath();
+      ctx.arc(x, y, mobile ? 5.0 : 6.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   update(dt) {
     this.uiTime += dt;
     if (this.mode === "ending") this.endingElapsed += dt;
@@ -403,6 +447,10 @@ export class UI {
     this.soulPulse = Math.max(0, this.soulPulse - dt);
     this.boundPulse = Math.max(0, this.boundPulse - dt);
     this.saveNoticeTimer = Math.max(0, this.saveNoticeTimer - dt);
+    if (this.blessingEffect) {
+      this.blessingEffect.age += dt;
+      if (this.blessingEffect.age >= this.blessingEffect.duration + 0.5) this.blessingEffect = null;
+    }
     for (let i = this.soulFlights.length - 1; i >= 0; i -= 1) {
       const flight = this.soulFlights[i];
       flight.age += dt;
@@ -446,6 +494,7 @@ export class UI {
       this.drawComplete(width, height);
     }
 
+    if (this.blessingEffect) this.drawHouseBlessing(width, height);
     if (this.developerPanelOpen) this.drawDeveloperPanel(width, height);
   }
 

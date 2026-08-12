@@ -48,6 +48,7 @@ export class WaveManager {
     this.midpointCount = 0;
     this.midpointTriggered = false;
     this.midpointPauseTimer = 0;
+    this.midpointHold = false;
   }
 
   setNewGamePlus(enabled) {
@@ -107,6 +108,16 @@ export class WaveManager {
     }
     if (wave >= settings.siegeWave) {
       siege = Math.max(1, Math.round(total * Math.min(0.045, 0.010 + (wave - settings.siegeWave) * 0.0015)));
+    }
+
+    // Hell Mode uses the new Normal Mode wave totals as its base, then applies
+    // its 25% population multiplier. Desktop receives a smaller heavy-enemy
+    // accessibility adjustment than Normal Mode so mouse play remains tough
+    // without becoming disproportionately punishing.
+    if (!this.mobileDifficulty && wave >= 45) {
+      const reduction = { 45: 0.97, 46: 0.95, 47: 0.92, 48: 0.90, 49: 0.87, 50: 0.83 }[wave] ?? 1;
+      brute = Math.max(0, Math.round(brute * reduction));
+      siege = Math.max(0, Math.round(siege * reduction));
     }
 
     const husk = Math.max(8, total - runner - strong - brute - siege);
@@ -238,6 +249,7 @@ export class WaveManager {
     this.midpointCount = index === CONFIG.waves.length - 1 ? Math.floor(this.queue.length / 2) : 0;
     this.midpointTriggered = false;
     this.midpointPauseTimer = 0;
+    this.midpointHold = false;
     this.running = true;
   }
 
@@ -255,11 +267,9 @@ export class WaveManager {
 
     // Wave 50 is a true two-phase siege. Phase 2 cannot begin until the
     // first half has spawned AND every Phase 1 demon has been resolved.
-    if (this.midpointPauseTimer > 0) {
+    if (!this.midpointHold && this.midpointPauseTimer > 0) {
       this.midpointPauseTimer = Math.max(0, this.midpointPauseTimer - dt);
-      if (this.midpointPauseTimer <= 0) {
-        this.spawnTimer = 0.15;
-      }
+      if (this.midpointPauseTimer <= 0) this.spawnTimer = 0.15;
     }
 
     const waitingForMidpointClear =
@@ -273,12 +283,14 @@ export class WaveManager {
       this.countActiveCombatEnemies() === 0
     ) {
       this.midpointTriggered = true;
-      this.midpointPauseTimer = 9.6;
-      this.spawnTimer = 9.6;
+      this.midpointHold = true;
+      this.midpointPauseTimer = 0;
+      this.spawnTimer = 0.15;
       this.onWaveMidpoint?.(this.waveIndex);
     }
 
     const canSpawn =
+      !this.midpointHold &&
       this.midpointPauseTimer <= 0 &&
       !waitingForMidpointClear &&
       this.spawned < this.queue.length;
@@ -436,6 +448,13 @@ export class WaveManager {
 
   getExtractionCount() {
     return this.activeExtractions.size;
+  }
+
+  releaseMidpoint() {
+    if (!this.midpointHold) return;
+    this.midpointHold = false;
+    this.midpointPauseTimer = 0;
+    this.spawnTimer = 0.15;
   }
 
   stop() {
