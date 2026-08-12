@@ -14,7 +14,8 @@ export class WaveManager {
     onEnemyImpact,
     onEnemyExtracted,
     onWaveComplete,
-    onSiegeClick
+    onSiegeClick,
+    onWaveMidpoint
   }) {
     this.scene = scene;
     this.assets = assets;
@@ -25,6 +26,7 @@ export class WaveManager {
     this.onEnemyExtracted = onEnemyExtracted;
     this.onWaveComplete = onWaveComplete;
     this.onSiegeClick = onSiegeClick;
+    this.onWaveMidpoint = onWaveMidpoint;
 
     this.waveIndex = -1;
     this.config = null;
@@ -43,6 +45,8 @@ export class WaveManager {
     this.poolMisses = Object.fromEntries(TYPES.map((type) => [type, 0]));
     this.aliveScratch = [];
     this.combatScratch = [];
+    this.midpointTriggered = false;
+    this.midpointPauseTimer = 0;
   }
 
   setNewGamePlus(enabled) {
@@ -200,6 +204,8 @@ export class WaveManager {
     this.spawned = 0;
     this.resolved = 0;
     this.spawnTimer = Math.max(this.config.initialDelay, minimumInitialDelay);
+    this.midpointTriggered = false;
+    this.midpointPauseTimer = 0;
     this.running = true;
   }
 
@@ -215,7 +221,11 @@ export class WaveManager {
     }
     this.enemies.length = write;
 
-    if (this.spawned < this.queue.length) {
+    if (this.midpointPauseTimer > 0) {
+      this.midpointPauseTimer = Math.max(0, this.midpointPauseTimer - dt);
+    }
+
+    if (this.spawned < this.queue.length && this.midpointPauseTimer <= 0) {
       this.spawnTimer -= dt;
       if (this.spawnTimer <= 0) {
         const available = Math.max(0, this.config.maxActive - this.countActiveCombatEnemies());
@@ -231,8 +241,19 @@ export class WaveManager {
             spawnedNow += 1;
           }
           if (spawnedNow > 0) {
-            const jitter = THREE.MathUtils.randFloat(0.78, 1.22);
-            this.spawnTimer = this.config.spawnGap * jitter;
+            if (
+              this.waveIndex === CONFIG.waves.length - 1 &&
+              !this.midpointTriggered &&
+              this.spawned >= Math.floor(this.queue.length / 2)
+            ) {
+              this.midpointTriggered = true;
+              this.midpointPauseTimer = 5.0;
+              this.spawnTimer = 5.0;
+              this.onWaveMidpoint?.(this.waveIndex, Math.floor(this.queue.length / 2), this.queue.length);
+            } else {
+              const jitter = THREE.MathUtils.randFloat(0.78, 1.22);
+              this.spawnTimer = this.config.spawnGap * jitter;
+            }
           } else {
             this.spawnTimer = 0.08;
           }

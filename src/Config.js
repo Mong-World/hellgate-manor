@@ -22,7 +22,7 @@ function makeWave(wave) {
   else if (wave <= 39) total = 245 + (wave - 35) * 11;
   else if (wave <= 44) total = 300 + (wave - 40) * 13;
   else if (wave <= 49) total = 365 + (wave - 45) * 15;
-  else total = 480;
+  else total = 800;
 
   let runner = 0;
   let strong = 0;
@@ -304,7 +304,7 @@ export const CONFIG = Object.freeze({
 
   ranking: {
     bindingMaxTarget: 150,
-    defenceDamageThresholds: [7000, 14000, 24000, 38000],
+    defenceDamageThresholds: [18000, 45000, 70000, 95000],
     newGamePlusDefenceScale: 1.25
   },
 

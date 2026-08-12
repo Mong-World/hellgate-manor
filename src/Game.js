@@ -42,6 +42,7 @@ export class Game {
     this.lightningThunderTimer = -1;
     this.runtimePrimed = false;
     this.lastUISyncState = null;
+    this.wave50MidpointEvent = null;
     this.uiUnlockWaves = Object.fromEntries(
       Object.entries(CONFIG.buildings)
         .filter(([, value]) => value.unlockWave)
@@ -185,6 +186,7 @@ export class Game {
     this.endingDawnMusicDelay = 4.15;
     this.paused = false;
     this.lastUISyncState = null;
+    this.wave50MidpointEvent = null;
   }
 
   async start() {
@@ -719,6 +721,7 @@ export class Game {
     // Red lightning is a late-night atmosphere layer only. It starts at Wave 45
     // and becomes a little more frequent as the final wave approaches.
     this.lightningThunderTimer = -1;
+    this.wave50MidpointEvent = null;
     this.lightningStrikeTimer = waveNumber >= 45
       ? THREE.MathUtils.randFloat(4.0, 8.0)
       : Infinity;
@@ -1695,6 +1698,44 @@ export class Game {
     this.camera.lookAt(this.cameraTarget);
   }
 
+  handleWaveMidpoint(index, reached, total) {
+    if ((index + 1) !== 50 || this.wave50MidpointEvent) return;
+    this.wave50MidpointEvent = {
+      timer: 0,
+      duration: 5.0,
+      strikes: [0.18, 0.55, 0.92, 1.32, 1.78, 2.22, 2.72, 3.22, 3.74, 4.26, 4.72],
+      nextStrike: 0
+    };
+    this.lightningThunderTimer = -1;
+    this.lightningStrikeTimer = 9.5;
+    this.ui.showBanner(
+      "DAWN IS COMING",
+      "ONE FINAL ONSLAUGHT SURGES FROM THE HELLGATE",
+      4.2
+    );
+  }
+
+  updateWave50MidpointSequence(dt) {
+    const seq = this.wave50MidpointEvent;
+    if (!seq || dt <= 0 || !this.gameplayActive) return;
+    seq.timer += dt;
+    while (seq.nextStrike < seq.strikes.length && seq.timer >= seq.strikes[seq.nextStrike]) {
+      seq.nextStrike += 1;
+      this.world.triggerRedLightning?.();
+      this.audio.play("lightning", {
+        volume: 0.82,
+        pitchMin: 0.78,
+        pitchMax: 1.28,
+        cooldown: 0,
+        maxInstances: 2
+      });
+    }
+    if (seq.timer >= seq.duration) {
+      this.wave50MidpointEvent = null;
+      this.lightningStrikeTimer = THREE.MathUtils.randFloat(6.0, 10.0);
+    }
+  }
+
   updateLateGameLightning(dt) {
     if (dt <= 0 || !this.gameplayActive) return;
     const waveNumber = this.waveIndex + 1;
@@ -1796,6 +1837,7 @@ export class Game {
       }
       this.updateFirstWaveTutorial(simulationActive ? dt : 0);
       this.updateLateGameLightning(simulationActive ? dt : 0);
+      this.updateWave50MidpointSequence(simulationActive ? dt : 0);
       if (simulationActive) {
         this.checkWorldCollisions();
       }

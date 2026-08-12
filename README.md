@@ -1,3 +1,12 @@
+# Hellgate Manor v1.9.12
+
+- Set manor shadow-map resolution to **1024x1024 on both desktop and mobile** for visual consistency and lighter rendering.
+- Loading embers now render on desktop as well as mobile; removed the reduced-motion rule that hid them entirely.
+- Added a **pulsing hidden-fire glow** along the bottom of the loading screen behind the ember drift.
+- Wave 50 is extended to a **two-phase final siege** with roughly **800 total enemies** and a **mid-wave 5 second pause** at the halfway point.
+- The Wave 50 midpoint now triggers a **burst of red lightning and thunder** plus a banner warning that dawn is coming and the final onslaught is beginning.
+- Relaxed end-of-run **Defence** star thresholds so about **40,000 total manor damage now scores 4 stars** instead of 1.
+
 # Hellgate Manor v1.8.7
 
 - Locked Systems upgrades now state the exact wave they unlock on, both in the row text and locked button.

@@ -497,7 +497,7 @@ export class World {
     this.moonLight = moonLight;
     moonLight.position.set(-18, 24, 13);
     moonLight.castShadow = true;
-    moonLight.shadow.mapSize.set(this.mobile ? 1024 : 2048, this.mobile ? 1024 : 2048);
+    moonLight.shadow.mapSize.set(1024, 1024);
     moonLight.shadow.camera.left = -36;
     moonLight.shadow.camera.right = 36;
     moonLight.shadow.camera.top = 24;

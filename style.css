@@ -226,6 +226,25 @@ canvas {
 }
 
 /* Ember drift behind the loading panel: denser and rising upward like heat from a fire. */
+#loading::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -4vh;
+  transform: translateX(-50%);
+  width: min(1100px, 120vw);
+  height: 28vh;
+  background:
+    radial-gradient(ellipse at center bottom, rgba(255,118,36,0.34) 0%, rgba(255,88,18,0.18) 26%, rgba(255,54,10,0.08) 46%, rgba(255,24,0,0.00) 72%),
+    radial-gradient(ellipse at 35% 100%, rgba(255,168,84,0.18) 0%, rgba(255,120,36,0.00) 60%),
+    radial-gradient(ellipse at 65% 100%, rgba(255,145,60,0.16) 0%, rgba(255,92,20,0.00) 58%);
+  filter: blur(18px);
+  opacity: 0.9;
+  pointer-events: none;
+  z-index: 1;
+  animation: loading-fire-pulse 3.2s ease-in-out infinite;
+}
+
 .loading-embers {
   position: absolute;
   z-index: 3;
@@ -266,6 +285,8 @@ canvas {
   100% { transform: translate3d(var(--drift), -112vh, 0) scale(0.18); opacity: 0; }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .loading-embers { display: none; }
+@keyframes loading-fire-pulse {
+  0%, 100% { opacity: 0.62; transform: translateX(-50%) scale(0.98); }
+  50% { opacity: 1; transform: translateX(-50%) scale(1.06); }
 }
+
