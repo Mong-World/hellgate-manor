@@ -1,3 +1,11 @@
+# Hellgate Manor v1.9.16
+
+- Paid 50-Bound-Soul Manor Overcharge now persists across a Continue/Retry of the same wave; the player is not charged again.
+- Hellfire arrows are fully suspended for the Wave 50 midpoint presentation, including the House Blessing.
+- Hellfire only resumes after a Phase 2 demon is actually visible on screen.
+- Reworked the midpoint lightning burst into eight clearly separated, stronger flashes over about 2.5 seconds, with broad thunder pitch variation.
+- Scripted lightning continues to reuse the pre-created/pre-warmed lightning geometry rather than allocating new effects during Wave 50.
+
 # Hellgate Manor v1.9.15
 
 - Replaced 162 animated loading-screen DOM embers with one low-resolution, ~30fps canvas particle layer to reduce loading hitching while keeping a dense ember field.

@@ -244,6 +244,8 @@ export class World {
     this.lightningBolt = null;
     this.lightningLight = null;
     this.lightningTimer = 0;
+    this.lightningDuration = 0.46;
+    this.lightningFlashIntensity = 22;
     this.groundFog = [];
     this.riftEmbers = null;
     this.riftEmberBase = null;
@@ -1583,7 +1585,7 @@ export class World {
     mount.pivot.rotation.x = THREE.MathUtils.clamp(pitch, -0.25, 0.28);
   }
 
-  triggerRedLightning() {
+  triggerRedLightning(duration = 0.46, flashIntensity = 22) {
     if (!this.lightningBolt || this.dawnActive || this.victoryClosing) return;
     const points = this.lightningBolt.attribute.array;
     const sideStrike = Math.random() < 0.42;
@@ -1616,10 +1618,12 @@ export class World {
         material.opacity = index === 1 ? 1 : 0.62;
       });
     }
-    this.lightningTimer = 0.52;
+    this.lightningDuration = Math.max(0.12, duration);
+    this.lightningFlashIntensity = Math.max(1, flashIntensity);
+    this.lightningTimer = this.lightningDuration;
     if (this.lightningLight) {
       this.lightningLight.position.set((startX + endX) * 0.5, 17, -15);
-      this.lightningLight.intensity = 22;
+      this.lightningLight.intensity = this.lightningFlashIntensity;
     }
   }
 
@@ -2213,7 +2217,7 @@ export class World {
 
     if (this.lightningTimer > 0) {
       this.lightningTimer = Math.max(0, this.lightningTimer - dt);
-      const t = this.lightningTimer / 0.46;
+      const t = this.lightningTimer / Math.max(0.01, this.lightningDuration);
       // A quick double-pulse reads as lightning without becoming distracting.
       const flash = t > 0.72 ? 1 : t > 0.52 ? 0.18 : t > 0.27 ? 0.72 : t * 1.3;
       if (this.lightningBolt) {
@@ -2223,7 +2227,7 @@ export class World {
           material.opacity = intensity * (index === 1 ? 1 : 0.62);
         });
       }
-      if (this.lightningLight) this.lightningLight.intensity = 22 * Math.max(0, flash);
+      if (this.lightningLight) this.lightningLight.intensity = this.lightningFlashIntensity * Math.max(0, flash);
     } else {
       if (this.lightningBolt) {
         if (this.lightningBolt.root) this.lightningBolt.root.visible = false;

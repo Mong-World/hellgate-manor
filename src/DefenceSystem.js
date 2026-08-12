@@ -16,6 +16,7 @@ export class DefenceSystem {
     this.hellfireSouls = 0;
     this.occultSouls = 0;
     this.overchargeActive = false;
+    this.hellfireSuppressed = false;
     this.pendingExtraShots = [];
     this.mountTimers = [1.2, 2.2, 3.2];
     this.occultTimer = 12;
@@ -142,6 +143,17 @@ export class DefenceSystem {
     this.pendingExtraShots = [];
   }
 
+  setHellfireSuppressed(suppressed) {
+    this.hellfireSuppressed = !!suppressed;
+    if (this.hellfireSuppressed) {
+      // Do not allow an already-scheduled Overcharge extra bolt to leak into
+      // the Wave 50 presentation break.
+      this.pendingExtraShots = [];
+    } else {
+      this.resetCooldown();
+    }
+  }
+
   getMountCount() {
     const souls = Math.min(this.hellfireSouls, CONFIG.defence.hellfireMaxSouls);
     if (souls <= 0) return 0;
@@ -181,22 +193,24 @@ export class DefenceSystem {
     this.updateImpacts(dt);
     if (!active) return;
 
-    for (let i = this.pendingExtraShots.length - 1; i >= 0; i -= 1) {
-      const shot = this.pendingExtraShots[i];
-      shot.timer -= dt;
-      if (shot.timer <= 0) {
-        this.fireMount(shot.mountIndex, false);
-        this.pendingExtraShots.splice(i, 1);
+    if (!this.hellfireSuppressed) {
+      for (let i = this.pendingExtraShots.length - 1; i >= 0; i -= 1) {
+        const shot = this.pendingExtraShots[i];
+        shot.timer -= dt;
+        if (shot.timer <= 0) {
+          this.fireMount(shot.mountIndex, false);
+          this.pendingExtraShots.splice(i, 1);
+        }
       }
-    }
 
-    const mounts = this.getMountCount();
-    if (mounts > 0) {
-      for (let index = 0; index < mounts; index += 1) {
-        this.mountTimers[index] -= dt;
-        if (this.mountTimers[index] <= 0) {
-          this.fireMount(index);
-          this.mountTimers[index] += this.getFireInterval();
+      const mounts = this.getMountCount();
+      if (mounts > 0) {
+        for (let index = 0; index < mounts; index += 1) {
+          this.mountTimers[index] -= dt;
+          if (this.mountTimers[index] <= 0) {
+            this.fireMount(index);
+            this.mountTimers[index] += this.getFireInterval();
+          }
         }
       }
     }
@@ -406,6 +420,7 @@ export class DefenceSystem {
     this.hellfireSouls = 0;
     this.occultSouls = 0;
     this.overchargeActive = false;
+    this.hellfireSuppressed = false;
     this.pendingExtraShots = [];
     // Keep the physical crossbows visible for the first seconds of the ending;
     // World powers the manor upgrades down as the Hell Gate collapses.

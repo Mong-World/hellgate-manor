@@ -41,6 +41,7 @@ export class Game {
     this.lightningStrikeTimer = Infinity;
     this.lightningThunderTimer = -1;
     this.wave50MidpointEvent = null;
+    this.wave50DefenceResumePending = false;
     this.runtimePrimed = false;
     this.lastUISyncState = null;
     this.uiUnlockWaves = Object.fromEntries(
@@ -185,6 +186,7 @@ export class Game {
     this.endingDawnMusicStarted = false;
     this.endingDawnMusicDelay = 4.15;
     this.wave50MidpointEvent = null;
+    this.wave50DefenceResumePending = false;
     this.paused = false;
     this.lastUISyncState = null;
   }
@@ -723,6 +725,8 @@ export class Game {
     // and becomes a little more frequent as the final wave approaches.
     this.lightningThunderTimer = -1;
     this.wave50MidpointEvent = null;
+    this.wave50DefenceResumePending = false;
+    this.defence.setHellfireSuppressed?.(false);
     this.lightningStrikeTimer = waveNumber >= 45
       ? THREE.MathUtils.randFloat(4.0, 8.0)
       : Infinity;
@@ -1262,7 +1266,10 @@ export class Game {
     // Souls and combat gains from that attempt are rolled back.
     this.totalClicks = clicksMade;
     this.continuesUsed = used;
-    this.overchargeActive = false;
+    // A paid Overcharge belongs to the whole wave attempt. The wave-start
+    // snapshot already records it as paid/active, so a Continue/Retry must not
+    // charge another 50 Bound Souls. Hide the combat visuals while in the
+    // intermission, but keep overchargeActive=true for startCurrentWave().
     this.world.setOverchargeActive?.(false);
     this.defence.setOvercharge?.(false);
     this.gameplayActive = false;
@@ -1724,12 +1731,14 @@ export class Game {
       lightningEnd,
       messageStart,
       messageShown: false,
-      strikeOffsets: [0.02, 0.24, 0.46, 0.67, 0.90, 1.12, 1.34, 1.56, 1.80, 2.04, 2.28, 2.50],
+      strikeOffsets: [0.02, 0.36, 0.70, 1.04, 1.38, 1.72, 2.06, 2.40],
       nextStrike: 0
     };
 
     this.lightningThunderTimer = -1;
     this.lightningStrikeTimer = 30;
+    this.wave50DefenceResumePending = false;
+    this.defence.setHellfireSuppressed?.(true);
     this.audio.setMusicLevel(0.18, 1.2);
   }
 
@@ -1771,11 +1780,13 @@ export class Game {
         event.timer >= event.lightningStart + event.strikeOffsets[event.nextStrike]
       ) {
         event.nextStrike += 1;
-        this.world.triggerRedLightning?.();
+        // Short, separated strikes read as multiple flashes instead of one
+        // continuous bolt. Reuse the same pre-created lightning geometry.
+        this.world.triggerRedLightning?.(0.24, 34);
         this.audio.play("lightning", {
-          volume: 0.82,
-          pitchMin: 0.66,
-          pitchMax: 1.42,
+          volume: 0.84,
+          pitchMin: 0.62,
+          pitchMax: 1.48,
           cooldown: 0,
           maxInstances: 3
         });
@@ -1797,8 +1808,30 @@ export class Game {
       this.wave50MidpointEvent = null;
       this.audio.setMusicLevel(0.425, 0.35);
       this.lightningStrikeTimer = THREE.MathUtils.randFloat(6.5, 10.5);
+      this.wave50DefenceResumePending = true;
       this.waveManager.releaseMidpoint?.();
       this.syncUI();
+    }
+  }
+
+  updateWave50DefenceResume() {
+    if (!this.wave50DefenceResumePending || !this.gameplayActive) return;
+
+    const projected = new THREE.Vector3();
+    for (const enemy of this.waveManager?.getActiveCombatEnemies?.() ?? []) {
+      if (!enemy || enemy.dead || enemy.removed || enemy.state === "extracting") continue;
+      projected.copy(enemy.position);
+      projected.y += Math.max(0.8, (enemy.definition?.height ?? 2) * 0.42);
+      projected.project(this.camera);
+      if (
+        projected.z >= -1 && projected.z <= 1 &&
+        projected.x >= -0.96 && projected.x <= 0.96 &&
+        projected.y >= -0.96 && projected.y <= 0.96
+      ) {
+        this.wave50DefenceResumePending = false;
+        this.defence.setHellfireSuppressed?.(false);
+        return;
+      }
     }
   }
 
@@ -1904,6 +1937,7 @@ export class Game {
       this.updateFirstWaveTutorial(simulationActive ? dt : 0);
       this.updateLateGameLightning(simulationActive ? dt : 0);
       this.updateWave50Midpoint(simulationActive ? dt : 0);
+      if (simulationActive) this.updateWave50DefenceResume();
       if (simulationActive) {
         this.checkWorldCollisions();
       }
