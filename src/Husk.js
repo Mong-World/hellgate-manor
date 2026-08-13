@@ -12,15 +12,19 @@ const STRONG_EMBER_MATERIAL = new THREE.MeshBasicMaterial({
   depthWrite: false
 });
 const STRONG_EMBER_ANCHORS = Object.freeze([
-  [-0.16, 1.50, 0.14],
-  [ 0.18, 1.42, 0.10],
-  [-0.23, 1.28, -0.06],
-  [ 0.11, 1.18, -0.14],
-  [-0.08, 1.02, 0.18],
-  [ 0.08, 1.08, -0.18],
-  [ 0.00, 1.56, -0.10]
+  [-0.10, 1.58, 0.30],
+  [ 0.12, 1.50, 0.28],
+  [-0.20, 1.40, 0.18],
+  [ 0.22, 1.34, 0.20],
+  [-0.08, 1.22, 0.34],
+  [ 0.10, 1.16, 0.36],
+  [ 0.00, 1.46, 0.10],
+  [ 0.00, 1.28, -0.02]
 ]);
-const STRONG_EMBER_POOL_SIZE = 14;
+const STRONG_EMBER_POOL_SIZE = 10;
+const STRONG_EMBER_SPAWN = new THREE.Vector3();
+const STRONG_EMBER_DRIFT = new THREE.Vector3();
+const STRONG_EMBER_ROTATION = new THREE.Quaternion();
 
 function findClip(animations, pattern) {
   return animations.find((clip) => pattern.test(clip.name));
@@ -92,30 +96,26 @@ export class Husk {
     this.animations = clone.animations;
 
     if (this.type === "strong") {
-      // The Strong Husk uses a tiny pooled ember system instead of static body
-      // glows. Embers emit from the torso/shoulders, then drift upward and
-      // slightly backward so they feel like heat peeling from the body while
-      // remaining lightweight enough for mobile.
-      this.strongEmbers = new THREE.Group();
+      // A tiny pooled ember system gives Strong Husks a much clearer identity
+      // without using dynamic lights. Embers emit higher from the upper torso
+      // and shoulders, with a slight front bias toward the camera so they read
+      // across the body instead of clustering under the legs.
       this.strongEmberPool = [];
       this.strongEmberSpawnTimer = 0;
       for (let i = 0; i < STRONG_EMBER_POOL_SIZE; i += 1) {
         const ember = new THREE.Mesh(STRONG_EMBER_GEOMETRY, STRONG_EMBER_MATERIAL);
         ember.visible = false;
         ember.userData.enemy = this;
-        ember.userData.phase = Math.random() * Math.PI * 2;
-        ember.userData.baseScale = THREE.MathUtils.randFloat(0.55, 1.15);
         ember.userData.velocity = new THREE.Vector3();
-        ember.userData.anchor = new THREE.Vector3();
-        ember.userData.life = 0;
         ember.userData.age = 0;
-        ember.userData.spin = THREE.MathUtils.randFloat(2.8, 5.2);
-        ember.userData.drift = THREE.MathUtils.randFloat(0.035, 0.11);
-        ember.userData.trail = THREE.MathUtils.randFloat(0.16, 0.34);
-        this.strongEmbers.add(ember);
+        ember.userData.life = 0;
+        ember.userData.baseScale = 1;
+        ember.userData.phase = 0;
+        ember.userData.spin = 0;
+        ember.userData.sway = 0;
+        this.scene.add(ember);
         this.strongEmberPool.push(ember);
       }
-      this.group.add(this.strongEmbers);
     }
 
     const [gx, gy, gz] = this.definition.grabBox;
@@ -255,39 +255,46 @@ export class Husk {
   }
 
   updateStrongEmbers(dt, elapsed) {
-    if (!this.strongEmberPool || !this.strongEmbers) return;
+    if (!this.strongEmberPool) return;
 
-    const active = !this.dead && !this.removed && this.state !== "pooled";
-    this.strongEmbers.visible = active;
-    if (!active) return;
+    const active = !this.dead && !this.removed && this.state !== "pooled" && this.state !== "extracting";
+    if (!active) {
+      this.strongEmberSpawnTimer = 0;
+    } else {
+      const moving = this.state === "walking" || this.state === "attacking" || this.state === "siegeCharging";
+      const spawnInterval = moving ? 0.045 : 0.075;
+      this.strongEmberSpawnTimer -= dt;
+      while (this.strongEmberSpawnTimer <= 0) {
+        this.strongEmberSpawnTimer += spawnInterval + Math.random() * 0.02;
+        const ember = this.strongEmberPool.find((item) => !item.visible);
+        if (!ember) break;
+        const data = ember.userData;
+        const anchor = STRONG_EMBER_ANCHORS[(Math.random() * STRONG_EMBER_ANCHORS.length) | 0];
+        STRONG_EMBER_SPAWN.set(
+          anchor[0] + THREE.MathUtils.randFloatSpread(0.07),
+          anchor[1] + THREE.MathUtils.randFloatSpread(0.06),
+          anchor[2] + THREE.MathUtils.randFloatSpread(0.07)
+        );
+        this.group.localToWorld(STRONG_EMBER_SPAWN);
+        ember.position.copy(STRONG_EMBER_SPAWN);
 
-    const moving = this.state === "walking" || this.state === "attacking" || this.state === "siegeCharging";
-    const emissionRate = moving ? 0.034 : 0.058;
-    this.strongEmberSpawnTimer -= dt;
-    while (this.strongEmberSpawnTimer <= 0) {
-      this.strongEmberSpawnTimer += emissionRate + Math.random() * 0.022;
-      const ember = this.strongEmberPool.find((item) => !item.visible);
-      if (!ember) break;
-      const data = ember.userData;
-      const anchor = STRONG_EMBER_ANCHORS[(Math.random() * STRONG_EMBER_ANCHORS.length) | 0];
-      data.anchor.set(anchor[0], anchor[1], anchor[2]);
-      ember.position.set(
-        data.anchor.x + THREE.MathUtils.randFloatSpread(0.08),
-        data.anchor.y + THREE.MathUtils.randFloatSpread(0.05),
-        data.anchor.z + THREE.MathUtils.randFloatSpread(0.11)
-      );
-      data.age = 0;
-      data.life = THREE.MathUtils.randFloat(0.48, 0.92);
-      data.phase = Math.random() * Math.PI * 2;
-      data.baseScale = THREE.MathUtils.randFloat(0.48, 1.05);
-      const backward = this.walkSpeed >= 0 ? -1 : 1;
-      data.velocity.set(
-        backward * THREE.MathUtils.randFloat(0.18, 0.34),
-        THREE.MathUtils.randFloat(0.38, 0.66),
-        THREE.MathUtils.randFloatSpread(0.13)
-      );
-      ember.scale.setScalar(data.baseScale);
-      ember.visible = true;
+        this.group.getWorldQuaternion(STRONG_EMBER_ROTATION);
+        STRONG_EMBER_DRIFT.set(
+          -THREE.MathUtils.randFloat(0.22, 0.42),
+          THREE.MathUtils.randFloat(0.52, 0.88),
+          THREE.MathUtils.randFloat(-0.03, 0.10)
+        ).applyQuaternion(STRONG_EMBER_ROTATION);
+
+        data.velocity.copy(STRONG_EMBER_DRIFT);
+        data.age = 0;
+        data.life = THREE.MathUtils.randFloat(0.42, 0.82);
+        data.baseScale = THREE.MathUtils.randFloat(0.52, 1.00);
+        data.phase = Math.random() * Math.PI * 2;
+        data.spin = THREE.MathUtils.randFloat(4.0, 7.0);
+        data.sway = THREE.MathUtils.randFloat(0.04, 0.10);
+        ember.scale.setScalar(data.baseScale);
+        ember.visible = true;
+      }
     }
 
     for (const ember of this.strongEmberPool) {
@@ -299,14 +306,13 @@ export class Husk {
         continue;
       }
       const t = data.age / data.life;
-      const riseEase = 1 - Math.pow(1 - t, 2);
-      const swirl = Math.sin(elapsed * data.spin + data.phase);
-      const swirl2 = Math.cos(elapsed * (data.spin * 0.82) + data.phase);
-      ember.position.x += (data.velocity.x + swirl * data.drift) * dt;
-      ember.position.y += (data.velocity.y + riseEase * 0.18) * dt;
-      ember.position.z += (data.velocity.z + swirl2 * data.drift * 0.8) * dt;
-      const scale = data.baseScale * (1 - t * 0.78);
-      ember.scale.setScalar(Math.max(0.12, scale));
+      const rise = 1 - Math.pow(1 - t, 2);
+      const swirlX = Math.sin(elapsed * data.spin + data.phase) * data.sway;
+      const swirlZ = Math.cos(elapsed * (data.spin * 0.82) + data.phase) * data.sway * 0.9;
+      ember.position.x += (data.velocity.x + swirlX) * dt;
+      ember.position.y += (data.velocity.y + rise * 0.22) * dt;
+      ember.position.z += (data.velocity.z + swirlZ + 0.015) * dt;
+      ember.scale.setScalar(Math.max(0.10, data.baseScale * (1 - t * 0.80)));
     }
   }
 
@@ -604,11 +610,7 @@ export class Husk {
     this.currentAction = null;
     if (this.strongEmberPool) {
       this.strongEmberSpawnTimer = 0;
-      this.strongEmbers.visible = true;
-      this.strongEmberPool.forEach((ember) => {
-        ember.visible = false;
-        ember.position.set(0, 1.18, 0);
-      });
+      this.strongEmberPool.forEach((ember) => { ember.visible = false; });
     }
     this.playAction("walk", 0);
     if (this.actions.walk) this.actions.walk.timeScale = this.walkAnimationSpeed;
@@ -626,10 +628,7 @@ export class Husk {
     this.modelRoot.scale.set(1, 1, 1);
     this.mixer?.stopAllAction();
     this.currentAction = null;
-    if (this.strongEmberPool) {
-      this.strongEmbers.visible = false;
-      this.strongEmberPool.forEach((ember) => { ember.visible = false; });
-    }
+    if (this.strongEmberPool) this.strongEmberPool.forEach((ember) => { ember.visible = false; });
   }
 
   preWarmAllActions(dt = 1 / 30) {
@@ -651,10 +650,7 @@ export class Husk {
     this.state = "dead";
     this.group.visible = false;
     this.mixer?.stopAllAction();
-    if (this.strongEmberPool) {
-      this.strongEmbers.visible = false;
-      this.strongEmberPool.forEach((ember) => { ember.visible = false; });
-    }
+    if (this.strongEmberPool) this.strongEmberPool.forEach((ember) => { ember.visible = false; });
   }
 
   dispose() {
@@ -663,6 +659,12 @@ export class Husk {
     if (this.grabCollider) {
       this.grabCollider.geometry.dispose();
       this.grabCollider.material.dispose();
+    }
+    if (this.strongEmberPool) {
+      this.strongEmberPool.forEach((ember) => {
+        ember.visible = false;
+        this.scene.remove(ember);
+      });
     }
     this.scene.remove(this.group);
   }
