@@ -781,7 +781,6 @@ export class Game {
       if (slot >= 0 && this.waveManager.captureEnemy(enemy)) {
         this.boundSouls += 1;
         this.totalBoundEver += 1;
-        this.ui.pulseBound();
         this.audio.play("soulBling", { volume: 0.62, pitchMin: 0.98, pitchMax: 1.03 });
         this.audio.playLoop("soulBinding", "soul-binding", { volume: 0.34, fadeSeconds: 0.25 });
         this.normaliseAssignments();

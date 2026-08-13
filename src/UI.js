@@ -47,6 +47,7 @@ export class UI {
     this.soulPulse = 0;
     this.boundPulse = 0;
     this.soulFlights = [];
+    this.boundTransferEffects = [];
     this.portalReady = false;
     this.portalReadyNoticeTimer = 0;
     this.blessingEffect = null;
@@ -334,18 +335,22 @@ export class UI {
   }
 
   addBoundSoulFlight(x, y) {
-    // A tiny cluster creates a short ember trail without any WebGL resources.
-    for (let i = 0; i < 4; i += 1) {
-      this.soulFlights.push({
-        x: x + (i - 1.5) * 3,
-        y: y + (i % 2) * 3,
-        age: -i * 0.06,
-        duration: 0.78 + i * 0.035,
-        onArrive: i === 3 ? () => this.pulseBound() : null,
-        scale: 0.58 + i * 0.08,
-        target: "bound"
+    const particles = [];
+    for (let i = 0; i < 24; i += 1) {
+      particles.push({
+        delay: i * 0.105,
+        duration: 1.35 + (i % 5) * 0.09,
+        arc: 22 + (i % 7) * 6,
+        drift: ((i % 2) ? 1 : -1) * (5 + (i % 4) * 4)
       });
     }
+    this.boundTransferEffects.push({
+      age: 0,
+      duration: 4.0,
+      origin: { x, y },
+      particles,
+      arrived: false
+    });
   }
 
   findButtonAt(x, y) {
@@ -465,6 +470,37 @@ export class UI {
     ctx.restore();
   }
 
+  drawBoundTransferEffects(width, height) {
+    if (this.boundTransferEffects.length === 0) return;
+    const mobile = this.isMobileLandscape();
+    const target = this.getBoundCounterPosition(width, height);
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    for (const fx of this.boundTransferEffects) {
+      for (const particle of fx.particles) {
+        const local = fx.age - particle.delay;
+        if (local < 0 || local > particle.duration) continue;
+        const t = Math.max(0, Math.min(1, local / particle.duration));
+        const eased = t * t * (3 - 2 * t);
+        const x = fx.origin.x + (target.x - fx.origin.x) * eased + Math.sin(t * Math.PI) * particle.drift;
+        const y = fx.origin.y + (target.y - fx.origin.y) * eased - Math.sin(t * Math.PI) * particle.arc;
+        const alpha = Math.sin(t * Math.PI) * 0.9;
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = "#ffb067";
+        ctx.beginPath();
+        ctx.arc(x, y, mobile ? 2.1 : 2.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = alpha * 0.30;
+        ctx.fillStyle = "#ff5f21";
+        ctx.beginPath();
+        ctx.arc(x, y, mobile ? 5.1 : 6.6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
   update(dt) {
     this.uiTime += dt;
     if (this.mode === "ending") this.endingElapsed += dt;
@@ -477,6 +513,15 @@ export class UI {
     if (this.blessingEffect) {
       this.blessingEffect.age += dt;
       if (this.blessingEffect.age >= this.blessingEffect.duration + 0.5) this.blessingEffect = null;
+    }
+    for (let i = this.boundTransferEffects.length - 1; i >= 0; i -= 1) {
+      const effect = this.boundTransferEffects[i];
+      effect.age += dt;
+      if (!effect.arrived && effect.age >= effect.duration - 0.35) {
+        effect.arrived = true;
+        this.pulseBound();
+      }
+      if (effect.age >= effect.duration + 0.5) this.boundTransferEffects.splice(i, 1);
     }
     for (let i = this.soulFlights.length - 1; i >= 0; i -= 1) {
       const flight = this.soulFlights[i];
@@ -523,6 +568,7 @@ export class UI {
     }
 
     if (this.blessingEffect) this.drawHouseBlessing(width, height);
+    if (this.boundTransferEffects.length > 0) this.drawBoundTransferEffects(width, height);
     if (this.developerPanelOpen) this.drawDeveloperPanel(width, height);
   }
 
