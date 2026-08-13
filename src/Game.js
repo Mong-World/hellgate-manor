@@ -151,6 +151,8 @@ export class Game {
     this.bombs = 0;
     this.fortifyLevel = 0;
     this.extractionLevel = 0;
+    this.portalReadyLast = false;
+    this.extractionScreenScratch = new THREE.Vector3();
     this.buildings = {
       extraction: false,
       hellfire: false,
@@ -327,6 +329,7 @@ export class Game {
     for (let i = 0; i < CONFIG.extraction.maxConcurrent; i += 1) {
       this.world.startExtractionBeam?.(CONFIG.extraction.maxConcurrent);
     }
+    this.world.setExtractionReady?.(true);
     this.world.triggerOccultStrike?.(new THREE.Vector3(-8, 0, -2));
     this.world.triggerOccultStrike?.(new THREE.Vector3(-2, 0, 1));
     this.world.triggerOccultStrike?.(new THREE.Vector3(5, 0, 3));
@@ -430,6 +433,7 @@ export class Game {
     this.defence.impacts = [];
     this.world.setTurretLevel(0);
     this.world.resetTransientEffects?.();
+    this.world.setExtractionReady?.(false);
     this.world.setNewGamePlusMode?.(false);
     this.applyUpgradeState();
     this.renderer.render(this.scene, this.camera);
@@ -1893,6 +1897,19 @@ export class Game {
     this.lightningStrikeTimer = THREE.MathUtils.randFloat(minGap, maxGap);
   }
 
+  updateExtractionReadyState() {
+    const ready = !!(
+      this.gameplayActive &&
+      !this.paused &&
+      this.buildings.extraction &&
+      this.extractionLevel > 0 &&
+      (this.world?.getAvailableExtractionSlot?.(this.extractionLevel) ?? -1) >= 0
+    );
+    this.world?.setExtractionReady?.(ready);
+    this.ui?.setPortalReady?.(ready);
+    this.portalReadyLast = ready;
+  }
+
   updateFirstWaveTutorial(dt) {
     if (!this.firstWaveTutorialPending || !this.gameplayActive || this.paused || this.ui.mode !== "playing") return;
 
@@ -1973,11 +1990,19 @@ export class Game {
     this.grabSystem?.update(simulationActive ? dt : 0);
     this.defence?.update(simulationActive ? dt : 0, simulationActive);
     this.effectPool?.update(this.paused ? 0 : dt);
+    this.updateExtractionReadyState();
     this.world?.update(elapsed, this.paused ? 0 : dt);
 
     const completedBindings = this.world?.consumeExtractionCompletions?.() ?? 0;
     for (let i = 0; i < completedBindings; i += 1) {
       this.audio.play("soulBling", { volume: 0.68, pitchMin: 1.00, pitchMax: 1.05 });
+      const origin = this.world?.getExtractionWorldPosition?.(this.extractionScreenScratch);
+      if (origin) {
+        const screen = this.projectWorldToScreen(origin);
+        this.ui?.addBoundSoulFlight?.(screen.x, screen.y);
+      } else {
+        this.ui?.pulseBound?.();
+      }
     }
 
     if ((this.world?.getActiveExtractionCount?.() ?? 0) <= 0) {

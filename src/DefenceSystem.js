@@ -28,6 +28,7 @@ export class DefenceSystem {
     this.destinationScratch = new THREE.Vector3();
     this.occultCandidates = [];
     this.occultDamaged = new Set();
+    this.targetProjection = new THREE.Vector3();
 
     this.createPools();
   }
@@ -198,8 +199,11 @@ export class DefenceSystem {
         const shot = this.pendingExtraShots[i];
         shot.timer -= dt;
         if (shot.timer <= 0) {
-          this.fireMount(shot.mountIndex, false);
-          this.pendingExtraShots.splice(i, 1);
+          if (this.fireMount(shot.mountIndex, false)) {
+            this.pendingExtraShots.splice(i, 1);
+          } else {
+            shot.timer = 0.12;
+          }
         }
       }
 
@@ -208,8 +212,8 @@ export class DefenceSystem {
         for (let index = 0; index < mounts; index += 1) {
           this.mountTimers[index] -= dt;
           if (this.mountTimers[index] <= 0) {
-            this.fireMount(index);
-            this.mountTimers[index] += this.getFireInterval();
+            if (this.fireMount(index)) this.mountTimers[index] += this.getFireInterval();
+            else this.mountTimers[index] = 0.12;
           }
         }
       }
@@ -224,11 +228,24 @@ export class DefenceSystem {
     }
   }
 
-  chooseTarget() {
+  isValidVisibleTarget(enemy) {
+    if (!enemy || enemy.dead || enemy.removed || enemy.state === "extracting" || this.isEnemyHeld(enemy)) return false;
+    if (["grabbed", "airborne", "fallen", "gettingUp"].includes(enemy.state)) return false;
+    const camera = enemy.camera;
+    if (!camera) return true;
+    this.targetProjection.copy(enemy.position);
+    this.targetProjection.y += Math.min(enemy.definition?.height * 0.35 || 0.8, 1.8);
+    this.targetProjection.project(camera);
+    return this.targetProjection.z >= -1 && this.targetProjection.z <= 1 &&
+      this.targetProjection.x >= -1.04 && this.targetProjection.x <= 1.04 &&
+      this.targetProjection.y >= -1.04 && this.targetProjection.y <= 1.04;
+  }
+
+  chooseTarget(exclude = null) {
     let best = null;
     let bestX = -Infinity;
     for (const enemy of this.getEnemies()) {
-      if (enemy.dead || enemy.removed || enemy.state === "extracting" || this.isEnemyHeld(enemy)) continue;
+      if (enemy === exclude || !this.isValidVisibleTarget(enemy)) continue;
       if (enemy.position.x > bestX) {
         best = enemy;
         bestX = enemy.position.x;
@@ -248,6 +265,7 @@ export class DefenceSystem {
 
   fireMount(mountIndex, scheduleExtra = true) {
     const target = this.chooseTarget();
+    if (!target) return false;
     const fallback = this.chooseGroundPoint(mountIndex, target, this.groundPointScratch);
     const destination = this.destinationScratch;
     if (target) {
@@ -265,6 +283,7 @@ export class DefenceSystem {
         timer: this.getFireInterval() * 0.5
       });
     }
+    return true;
   }
 
   acquireArrow() {
@@ -298,18 +317,21 @@ export class DefenceSystem {
       const projectile = this.projectiles[i];
       projectile.age += dt;
 
-      if (
-        projectile.target &&
-        !projectile.target.dead &&
-        !projectile.target.removed &&
-        projectile.target.state !== "extracting" &&
-        !this.isEnemyHeld(projectile.target)
-      ) {
+      if (projectile.target && this.isValidVisibleTarget(projectile.target)) {
         projectile.destination.copy(projectile.target.position);
         projectile.destination.y += Math.min(projectile.target.definition.height * 0.4, 2.1);
       } else if (projectile.target) {
-        projectile.destination.copy(projectile.fallback);
-        projectile.target = null;
+        const replacement = this.chooseTarget(projectile.target);
+        if (replacement) {
+          projectile.target = replacement;
+          projectile.destination.copy(replacement.position);
+          projectile.destination.y += Math.min(replacement.definition.height * 0.4, 2.1);
+        } else {
+          // At the end of a wave there may be nobody left to retarget. Keep the
+          // physical arrow believable by letting it finish at the ground point.
+          projectile.destination.copy(projectile.fallback);
+          projectile.target = null;
+        }
       }
 
       const direction = projectile.direction.copy(projectile.destination).sub(projectile.group.position);

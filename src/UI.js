@@ -47,6 +47,8 @@ export class UI {
     this.soulPulse = 0;
     this.boundPulse = 0;
     this.soulFlights = [];
+    this.portalReady = false;
+    this.portalReadyNoticeTimer = 0;
     this.blessingEffect = null;
     this.buttons = [];
     this.shopPage = 0;
@@ -312,15 +314,38 @@ export class UI {
     this.boundPulse = 0.55;
   }
 
-  addSoulFlight(x, y, onArrive = null, scale = 1) {
+  setPortalReady(ready) {
+    const next = !!ready;
+    if (next && !this.portalReady) this.portalReadyNoticeTimer = 4.8;
+    if (!next) this.portalReadyNoticeTimer = 0;
+    this.portalReady = next;
+  }
+
+  addSoulFlight(x, y, onArrive = null, scale = 1, target = "souls") {
     this.soulFlights.push({
       x,
       y,
       age: 0,
       duration: 0.72 + Math.random() * 0.16,
       onArrive,
-      scale
+      scale,
+      target
     });
+  }
+
+  addBoundSoulFlight(x, y) {
+    // A tiny cluster creates a short ember trail without any WebGL resources.
+    for (let i = 0; i < 4; i += 1) {
+      this.soulFlights.push({
+        x: x + (i - 1.5) * 3,
+        y: y + (i % 2) * 3,
+        age: -i * 0.06,
+        duration: 0.78 + i * 0.035,
+        onArrive: i === 3 ? () => this.pulseBound() : null,
+        scale: 0.58 + i * 0.08,
+        target: "bound"
+      });
+    }
   }
 
   findButtonAt(x, y) {
@@ -448,6 +473,7 @@ export class UI {
     this.soulPulse = Math.max(0, this.soulPulse - dt);
     this.boundPulse = Math.max(0, this.boundPulse - dt);
     this.saveNoticeTimer = Math.max(0, this.saveNoticeTimer - dt);
+    this.portalReadyNoticeTimer = Math.max(0, this.portalReadyNoticeTimer - dt);
     if (this.blessingEffect) {
       this.blessingEffect.age += dt;
       if (this.blessingEffect.age >= this.blessingEffect.duration + 0.5) this.blessingEffect = null;
@@ -457,7 +483,8 @@ export class UI {
       flight.age += dt;
       if (flight.age >= flight.duration) {
         this.soulFlights.splice(i, 1);
-        this.pulseSouls();
+        if (flight.target === "bound") this.pulseBound();
+        else this.pulseSouls();
         flight.onArrive?.();
       }
     }
@@ -825,6 +852,7 @@ export class UI {
     }
 
     this.drawSoulFlights(width, height);
+    this.drawPortalReadyNotice(width, height);
   }
 
   drawMobileHUD(width, height) {
@@ -932,6 +960,7 @@ export class UI {
     }
 
     this.drawSoulFlights(width, height);
+    this.drawPortalReadyNotice(width, height);
   }
 
   getSoulCounterPosition(width, height) {
@@ -951,11 +980,31 @@ export class UI {
     return { x: rightX + 25, y: y + 38 };
   }
 
+  getBoundCounterPosition(width, height) {
+    if (this.isMobileLandscape()) {
+      const margin = 5;
+      const hudH = 36;
+      const rightW = Math.min(106, width * 0.165);
+      const rightX = width - margin - rightW;
+      return { x: rightX + rightW - 13, y: height - margin - hudH - 15 };
+    }
+    const compact = width < 820;
+    const margin = compact ? 12 : 20;
+    const hudHeight = compact ? 62 : 68;
+    const y = height - margin - hudHeight;
+    const rightWidth = compact ? 168 : 215;
+    const rightX = width - margin - rightWidth;
+    return { x: rightX + rightWidth - 24, y: y - 26 };
+  }
+
   drawSoulFlights(width, height) {
     if (this.soulFlights.length === 0) return;
-    const target = this.getSoulCounterPosition(width, height);
+    const soulTarget = this.getSoulCounterPosition(width, height);
+    const boundTarget = this.getBoundCounterPosition(width, height);
     const ctx = this.ctx;
     for (const flight of this.soulFlights) {
+      if (flight.age < 0) continue;
+      const target = flight.target === "bound" ? boundTarget : soulTarget;
       const t = Math.min(1, flight.age / flight.duration);
       const eased = 1 - Math.pow(1 - t, 3);
       const controlX = (flight.x + target.x) * 0.5;
@@ -974,6 +1023,30 @@ export class UI {
       ctx.fill();
       ctx.restore();
     }
+  }
+
+  drawPortalReadyNotice(width, height) {
+    if (!this.portalReady || (this.mode !== "playing" && this.mode !== "paused")) return;
+    const mobile = this.isMobileLandscape();
+    const strong = this.portalReadyNoticeTimer > 0;
+    const text = strong ? "PORTAL READY — CAPTURE A DEMON" : "PORTAL READY";
+    const pulse = strong ? (0.58 + 0.42 * Math.abs(Math.sin(this.uiTime * 6.2))) : 0.82;
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.globalAlpha = pulse;
+    ctx.textAlign = "center";
+    ctx.font = this.dataFont(mobile ? 8 : 10, 900);
+    const textWidth = ctx.measureText(text).width;
+    const boxW = textWidth + (mobile ? 20 : 28);
+    const boxH = mobile ? 24 : 30;
+    const x = width / 2 - boxW / 2;
+    const y = mobile ? 8 : 14;
+    this.panel(x, y, boxW, boxH, "rgba(8,7,6,.82)", 6);
+    ctx.fillStyle = C.orangeLight;
+    ctx.shadowColor = "rgba(255,92,26,.82)";
+    ctx.shadowBlur = strong ? 9 : 4;
+    ctx.fillText(text, width / 2, y + (mobile ? 16 : 20));
+    ctx.restore();
   }
 
   drawPauseButton(width) {

@@ -100,12 +100,12 @@ export class AssetLibrary {
 
     const clone = material.clone();
     if (type === "strong") {
-      // Combined value of the two historical Strong-Husk tint passes. Keeping
-      // it here means every pooled Strong Husk can share the same material.
-      if (clone.color) clone.color.multiply(new THREE.Color(0.5184, 0.1932, 0.1292));
+      // Warmer/redder Strong Husk tint for better battlefield readability.
+      // Keep the material shared across the pool so this costs nothing per-frame.
+      if (clone.color) clone.color.multiply(new THREE.Color(0.64, 0.255, 0.17));
       if ("emissive" in clone) {
-        clone.emissive = new THREE.Color(0x351208);
-        clone.emissiveIntensity = 0.45;
+        clone.emissive = new THREE.Color(0x5a1b0b);
+        clone.emissiveIntensity = 0.62;
       }
     } else if (type === "runner") {
       if ("emissive" in clone) {

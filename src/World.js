@@ -254,6 +254,7 @@ export class World {
     this.extractionBeams = [];
     this.extractionCapacity = 0;
     this.extractionCompletions = 0;
+    this.extractionReady = false;
     this.upgradeGroups = {};
     this.fortifyGroups = [];
     this.occultPulseTimer = 0;
@@ -1519,6 +1520,14 @@ export class World {
     return this.extractionBeams.reduce((count, slot) => count + (slot.active ? 1 : 0), 0);
   }
 
+  setExtractionReady(ready) {
+    this.extractionReady = !!ready;
+  }
+
+  getExtractionWorldPosition(out = new THREE.Vector3()) {
+    return out.copy(this.extractionCentre);
+  }
+
   consumeExtractionCompletions() {
     const count = this.extractionCompletions;
     this.extractionCompletions = 0;
@@ -2115,12 +2124,13 @@ export class World {
     if (this.upgradeGroups.extraction?.group.visible) {
       const extraction = this.upgradeGroups.extraction;
       const pulse = 1 + Math.sin(elapsed * 2.8) * 0.08;
-      extraction.portal.material.opacity = 0.44 + Math.sin(elapsed * 2.4) * 0.07;
-      extraction.portalHalo.material.opacity = 0.14 + Math.sin(elapsed * 1.9 + 1.1) * 0.04;
-      const portalScale = 1 + Math.sin(elapsed * 2.0) * 0.025;
+      const readyPulse = this.extractionReady ? (0.5 + 0.5 * Math.sin(elapsed * 6.1)) : 0;
+      extraction.portal.material.opacity = 0.44 + Math.sin(elapsed * 2.4) * 0.07 + readyPulse * 0.18;
+      extraction.portalHalo.material.opacity = 0.14 + Math.sin(elapsed * 1.9 + 1.1) * 0.04 + readyPulse * 0.12;
+      const portalScale = 1 + Math.sin(elapsed * 2.0) * 0.025 + readyPulse * 0.035;
       extraction.portal.scale.set(8.8 * portalScale, 3.25 * portalScale, 1);
       extraction.portalHalo.scale.set(10.2 / portalScale, 4.2 / portalScale, 1);
-      extraction.light.intensity = 20 + pulse * 7;
+      extraction.light.intensity = 20 + pulse * 7 + readyPulse * 12;
     }
 
     this.extractionBeams.forEach((slot, slotIndex) => {

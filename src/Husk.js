@@ -2,6 +2,24 @@ import * as THREE from "three";
 import { AssetLibrary } from "./AssetLibrary.js";
 import { CONFIG } from "./Config.js";
 
+
+const STRONG_EMBER_GEOMETRY = new THREE.IcosahedronGeometry(0.055, 0);
+const STRONG_EMBER_MATERIAL = new THREE.MeshBasicMaterial({
+  color: 0xff6a24,
+  transparent: true,
+  opacity: 0.92,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false
+});
+const STRONG_EMBER_POINTS = Object.freeze([
+  [-0.20, 1.58, 0.18, 1.00],
+  [ 0.22, 1.42, 0.16, 0.78],
+  [-0.28, 1.12, 0.13, 0.70],
+  [ 0.18, 0.93, 0.19, 0.88],
+  [-0.13, 0.72, 0.17, 0.62],
+  [ 0.26, 0.56, 0.10, 0.58]
+]);
+
 function findClip(animations, pattern) {
   return animations.find((clip) => pattern.test(clip.name));
 }
@@ -70,6 +88,21 @@ export class Husk {
     this.modelRoot.add(model);
     this.model = model;
     this.animations = clone.animations;
+
+    if (this.type === "strong") {
+      // Small emissive ember flecks make the darker variant readable without
+      // adding a dynamic light. These meshes are created while enemy pools are
+      // prepared on the loading screen and share one geometry/material.
+      this.strongEmbers = new THREE.Group();
+      for (const [x, y, z, scale] of STRONG_EMBER_POINTS) {
+        const ember = new THREE.Mesh(STRONG_EMBER_GEOMETRY, STRONG_EMBER_MATERIAL);
+        ember.position.set(x, y, z);
+        ember.scale.setScalar(scale);
+        ember.userData.enemy = this;
+        this.strongEmbers.add(ember);
+      }
+      this.modelRoot.add(this.strongEmbers);
+    }
 
     const [gx, gy, gz] = this.definition.grabBox;
     const grabGeometry = new THREE.BoxGeometry(gx, gy, gz);

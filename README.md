@@ -438,3 +438,9 @@ Built directly on v1.9.8 without changing the established core mechanics.
 - Overcharge now adds a third Occult strike when Occult is already at its normal two-strike power level.
 - Wave 40 Overcharge tutorial wording now explains the shield, extra Hellfire bolts, extra Hell Bomb, and third Occult strike.
 - First-wave compact tutorial has more vertical clearance above the `GOT IT` button.
+
+## v1.9.18
+- Strong Husks are warmer/redder and carry subtle emissive ember flecks for readability.
+- Crossbows wait for visible valid targets; in-flight arrows retarget if their target is grabbed/thrown/invalid, otherwise finish in the ground if the battlefield clears.
+- Soul Extraction now pulses when a slot is ready, shows a pulsing capture reminder before settling to `PORTAL READY`, and sends an ember HUD trail to the Bound Souls counter on completion.
+- New visuals reuse/prewarm existing resources during the loading-screen warm-up.
