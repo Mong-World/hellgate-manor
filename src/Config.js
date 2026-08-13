@@ -108,6 +108,7 @@ const waves = Array.from({ length: 50 }, (_, index) => makeWave(index + 1));
 export const CONFIG = Object.freeze({
   assets: {
     husk: "./assets/husk.glb",
+    strong: "./assets/strong-husk.glb",
     runner: "./assets/running-crawl.glb",
     brute: "./assets/slow-walk.glb",
     siege: "./assets/skinny-monster.glb",
@@ -203,7 +204,7 @@ export const CONFIG = Object.freeze({
       convertible: true
     },
     strong: {
-      asset: "husk",
+      asset: "strong",
       height: 3.72,
       rotationY: Math.PI / 2,
       speed: [2.9, 3.3],

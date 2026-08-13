@@ -3,25 +3,27 @@ import { AssetLibrary } from "./AssetLibrary.js";
 import { CONFIG } from "./Config.js";
 
 
-const STRONG_EMBER_GEOMETRY = new THREE.IcosahedronGeometry(0.034, 0);
+const STRONG_EMBER_GEOMETRY = new THREE.IcosahedronGeometry(0.042, 0);
 const STRONG_EMBER_MATERIAL = new THREE.MeshBasicMaterial({
-  color: 0xff6a24,
+  color: 0xff7b28,
   transparent: true,
-  opacity: 0.94,
+  opacity: 1.0,
   blending: THREE.AdditiveBlending,
   depthWrite: false
 });
 const STRONG_EMBER_ANCHORS = Object.freeze([
-  [-0.10, 1.58, 0.30],
-  [ 0.12, 1.50, 0.28],
-  [-0.20, 1.40, 0.18],
-  [ 0.22, 1.34, 0.20],
-  [-0.08, 1.22, 0.34],
-  [ 0.10, 1.16, 0.36],
-  [ 0.00, 1.46, 0.10],
-  [ 0.00, 1.28, -0.02]
+  [-0.26, 2.78, 0.48],
+  [ 0.24, 2.70, 0.52],
+  [-0.18, 2.52, 0.56],
+  [ 0.18, 2.44, 0.58],
+  [-0.10, 2.28, 0.54],
+  [ 0.10, 2.22, 0.58],
+  [-0.30, 2.58, 0.30],
+  [ 0.28, 2.54, 0.32],
+  [ 0.00, 2.92, 0.36],
+  [ 0.00, 2.36, 0.24]
 ]);
-const STRONG_EMBER_POOL_SIZE = 10;
+const STRONG_EMBER_POOL_SIZE = 18;
 const STRONG_EMBER_SPAWN = new THREE.Vector3();
 const STRONG_EMBER_DRIFT = new THREE.Vector3();
 const STRONG_EMBER_ROTATION = new THREE.Quaternion();
@@ -262,7 +264,7 @@ export class Husk {
       this.strongEmberSpawnTimer = 0;
     } else {
       const moving = this.state === "walking" || this.state === "attacking" || this.state === "siegeCharging";
-      const spawnInterval = moving ? 0.045 : 0.075;
+      const spawnInterval = moving ? 0.030 : 0.052;
       this.strongEmberSpawnTimer -= dt;
       while (this.strongEmberSpawnTimer <= 0) {
         this.strongEmberSpawnTimer += spawnInterval + Math.random() * 0.02;
@@ -271,27 +273,29 @@ export class Husk {
         const data = ember.userData;
         const anchor = STRONG_EMBER_ANCHORS[(Math.random() * STRONG_EMBER_ANCHORS.length) | 0];
         STRONG_EMBER_SPAWN.set(
-          anchor[0] + THREE.MathUtils.randFloatSpread(0.07),
-          anchor[1] + THREE.MathUtils.randFloatSpread(0.06),
-          anchor[2] + THREE.MathUtils.randFloatSpread(0.07)
+          anchor[0] + THREE.MathUtils.randFloatSpread(0.10),
+          anchor[1] + THREE.MathUtils.randFloatSpread(0.10),
+          anchor[2] + THREE.MathUtils.randFloatSpread(0.10)
         );
         this.group.localToWorld(STRONG_EMBER_SPAWN);
         ember.position.copy(STRONG_EMBER_SPAWN);
 
         this.group.getWorldQuaternion(STRONG_EMBER_ROTATION);
         STRONG_EMBER_DRIFT.set(
-          -THREE.MathUtils.randFloat(0.22, 0.42),
-          THREE.MathUtils.randFloat(0.52, 0.88),
-          THREE.MathUtils.randFloat(-0.03, 0.10)
+          -THREE.MathUtils.randFloat(0.30, 0.52),
+          THREE.MathUtils.randFloat(0.62, 1.02),
+          THREE.MathUtils.randFloat(0.05, 0.16)
         ).applyQuaternion(STRONG_EMBER_ROTATION);
 
         data.velocity.copy(STRONG_EMBER_DRIFT);
         data.age = 0;
-        data.life = THREE.MathUtils.randFloat(0.42, 0.82);
-        data.baseScale = THREE.MathUtils.randFloat(0.52, 1.00);
+        data.life = THREE.MathUtils.randFloat(0.52, 0.96);
+        data.baseScale = Math.random() < 0.18
+          ? THREE.MathUtils.randFloat(1.05, 1.42)
+          : THREE.MathUtils.randFloat(0.62, 1.08);
         data.phase = Math.random() * Math.PI * 2;
         data.spin = THREE.MathUtils.randFloat(4.0, 7.0);
-        data.sway = THREE.MathUtils.randFloat(0.04, 0.10);
+        data.sway = THREE.MathUtils.randFloat(0.055, 0.13);
         ember.scale.setScalar(data.baseScale);
         ember.visible = true;
       }
@@ -310,9 +314,9 @@ export class Husk {
       const swirlX = Math.sin(elapsed * data.spin + data.phase) * data.sway;
       const swirlZ = Math.cos(elapsed * (data.spin * 0.82) + data.phase) * data.sway * 0.9;
       ember.position.x += (data.velocity.x + swirlX) * dt;
-      ember.position.y += (data.velocity.y + rise * 0.22) * dt;
-      ember.position.z += (data.velocity.z + swirlZ + 0.015) * dt;
-      ember.scale.setScalar(Math.max(0.10, data.baseScale * (1 - t * 0.80)));
+      ember.position.y += (data.velocity.y + rise * 0.30) * dt;
+      ember.position.z += (data.velocity.z + swirlZ + 0.035) * dt;
+      ember.scale.setScalar(Math.max(0.12, data.baseScale * (1 - t * 0.76)));
     }
   }
 

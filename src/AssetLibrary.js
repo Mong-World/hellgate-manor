@@ -15,7 +15,7 @@ export class AssetLibrary {
     // Loading several multi-megabyte GLBs simultaneously inside Portals can
     // occasionally fail even when every file exists, so this deliberately
     // uses a controlled sequential loader with retries.
-    const orderedKeys = ["husk", "manor", "runner", "brute", "siege", "shed"];
+    const orderedKeys = ["husk", "strong", "manor", "runner", "brute", "siege", "shed"];
     let completed = 0;
 
     for (const key of orderedKeys) {
@@ -100,13 +100,8 @@ export class AssetLibrary {
 
     const clone = material.clone();
     if (type === "strong") {
-      // Warmer/redder Strong Husk tint for better battlefield readability.
-      // Keep the material shared across the pool so this costs nothing per-frame.
-      if (clone.color) clone.color.multiply(new THREE.Color(0.64, 0.255, 0.17));
-      if ("emissive" in clone) {
-        clone.emissive = new THREE.Color(0x5a1b0b);
-        clone.emissiveIntensity = 0.62;
-      }
+      // strong-husk.glb already carries its dedicated texture treatment.
+      // Preserve that authored material rather than applying the old runtime tint.
     } else if (type === "runner") {
       if ("emissive" in clone) {
         clone.emissive = new THREE.Color(0x2a1710);
