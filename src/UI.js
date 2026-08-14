@@ -1735,11 +1735,11 @@ export class UI {
       ctx.fillText("MANOR OVERCHARGE", x + 16, rowY + 30);
       ctx.fillStyle = C.text;
       ctx.font = this.dataFont(mobile ? 9 : 10, 820);
-      ctx.fillText("ONE WAVE • 20% LESS MANOR DAMAGE • EXTRA HELLFIRE BOLTS", x + 16, rowY + 50);
+      ctx.fillText("FOR ONE WAVE, BOOST THE MANOR'S DEFENCES WITH A PROTECTIVE SHIELD AND EMPOWERED WEAPONS.", x + 16, rowY + 50);
       ctx.fillStyle = C.muted;
       ctx.font = this.dataFont(mobile ? 8 : 9, 800);
       const status = this.overchargeActive
-        ? "PAID — ACTIVE FOR THIS WAVE / RETRY"
+        ? "PAID — ACTIVE FOR THIS WAVE"
         : this.overchargeReady
           ? "50 / 50 RESERVED — READY FOR NEXT WAVE"
           : "COST: 50 UNASSIGNED BOUND SOULS";
