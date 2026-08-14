@@ -181,10 +181,10 @@ export const CONFIG = Object.freeze({
   },
 
   boundCaps: {
-    hellfire: 45,
+    hellfire: 50,
     demolition: 50,
     undercroft: 30,
-    occult: 30
+    occult: 40
   },
 
   enemyTypes: {
@@ -284,9 +284,10 @@ export const CONFIG = Object.freeze({
     bombFirstSoulCost: 25,
     bombSecondSoulCost: 50,
     bombOverchargeMaxCharges: 3,
-    hellfireMaxSouls: 45,
-    occultMaxSouls: 30,
-    occultSecondStrikeSouls: 25,
+    hellfireMaxSouls: 50,
+    hellfireSecondCrossbowSouls: 25,
+    occultMaxSouls: 40,
+    occultSecondStrikeSouls: 20,
     occultRadius: 3.6,
     undercroftRepairPerSoul: 25
   },

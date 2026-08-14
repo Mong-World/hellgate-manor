@@ -705,7 +705,7 @@ export class Game {
           ? 1
           : 0;
     this.bombs = baseBombs;
-    if (this.overchargeActive && baseBombs >= CONFIG.defence.bombMaxCharges) {
+    if (this.overchargeActive && baseBombs > 0) {
       this.bombs = Math.min(
         CONFIG.defence.bombOverchargeMaxCharges ?? 3,
         baseBombs + 1

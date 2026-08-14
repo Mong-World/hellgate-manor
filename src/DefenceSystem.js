@@ -158,29 +158,31 @@ export class DefenceSystem {
   getMountCount() {
     const souls = Math.min(this.hellfireSouls, CONFIG.defence.hellfireMaxSouls);
     if (souls <= 0) return 0;
-    if (souls < 10) return 1;
-    return 2;
+    return souls >= (CONFIG.defence.hellfireSecondCrossbowSouls ?? 25) ? 2 : 1;
   }
 
   getFireInterval() {
     const souls = Math.min(this.hellfireSouls, CONFIG.defence.hellfireMaxSouls);
     if (souls <= 0) return Infinity;
 
-    // Hellfire now caps at two physical crossbows. The second emplacement
-    // resets the reload curve, and later Bound Souls improve cadence without
-    // returning to the near-machine-gun rate of the old three-crossbow setup.
-    if (souls < 10) {
-      const t = THREE.MathUtils.clamp((souls - 1) / 8, 0, 1);
-      return THREE.MathUtils.lerp(7.0, 5.2, t);
-    }
-    const t = THREE.MathUtils.clamp((souls - 10) / 35, 0, 1);
-    return THREE.MathUtils.lerp(6.2, 4.0, t);
+    // Every assigned Bound Soul visibly improves reload by 0.2s. Reaching
+    // 25 unlocks the second crossbow and resets the cadence to 9.0s, then
+    // Souls 26-50 build both bows back down to a 4.0s maximum reload.
+    const secondAt = CONFIG.defence.hellfireSecondCrossbowSouls ?? 25;
+    if (souls < secondAt) return Math.max(4.2, 9.0 - souls * 0.2);
+    return Math.max(4.0, 9.0 - (souls - secondAt) * 0.2);
   }
 
   getOccultInterval() {
     const souls = Math.min(this.occultSouls, CONFIG.defence.occultMaxSouls);
     if (souls <= 0) return Infinity;
-    return THREE.MathUtils.lerp(13.5, 6.0, THREE.MathUtils.clamp((souls - 1) / 29, 0, 1));
+
+    // Occult follows the same readable two-stage progression: each Soul cuts
+    // 0.2s, Soul 20 unlocks the second strike and resets to 10.0s, then
+    // Souls 21-40 improve the two-strike cycle down to 6.0s.
+    const secondAt = CONFIG.defence.occultSecondStrikeSouls ?? 20;
+    if (souls < secondAt) return Math.max(6.2, 10.0 - souls * 0.2);
+    return Math.max(6.0, 10.0 - (souls - secondAt) * 0.2);
   }
 
   update(dt, active) {
@@ -385,10 +387,10 @@ export class DefenceSystem {
       [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
     }
 
-    const baseStrikeCount = this.occultSouls >= (CONFIG.defence.occultSecondStrikeSouls ?? 25) ? 2 : 1;
-    // A fully powered Occult defence gains one extra strike while Manor
-    // Overcharge is active, taking the normal two-strike pulse to three.
-    const strikeCount = baseStrikeCount + (this.overchargeActive && baseStrikeCount >= 2 ? 1 : 0);
+    const baseStrikeCount = this.occultSouls >= (CONFIG.defence.occultSecondStrikeSouls ?? 20) ? 2 : 1;
+    // Overcharge always adds one extra Occult strike, whether the tower is
+    // currently at one strike or has already unlocked its second strike.
+    const strikeCount = baseStrikeCount + (this.overchargeActive ? 1 : 0);
     const targetCount = Math.min(strikeCount, candidates.length);
     const damaged = this.occultDamaged;
     damaged.clear();

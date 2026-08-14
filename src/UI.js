@@ -283,7 +283,7 @@ export class UI {
         "Overcharge is now available in Bound Souls.",
         "Spend 50 unassigned Bound Souls to shield the Manor and",
         "overcharge its defences for one wave.",
-        "Extra Hellfire bolts, an extra Hell Bomb and a third Occult strike."
+        "Extra Hellfire bolts, an extra Hell Bomb and an extra Occult strike."
       ]
     };
   }
@@ -1641,10 +1641,10 @@ export class UI {
 
     const items = [
       extractionItem,
-      makeSystem("hellfire", "HELLFIRE BATTERY", "BOUND SOULS BUILD UP TO 2 CROSSBOWS AND IMPROVE RELOAD"),
+      makeSystem("hellfire", "HELLFIRE BATTERY", "25 BOUND SOULS = 2ND CROSSBOW • EVERY SOUL IMPROVES RELOAD"),
       makeSystem("demolition", "HELL BOMB FORGE", "25 BOUND SOULS = 1 BOMB • 50 = 2 • OVERCHARGE CAN ADD A 3RD"),
       makeSystem("undercroft", "UNDERCROFT", "BOUND SOULS REPAIR THE MANOR BETWEEN WAVES"),
-      makeSystem("occult", "OCCULT TOWER", "LIGHT-PURPLE GROUND FIRE STRIKES ACTIVE DEMONS")
+      makeSystem("occult", "OCCULT TOWER", "20 BOUND SOULS = 2ND STRIKE • EVERY SOUL IMPROVES COOLDOWN")
     ];
     this.drawShopRows(items, x, y, width, height, mobile, true);
   }
@@ -1782,16 +1782,17 @@ export class UI {
       ctx.font = this.dataFont(mobile ? 9 : 10, 800);
       let effectText = "";
       if (key === "hellfire") {
+        const secondAt = CONFIG.defence.hellfireSecondCrossbowSouls ?? 25;
         let mounts = 0;
         let interval = 0;
         let next = "";
-        if (assigned > 0 && assigned < 10) {
+        if (assigned > 0 && assigned < secondAt) {
           mounts = 1;
-          interval = 7 - Math.min(1, (assigned - 1) / 8) * 1.8;
-          next = ` • 2ND CROSSBOW AT 10`;
-        } else if (assigned >= 10) {
+          interval = Math.max(4.2, 9.0 - assigned * 0.2);
+          next = ` • 2ND CROSSBOW AT ${secondAt}`;
+        } else if (assigned >= secondAt) {
           mounts = 2;
-          interval = 6.2 - Math.min(1, (assigned - 10) / 35) * 2.2;
+          interval = Math.max(4.0, 9.0 - (assigned - secondAt) * 0.2);
         }
         effectText = assigned > 0
           ? `${mounts} CROSSBOW${mounts === 1 ? "" : "S"} • ${interval.toFixed(1)}s RELOAD${next}`
@@ -1808,8 +1809,12 @@ export class UI {
       } else if (key === "undercroft") {
         effectText = `+${assigned * (CONFIG.defence.undercroftRepairPerSoul ?? 25)} MANOR HEALTH AFTER EACH WAVE`;
       } else if (key === "occult") {
-        const interval = assigned <= 0 ? 0 : 13.5 - Math.min(1, (assigned - 1) / 29) * 7.5;
-        const secondStrikeAt = CONFIG.defence.occultSecondStrikeSouls ?? 25;
+        const secondStrikeAt = CONFIG.defence.occultSecondStrikeSouls ?? 20;
+        const interval = assigned <= 0
+          ? 0
+          : assigned < secondStrikeAt
+            ? Math.max(6.2, 10.0 - assigned * 0.2)
+            : Math.max(6.0, 10.0 - (assigned - secondStrikeAt) * 0.2);
         const strikes = assigned >= secondStrikeAt ? 2 : assigned > 0 ? 1 : 0;
         effectText = assigned > 0
           ? `${strikes} PURPLE FIRE STRIKE${strikes === 1 ? "" : "S"} • ${interval.toFixed(1)}s • ${strikes === 1 ? `2ND AT ${secondStrikeAt}` : "MAX 2 STRIKES"}`
