@@ -159,28 +159,22 @@ export class DefenceSystem {
     const souls = Math.min(this.hellfireSouls, CONFIG.defence.hellfireMaxSouls);
     if (souls <= 0) return 0;
     if (souls < 10) return 1;
-    if (souls < 25) return 2;
-    return 3;
+    return 2;
   }
 
   getFireInterval() {
     const souls = Math.min(this.hellfireSouls, CONFIG.defence.hellfireMaxSouls);
     if (souls <= 0) return Infinity;
 
-    // Each new crossbow resets the reload curve, then additional Bound Souls
-    // train the active battery back down again. This makes unlocking a second
-    // or third emplacement feel like a real milestone rather than a flat DPS
-    // increase hidden inside one number.
+    // Hellfire now caps at two physical crossbows. The second emplacement
+    // resets the reload curve, and later Bound Souls improve cadence without
+    // returning to the near-machine-gun rate of the old three-crossbow setup.
     if (souls < 10) {
       const t = THREE.MathUtils.clamp((souls - 1) / 8, 0, 1);
-      return THREE.MathUtils.lerp(7.0, 3.8, t);
+      return THREE.MathUtils.lerp(7.0, 5.2, t);
     }
-    if (souls < 25) {
-      const t = THREE.MathUtils.clamp((souls - 10) / 14, 0, 1);
-      return THREE.MathUtils.lerp(7.0, 3.6, t);
-    }
-    const t = THREE.MathUtils.clamp((souls - 25) / 20, 0, 1);
-    return THREE.MathUtils.lerp(7.0, 2.4, t);
+    const t = THREE.MathUtils.clamp((souls - 10) / 35, 0, 1);
+    return THREE.MathUtils.lerp(6.2, 4.0, t);
   }
 
   getOccultInterval() {
@@ -318,20 +312,15 @@ export class DefenceSystem {
       projectile.age += dt;
 
       if (projectile.target && this.isValidVisibleTarget(projectile.target)) {
+        // Stay committed to the demon selected when the bolt was fired. The
+        // bolt can follow that original target, but it never jumps to a new one.
         projectile.destination.copy(projectile.target.position);
         projectile.destination.y += Math.min(projectile.target.definition.height * 0.4, 2.1);
       } else if (projectile.target) {
-        const replacement = this.chooseTarget(projectile.target);
-        if (replacement) {
-          projectile.target = replacement;
-          projectile.destination.copy(replacement.position);
-          projectile.destination.y += Math.min(replacement.definition.height * 0.4, 2.1);
-        } else {
-          // At the end of a wave there may be nobody left to retarget. Keep the
-          // physical arrow believable by letting it finish at the ground point.
-          projectile.destination.copy(projectile.fallback);
-          projectile.target = null;
-        }
+        // If the player grabs/throws the target, or it dies before impact, the
+        // shot is genuinely wasted: carry on to the original ground point.
+        projectile.destination.copy(projectile.fallback);
+        projectile.target = null;
       }
 
       const direction = projectile.direction.copy(projectile.destination).sub(projectile.group.position);

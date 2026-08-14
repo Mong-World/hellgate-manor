@@ -60,11 +60,36 @@ export class WaveManager {
   }
 
   applyDeviceDifficulty(config, wave) {
-    if (!this.mobileDifficulty || wave < (CONFIG.mobileDifficulty?.lateWaveStart ?? 35)) return config;
+    const settings = CONFIG.mobileDifficulty;
+    if (!this.mobileDifficulty || wave < (settings?.lateWaveStart ?? 35)) return config;
+
+    const finalRamp = wave >= (settings?.finalWaveStart ?? 45);
+    const maxActiveBonus = finalRamp
+      ? (settings?.finalMaxActiveBonus ?? settings?.maxActiveBonus ?? 2)
+      : (settings?.maxActiveBonus ?? 2);
+    const spawnGapMultiplier = finalRamp
+      ? (settings?.finalSpawnGapMultiplier ?? settings?.spawnGapMultiplier ?? 0.92)
+      : (settings?.spawnGapMultiplier ?? 0.92);
+
+    let counts = config.counts;
+    // Normal-mode mobile Waves 45-50 deliberately contain far more heavy
+    // pressure without increasing the total population. Hell Mode keeps its
+    // own heavier composition logic and only receives the device pacing ramp.
+    const mobileHeavy = !this.newGamePlus ? settings?.lateHeavy?.[wave] : null;
+    if (mobileHeavy) {
+      counts = { ...config.counts };
+      const oldHeavy = (counts.brute ?? 0) + (counts.siege ?? 0);
+      counts.brute = mobileHeavy.brute;
+      counts.siege = mobileHeavy.siege;
+      const newHeavy = counts.brute + counts.siege;
+      counts.husk = Math.max(8, (counts.husk ?? 0) - (newHeavy - oldHeavy));
+    }
+
     return {
       ...config,
-      maxActive: config.maxActive + (CONFIG.mobileDifficulty?.maxActiveBonus ?? 2),
-      spawnGap: Math.max(0.42, config.spawnGap * (CONFIG.mobileDifficulty?.spawnGapMultiplier ?? 0.92))
+      counts,
+      maxActive: config.maxActive + maxActiveBonus,
+      spawnGap: Math.max(0.42, config.spawnGap * spawnGapMultiplier)
     };
   }
 

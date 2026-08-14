@@ -1,3 +1,10 @@
+## V1.2
+
+- Mobile Waves 45-50 now ramp heavy pressure to 55/18 Brute/Siege at Wave 45 through 90/35 at Wave 50, while keeping total wave populations unchanged.
+- Mobile Waves 45-50 allow up to +5 active enemies and use a stronger late-game spawn cadence.
+- Hellfire now caps at two crossbows; the second unlocks at 10 assigned Bound Souls and reload improves to a 4.0s fully-powered minimum.
+- Flaming bolts stay committed to their original target and no longer retarget another demon if that target is grabbed, thrown, killed or otherwise becomes invalid.
+
 # Hellgate Manor v1.9.17
 
 - Fixed retry Overcharge UI/purchase logic: a paid charge restored for the same-wave Continue now displays ACTIVE and cannot be purchased again. Bound Souls are not refunded on death; the original paid charge is retained.

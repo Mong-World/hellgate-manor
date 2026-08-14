@@ -1641,7 +1641,7 @@ export class UI {
 
     const items = [
       extractionItem,
-      makeSystem("hellfire", "HELLFIRE BATTERY", "BOUND SOULS BUILD AND SPEED UP CROSSBOW DEFENCES"),
+      makeSystem("hellfire", "HELLFIRE BATTERY", "BOUND SOULS BUILD UP TO 2 CROSSBOWS AND IMPROVE RELOAD"),
       makeSystem("demolition", "HELL BOMB FORGE", "25 BOUND SOULS = 1 BOMB • 50 = 2 • OVERCHARGE CAN ADD A 3RD"),
       makeSystem("undercroft", "UNDERCROFT", "BOUND SOULS REPAIR THE MANOR BETWEEN WAVES"),
       makeSystem("occult", "OCCULT TOWER", "LIGHT-PURPLE GROUND FIRE STRIKES ACTIVE DEMONS")
@@ -1787,15 +1787,11 @@ export class UI {
         let next = "";
         if (assigned > 0 && assigned < 10) {
           mounts = 1;
-          interval = 7 - Math.min(1, (assigned - 1) / 8) * 3.2;
+          interval = 7 - Math.min(1, (assigned - 1) / 8) * 1.8;
           next = ` • 2ND CROSSBOW AT 10`;
-        } else if (assigned >= 10 && assigned < 25) {
+        } else if (assigned >= 10) {
           mounts = 2;
-          interval = 7 - Math.min(1, (assigned - 10) / 14) * 3.4;
-          next = ` • 3RD CROSSBOW AT 25`;
-        } else if (assigned >= 25) {
-          mounts = 3;
-          interval = 7 - Math.min(1, (assigned - 25) / 20) * 4.6;
+          interval = 6.2 - Math.min(1, (assigned - 10) / 35) * 2.2;
         }
         effectText = assigned > 0
           ? `${mounts} CROSSBOW${mounts === 1 ? "" : "S"} • ${interval.toFixed(1)}s RELOAD${next}`

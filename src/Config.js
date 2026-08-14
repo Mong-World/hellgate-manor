@@ -307,7 +307,18 @@ export const CONFIG = Object.freeze({
   mobileDifficulty: {
     lateWaveStart: 35,
     maxActiveBonus: 2,
-    spawnGapMultiplier: 0.92
+    spawnGapMultiplier: 0.92,
+    finalWaveStart: 45,
+    finalMaxActiveBonus: 5,
+    finalSpawnGapMultiplier: 0.83,
+    lateHeavy: {
+      45: { brute: 55, siege: 18 },
+      46: { brute: 62, siege: 21 },
+      47: { brute: 70, siege: 24 },
+      48: { brute: 78, siege: 28 },
+      49: { brute: 84, siege: 31 },
+      50: { brute: 90, siege: 35 }
+    }
   },
 
   newGamePlus: {
