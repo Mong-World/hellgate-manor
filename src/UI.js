@@ -1303,7 +1303,7 @@ export class UI {
     const tabW = mobileLandscape ? 130 : 160;
     const tabH = mobileLandscape ? 32 : 38;
     this.button("ABOUT", width / 2 - tabW - 8, tabY, tabW, tabH, () => this.callbacks.onBonusTab?.("about"), false, null, this.bonusTab === "about" ? C.orange : C.borderHot);
-    this.button("ENEMIES", width / 2 + 8, tabY, tabW, tabH, () => this.callbacks.onBonusTab?.("enemies"), false, null, this.bonusTab === "enemies" ? C.orange : C.borderHot);
+    this.button("ENEMIES (MODEL VIEWER)", width / 2 + 8, tabY, tabW, tabH, () => this.callbacks.onBonusTab?.("enemies"), false, null, this.bonusTab === "enemies" ? C.orange : C.borderHot);
     this.button("BACK", x + panelWidth - 98, y + 14, 80, 30, () => this.callbacks.onBonusBack?.());
 
     if (this.bonusTab === "about") {
