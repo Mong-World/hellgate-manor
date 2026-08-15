@@ -47,6 +47,8 @@ const EMBER_SPAWN = new THREE.Vector3();
 const EMBER_DRIFT = new THREE.Vector3();
 const EMBER_ROTATION = new THREE.Quaternion();
 
+const PLATFORM_EMBER_GEOMETRY = new THREE.IcosahedronGeometry(0.022, 0);
+
 const TEMP_BOX = new THREE.Box3();
 const TEMP_SIZE = new THREE.Vector3();
 const TEMP_CENTER = new THREE.Vector3();
@@ -81,7 +83,7 @@ export class BonusViewer {
     this.target = new THREE.Vector3(0, 1.75, 0);
     this.root = new THREE.Group();
     this.root.position.set(0, -0.05, 0);
-    this.root.rotation.y = Math.PI * 0.62;
+    this.root.rotation.y = Math.PI * 1.62;
     this.scene.add(this.root);
 
     this.pitchPivot = new THREE.Group();
@@ -165,10 +167,34 @@ export class BonusViewer {
   }
 
   setupEmbers() {
+    this.platformEmbers = [];
     this.strongEmberPool = [];
     this.hellwingEmberPool = [];
     this.strongEmberSpawnTimer = 0;
     this.hellwingEmberSpawnTimer = 0;
+
+    for (let i = 0; i < 14; i += 1) {
+      const material = new THREE.MeshBasicMaterial({
+        color: i % 3 === 0 ? 0xffc38a : (i % 2 ? 0xff7c30 : 0xff4d16),
+        transparent: true,
+        opacity: 0.52,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+      const ember = new THREE.Mesh(PLATFORM_EMBER_GEOMETRY, material);
+      const angle = (i / 14) * Math.PI * 2;
+      ember.userData = {
+        angle,
+        radius: 1.58 + (i % 4) * 0.12,
+        baseY: 0.05 + (i % 3) * 0.04,
+        rise: 0.045 + (i % 3) * 0.01,
+        speed: 0.18 + (i % 5) * 0.025,
+        phase: i * 0.43,
+        size: 0.65 + (i % 4) * 0.12
+      };
+      this.scene.add(ember);
+      this.platformEmbers.push(ember);
+    }
 
     for (let i = 0; i < STRONG_EMBER_POOL_SIZE; i += 1) {
       const ember = new THREE.Mesh(STRONG_EMBER_GEOMETRY, STRONG_EMBER_MATERIAL);
@@ -346,7 +372,7 @@ export class BonusViewer {
     modelRoot.position.y = this.modelBaseY;
     this.modelPivot.add(modelRoot);
     this.modelRoot = modelRoot;
-    this.root.rotation.y = Math.PI * 0.62;
+    this.root.rotation.y = Math.PI * 1.62;
     this.distance = display.distance;
     this.minDistance = Math.max(1.8, display.distance - 1.6);
     this.maxDistance = display.distance + 3.0;
@@ -389,6 +415,19 @@ export class BonusViewer {
 
   update(dt, elapsed) {
     this.mixer?.update(dt);
+    for (const ember of this.platformEmbers) {
+      const data = ember.userData;
+      const angle = data.angle + elapsed * data.speed;
+      const radius = data.radius + Math.sin(elapsed * 0.8 + data.phase) * 0.04;
+      ember.position.set(
+        Math.cos(angle) * radius,
+        data.baseY + Math.sin(elapsed * 1.35 + data.phase) * data.rise,
+        Math.sin(angle) * radius * 0.52
+      );
+      const pulse = 0.82 + Math.sin(elapsed * 2.6 + data.phase) * 0.18;
+      ember.scale.setScalar(data.size * pulse);
+      ember.material.opacity = 0.16 + pulse * 0.22;
+    }
     if (this.modelRoot) {
       this.modelFloat += dt;
       this.modelRoot.position.y = this.modelBaseY + Math.sin(this.modelFloat * 1.4) * 0.05;
