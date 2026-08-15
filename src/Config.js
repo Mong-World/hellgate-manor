@@ -309,7 +309,7 @@ export const CONFIG = Object.freeze({
   hellwing: {
     unlockWave: 45,
     maxVisualDimension: 3.0,
-    visualScaleMultiplier: 0.009,
+    visualScaleMultiplier: 0.018,
     impactHealthFraction: 0.10,
     adaptiveStopHealth: 0.50,
     finalAdaptiveStopHealth: 0.30,
