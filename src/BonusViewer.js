@@ -2,12 +2,12 @@ import * as THREE from "three";
 import { AssetLibrary } from "./AssetLibrary.js";
 
 const DISPLAY = Object.freeze({
-  husk: { label: "Husks", fit: "height", target: 3.35, cameraY: 1.8, distance: 7.0 },
-  runner: { label: "Crawling Husks", fit: "height", target: 1.80, cameraY: 1.05, distance: 5.9 },
-  strong: { label: "Flaming Husks", fit: "height", target: 3.35, cameraY: 1.95, distance: 7.0 },
-  brute: { label: "Brute Demon", fit: "height", target: 4.15, cameraY: 2.4, distance: 8.6 },
-  siege: { label: "Siege Demon", fit: "height", target: 6.30, cameraY: 2.95, distance: 10.2 },
-  hellwing: { label: "Hell-Wings", fit: "max", target: 0.1225, cameraY: 0.95, distance: 3.8 }
+  husk: { label: "Husks", fit: "height", target: 3.35, cameraY: 1.8, distance: 7.0, floatBase: 0.42 },
+  runner: { label: "Crawling Husks", fit: "height", target: 1.80, cameraY: 1.05, distance: 5.9, floatBase: 0.42 },
+  strong: { label: "Flaming Husks", fit: "height", target: 3.35, cameraY: 1.95, distance: 7.0, floatBase: 0.42 },
+  brute: { label: "Brute Demon", fit: "height", target: 4.15, cameraY: 2.4, distance: 8.6, floatBase: 0.42 },
+  siege: { label: "Siege Demon", fit: "height", target: 6.30, cameraY: 2.95, distance: 10.2, floatBase: 0.42 },
+  hellwing: { label: "Hell-Wings", fit: "max", target: 0.006125, cameraY: 0.72, distance: 3.2, floatBase: 1.08 }
 });
 
 const TEMP_BOX = new THREE.Box3();
@@ -62,6 +62,7 @@ export class BonusViewer {
     this.mixer = null;
     this.modelRoot = null;
     this.modelFloat = 0;
+    this.modelBaseY = 0.42;
 
     this.setupStage();
     this.setupEmbers();
@@ -130,26 +131,26 @@ export class BonusViewer {
     this.embers = [];
     this.emberGroup = new THREE.Group();
     this.scene.add(this.emberGroup);
-    const geometry = new THREE.IcosahedronGeometry(0.06, 0);
-    for (let i = 0; i < 22; i += 1) {
+    const geometry = new THREE.IcosahedronGeometry(0.022, 0);
+    for (let i = 0; i < 14; i += 1) {
       const material = new THREE.MeshBasicMaterial({
         color: i % 3 === 0 ? 0xffc38a : (i % 2 ? 0xff7c30 : 0xff4d16),
         transparent: true,
-        opacity: 0.86,
+        opacity: 0.68,
         blending: THREE.AdditiveBlending,
         depthWrite: false
       });
       const ember = new THREE.Mesh(geometry, material);
-      const angle = (i / 22) * Math.PI * 2;
-      const radius = 1.55 + (i % 5) * 0.12;
+      const angle = (i / 14) * Math.PI * 2;
+      const radius = 1.45 + (i % 4) * 0.10;
       ember.userData = {
         angle,
         radius,
-        height: 0.28 + (i % 7) * 0.24,
-        speed: 0.35 + (i % 6) * 0.07,
-        drift: 0.15 + (i % 4) * 0.03,
+        height: 0.02 + (i % 4) * 0.06,
+        speed: 0.22 + (i % 5) * 0.04,
+        drift: 0.04 + (i % 3) * 0.015,
         phase: i * 0.47,
-        size: 0.65 + (i % 6) * 0.16
+        size: 0.58 + (i % 5) * 0.10
       };
       this.emberGroup.add(ember);
       this.embers.push(ember);
@@ -179,7 +180,8 @@ export class BonusViewer {
     AssetLibrary.prepareModel(scene);
     if (display.fit === "max") fitModelToMaximumDimension(scene, display.target, Math.PI / 2);
     else AssetLibrary.fitModelToHeight(scene, display.target, Math.PI / 2);
-    modelRoot.position.y = 0.42;
+    this.modelBaseY = display.floatBase ?? 0.42;
+    modelRoot.position.y = this.modelBaseY;
     this.modelPivot.add(modelRoot);
     this.modelRoot = modelRoot;
     this.root.rotation.y = Math.PI * 0.62;
@@ -227,7 +229,7 @@ export class BonusViewer {
     this.mixer?.update(dt);
     if (this.modelRoot) {
       this.modelFloat += dt;
-      this.modelRoot.position.y = 0.42 + Math.sin(this.modelFloat * 1.4) * 0.05;
+      this.modelRoot.position.y = this.modelBaseY + Math.sin(this.modelFloat * 1.4) * 0.05;
     }
     for (const ember of this.embers) {
       const data = ember.userData;
@@ -235,12 +237,12 @@ export class BonusViewer {
       const radius = data.radius + Math.sin(elapsed * 1.2 + data.phase) * 0.08;
       ember.position.set(
         Math.cos(angle) * radius,
-        0.35 + data.height + Math.sin(elapsed * 1.8 + data.phase) * data.drift,
+        0.10 + data.height + Math.sin(elapsed * 1.8 + data.phase) * data.drift,
         Math.sin(angle) * radius * 0.48
       );
-      const pulse = 0.72 + Math.sin(elapsed * 3.2 + data.phase) * 0.28;
+      const pulse = 0.78 + Math.sin(elapsed * 3.0 + data.phase) * 0.18;
       ember.scale.setScalar(data.size * pulse);
-      ember.material.opacity = 0.28 + pulse * 0.55;
+      ember.material.opacity = 0.18 + pulse * 0.34;
     }
     this.updateCamera();
   }
