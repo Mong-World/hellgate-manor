@@ -8,9 +8,11 @@ import { DefenceSystem } from "./DefenceSystem.js";
 import { UI } from "./UI.js";
 import { AudioManager } from "./AudioManager.js";
 import { EffectPool } from "./EffectPool.js";
+import { BonusViewer } from "./BonusViewer.js";
 
 const SAVE_KEY = "hellgate-manor-save-v3";
 const META_KEY = "hellgate-manor-meta-v1";
+const BONUS_ENEMY_WAVES = Object.freeze({ husk: 1, runner: 10, strong: 15, brute: 25, siege: 35, hellwing: 45 });
 export class Game {
   constructor(container) {
     this.container = container;
@@ -99,8 +101,17 @@ export class Game {
       onNewGame: () => this.beginNewGame(),
       onNewGamePlus: () => this.beginNewGamePlus(),
       onContinueSave: () => this.continueSavedGame(),
+      onOpenBonus: () => this.openBonusMenu(),
+      onBonusBack: () => this.closeBonusMenu(),
+      onBonusTab: (tab) => this.setBonusTab(tab),
+      onOpenBonusEnemy: (key) => this.openBonusEnemy(key),
+      onBonusViewerBack: () => this.closeBonusViewer(),
+      onBonusViewerReset: () => this.resetBonusViewer(),
+      onBonusViewerRotate: (dx, dy) => this.rotateBonusViewer(dx, dy),
+      onBonusViewerZoom: (delta) => this.zoomBonusViewer(delta),
       onBomb: () => this.useBomb(),
       onPause: () => this.togglePause(),
+      onMainMenu: () => this.returnToMainMenu(),
       onDevSecretTap: () => this.handleDeveloperSecretTap(),
       onPurchase: (type) => this.purchase(type),
       onAssign: (system, delta) => this.assignBoundSoul(system, delta),
@@ -268,9 +279,11 @@ export class Game {
     this.setLoadingProgress(78);
     await this.preWarmEverything();
 
+    this.bonusViewer = new BonusViewer(this.assets);
     this.applyUpgradeState();
     this.syncUI();
     this.ui.setMeta(this.meta);
+    this.ui.setBonusState({ unlocks: this.meta.enemyGalleryUnlocked, hasNew: this.meta.bonusHasNew, tab: "about", viewerEnemy: null });
     this.ui.setHasSave(this.developerMode ? false : this.hasSave());
     this.ui.setMode("start");
     this.running = true;
@@ -600,27 +613,135 @@ export class Game {
     this.normaliseAssignments();
   }
 
+  normaliseMeta(meta = {}) {
+    const unlocks = { husk: true, runner: false, strong: false, brute: false, siege: false, hellwing: false, ...(meta.enemyGalleryUnlocked ?? {}) };
+    unlocks.husk = true;
+    return {
+      ngPlusUnlocked: !!meta.ngPlusUnlocked,
+      bestRank: meta.bestRank ?? null,
+      bestStars: meta.bestStars ?? null,
+      enemyGalleryUnlocked: unlocks,
+      bonusHasNew: !!meta.bonusHasNew
+    };
+  }
+
   readMeta() {
     try {
       const raw = localStorage.getItem(META_KEY);
       const parsed = raw ? JSON.parse(raw) : {};
-      return {
-        ngPlusUnlocked: !!parsed.ngPlusUnlocked,
-        bestRank: parsed.bestRank ?? null,
-        bestStars: parsed.bestStars ?? null
-      };
+      return this.normaliseMeta(parsed);
     } catch {
-      return { ngPlusUnlocked: false, bestRank: null, bestStars: null };
+      return this.normaliseMeta();
     }
   }
 
   saveMeta() {
+    this.meta = this.normaliseMeta(this.meta);
     try {
       localStorage.setItem(META_KEY, JSON.stringify(this.meta));
     } catch {
       // Persistent meta is optional in restricted embeds.
     }
     this.ui?.setMeta(this.meta);
+    this.ui?.setBonusState({ unlocks: this.meta.enemyGalleryUnlocked, hasNew: this.meta.bonusHasNew });
+  }
+
+  refreshBonusUnlocks(waveNumber = this.waveIndex + 1) {
+    const unlocks = { ...(this.meta.enemyGalleryUnlocked ?? {}) };
+    let changed = false;
+    for (const [key, unlockWave] of Object.entries(BONUS_ENEMY_WAVES)) {
+      if (waveNumber >= unlockWave && !unlocks[key]) {
+        unlocks[key] = true;
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.meta.enemyGalleryUnlocked = unlocks;
+      this.meta.bonusHasNew = true;
+      this.saveMeta();
+    } else {
+      this.ui?.setBonusState({ unlocks, hasNew: this.meta.bonusHasNew });
+    }
+  }
+
+  markBonusSeen() {
+    if (!this.meta.bonusHasNew) return;
+    this.meta.bonusHasNew = false;
+    this.saveMeta();
+  }
+
+  openBonusMenu() {
+    this.ui.setBonusState({ unlocks: this.meta.enemyGalleryUnlocked, hasNew: this.meta.bonusHasNew, tab: this.ui.bonusTab ?? "about", viewerEnemy: null });
+    this.ui.setMode("bonus");
+  }
+
+  closeBonusMenu() {
+    this.ui.setBonusState({ viewerEnemy: null });
+    this.ui.setMode("start");
+  }
+
+  setBonusTab(tab = "about") {
+    if (tab === "enemies") this.markBonusSeen();
+    this.ui.setBonusState({ tab, unlocks: this.meta.enemyGalleryUnlocked, hasNew: this.meta.bonusHasNew });
+    if (this.ui.mode !== "bonusViewer") this.ui.setMode("bonus");
+  }
+
+  openBonusEnemy(key) {
+    if (!this.meta.enemyGalleryUnlocked?.[key]) return;
+    this.markBonusSeen();
+    if (this.bonusViewer?.setEnemy(key)) {
+      this.ui.setBonusState({ viewerEnemy: key, unlocks: this.meta.enemyGalleryUnlocked, hasNew: this.meta.bonusHasNew });
+      this.ui.setMode("bonusViewer");
+    }
+  }
+
+  closeBonusViewer() {
+    this.ui.setBonusState({ viewerEnemy: null });
+    this.ui.setMode("bonus");
+  }
+
+  resetBonusViewer() {
+    const key = this.ui.bonusViewerEnemy;
+    if (key) this.bonusViewer?.setEnemy(key);
+  }
+
+  rotateBonusViewer(dx, dy) {
+    if (this.ui.mode !== "bonusViewer") return;
+    this.bonusViewer?.rotate(dx, dy);
+  }
+
+  zoomBonusViewer(delta) {
+    if (this.ui.mode !== "bonusViewer") return;
+    this.bonusViewer?.zoom(delta);
+  }
+
+  returnToMainMenu() {
+    if (!this.gameplayActive && this.ui.mode !== "paused") {
+      this.ui.setMode("start");
+      return;
+    }
+    this.resetDeveloperSecretTap();
+    this.paused = false;
+    this.gameplayActive = false;
+    this.endingActive = false;
+    this.wave50MidpointEvent = null;
+    this.wave50DefenceResumePending = false;
+    this.grabSystem?.setEnabled(false);
+    this.grabSystem?.forceRelease?.();
+    this.waveManager?.clearActiveOnly();
+    this.defence?.clearTransient?.();
+    this.world?.resetTransientEffects?.();
+    this.world?.setExtractionReady?.(false);
+    this.world?.setOverchargeActive?.(false);
+    this.world?.setLateGameVisualMode?.(false, 0);
+    this.world?.resetNight?.();
+    this.audio.stopLoop?.("soul-binding", 0.15);
+    this.audio.stopMusic?.(0.65);
+    this.ui.tutorial = null;
+    this.ui.setHasSave(this.developerMode ? false : this.hasSave());
+    this.ui.setBonusState({ unlocks: this.meta.enemyGalleryUnlocked, hasNew: this.meta.bonusHasNew, tab: "about", viewerEnemy: null });
+    this.ui.setMode("start");
+    this.syncUI(true);
   }
 
   rankValue(rank) {
@@ -679,6 +800,7 @@ export class Game {
   }
 
   startCurrentWave() {
+    this.refreshBonusUnlocks(this.waveIndex + 1);
     // A charged Overcharge consumes its reserved Bound Souls as the wave begins.
     // If this wave is being restored from its start-of-wave save, a previously
     // paid Overcharge remains active without charging the player a second time.
@@ -2019,6 +2141,7 @@ export class Game {
     const rawDt = this.clock.getDelta();
     const dt = Math.min(rawDt, 1 / 30);
     const elapsed = this.clock.elapsedTime;
+    const viewerActive = this.ui.mode === "bonusViewer";
     this.ui.update(dt);
 
     if (this.endingActive) {
@@ -2070,10 +2193,15 @@ export class Game {
     if ((this.world?.getActiveExtractionCount?.() ?? 0) <= 0) {
       this.audio.stopLoop("soul-binding", 0.35);
     }
-    this.updateCamera(dt);
+    if (viewerActive) {
+      this.bonusViewer?.update(dt, elapsed);
+    } else {
+      this.updateCamera(dt);
+    }
     this.syncUI();
     this.ui.draw();
-    this.renderer.render(this.scene, this.camera);
+    if (viewerActive) this.bonusViewer?.render(this.renderer, window.innerWidth, window.innerHeight);
+    else this.renderer.render(this.scene, this.camera);
   }
 
   onResize() {

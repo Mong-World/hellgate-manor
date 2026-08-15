@@ -429,6 +429,17 @@ export class DefenceSystem {
     this.pendingExtraShots = [];
   }
 
+  clearTransient() {
+    this.pendingExtraShots = [];
+    this.projectiles.slice().forEach((projectile) => this.releaseArrow(projectile));
+    this.impacts.slice().forEach((impact) => {
+      impact.active = false;
+      impact.mesh.visible = false;
+    });
+    this.impacts = [];
+    this.resetCooldown();
+  }
+
   clearForDawn() {
     this.hellfireSouls = 0;
     this.occultSouls = 0;

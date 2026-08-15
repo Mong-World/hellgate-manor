@@ -66,6 +66,18 @@ export class UI {
     this.ngPlusUnlocked = false;
     this.bestRank = null;
     this.newGamePlus = false;
+    this.bonusTab = "about";
+    this.bonusHasNew = false;
+    this.bonusViewerEnemy = null;
+    this.bonusEnemyDefs = [
+      { key: "husk", label: "Husks" },
+      { key: "runner", label: "Crawling Husks" },
+      { key: "strong", label: "Flaming Husks" },
+      { key: "brute", label: "Brute Demon" },
+      { key: "siege", label: "Siege Demon" },
+      { key: "hellwing", label: "Hell-Wings" }
+    ];
+    this.bonusUnlocks = Object.fromEntries(this.bonusEnemyDefs.map((entry) => [entry.key, entry.key === "husk"]));
     this.endingData = null;
     this.endingElapsed = 0;
     this.overchargeReserve = 0;
@@ -165,6 +177,7 @@ export class UI {
       this.shopPage = 0;
       this.shopScroll = 0;
     }
+    if (mode !== "bonusViewer") this.pointerGesture = null;
   }
 
   setHUD(data) {
@@ -182,6 +195,15 @@ export class UI {
   setMeta(meta = {}) {
     this.ngPlusUnlocked = !!meta.ngPlusUnlocked;
     this.bestRank = meta.bestRank ?? null;
+    this.bonusHasNew = !!meta.bonusHasNew;
+    if (meta.enemyGalleryUnlocked) this.bonusUnlocks = { ...this.bonusUnlocks, ...meta.enemyGalleryUnlocked };
+  }
+
+  setBonusState(data = {}) {
+    if (data.tab) this.bonusTab = data.tab;
+    if (Object.prototype.hasOwnProperty.call(data, "hasNew")) this.bonusHasNew = !!data.hasNew;
+    if (data.unlocks) this.bonusUnlocks = { ...this.bonusUnlocks, ...data.unlocks };
+    if (Object.prototype.hasOwnProperty.call(data, "viewerEnemy")) this.bonusViewerEnemy = data.viewerEnemy ?? null;
   }
 
   startEndingSequence(data) {
@@ -405,6 +427,18 @@ export class UI {
       return;
     }
 
+    if (this.mode === "bonusViewer" && !button) {
+      this.pointerGesture = {
+        pointerId: event.pointerId,
+        mode: "bonusViewer",
+        lastX: x,
+        lastY: y
+      };
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
+
     if (button) {
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -415,6 +449,18 @@ export class UI {
   onPointerMove(event) {
     const gesture = this.pointerGesture;
     if (!gesture || gesture.pointerId !== event.pointerId) return;
+
+    if (gesture.mode === "bonusViewer") {
+      const dx = event.clientX - gesture.lastX;
+      const dy = event.clientY - gesture.lastY;
+      gesture.lastX = event.clientX;
+      gesture.lastY = event.clientY;
+      this.callbacks.onBonusViewerRotate?.(dx, dy);
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
+
     const dy = event.clientY - gesture.lastY;
     if (Math.abs(event.clientY - gesture.startY) > 7) gesture.moved = true;
     if (gesture.moved && this.shopScrollMax > 0) {
@@ -430,11 +476,17 @@ export class UI {
     if (!gesture || gesture.pointerId !== event.pointerId) return;
     event.preventDefault();
     event.stopImmediatePropagation();
-    if (!gesture.moved && gesture.pendingButton) this.activateButton(gesture.pendingButton);
+    if (gesture.mode !== "bonusViewer" && !gesture.moved && gesture.pendingButton) this.activateButton(gesture.pendingButton);
     this.pointerGesture = null;
   }
 
   onWheel(event) {
+    if (this.mode === "bonusViewer") {
+      this.callbacks.onBonusViewerZoom?.(event.deltaY);
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
     if (this.mode !== "intermission" || !this.pointInShopViewport(event.clientX, event.clientY) || this.shopScrollMax <= 0) return;
     this.shopScroll = Math.max(0, Math.min(this.shopScrollMax, this.shopScroll + event.deltaY));
     event.preventDefault();
@@ -557,6 +609,8 @@ export class UI {
     this.buttons = [];
 
     if (this.mode === "start") this.drawStart(width, height);
+    else if (this.mode === "bonus") this.drawBonusMenu(width, height);
+    else if (this.mode === "bonusViewer") this.drawBonusViewer(width, height);
     else if (this.mode === "playing") {
       this.drawHUD(width, height);
       this.drawPauseButton(width, height);
@@ -700,7 +754,7 @@ export class UI {
   drawStart(width, height) {
     const mobileLandscape = this.isMobileLandscape();
     const mobile = mobileLandscape || width < 700 || height < 620;
-    const buttonCount = 1 + (this.hasSave && !this.developerMode ? 1 : 0) + (this.ngPlusUnlocked && !this.developerMode ? 1 : 0);
+    const buttonCount = 2 + (this.hasSave && !this.developerMode ? 1 : 0) + (this.ngPlusUnlocked && !this.developerMode ? 1 : 0);
 
     // Keep the start menu tightly wrapped around its content. Earlier builds
     // reserved far more vertical space than the branding/buttons actually
@@ -760,6 +814,22 @@ export class UI {
     // a large dead area in the panel.
     let buttonY = contentY + (mobileLandscape ? 12 : (mobile ? 18 : 21));
     this.button("NEW GAME", width / 2 - 105, buttonY, 210, buttonHeight, () => this.callbacks.onNewGame?.());
+    buttonY += buttonHeight + buttonGap;
+
+    this.button("BONUS", width / 2 - 105, buttonY, 210, buttonHeight, () => this.callbacks.onOpenBonus?.());
+    if (this.bonusHasNew) {
+      const dotX = width / 2 + 74;
+      const dotY = buttonY + buttonHeight / 2;
+      const pulse = 0.65 + Math.sin(this.uiTime * 5.5) * 0.18;
+      ctx.fillStyle = C.red;
+      ctx.beginPath();
+      ctx.arc(dotX, dotY, 5.2 * pulse, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(255,160,140,.95)";
+      ctx.beginPath();
+      ctx.arc(dotX, dotY, 2.3, 0, Math.PI * 2);
+      ctx.fill();
+    }
     buttonY += buttonHeight + buttonGap;
 
     if (this.hasSave && !this.developerMode) {
@@ -1134,7 +1204,7 @@ export class UI {
     // Pause is intentionally simpler than the title screen. The studio credit
     // is omitted here so the game title and pause state stay easy to read.
     const panelWidth = Math.min(mobileLandscape ? 350 : (mobile ? 382 : 400), width - (mobileLandscape ? 18 : 30));
-    const panelHeight = mobileLandscape ? Math.min(168, height - 18) : (mobile ? 188 : 198);
+    const panelHeight = mobileLandscape ? Math.min(214, height - 18) : (mobile ? 244 : 256);
     const x = (width - panelWidth) / 2;
     const y = (height - panelHeight) / 2;
     this.panel(x, y, panelWidth, panelHeight, C.panel, 13);
@@ -1173,15 +1243,154 @@ export class UI {
     ctx.fillText(mobileLandscape ? "TAP RESUME TO RETURN" : "ESC OR RESUME TO RETURN", width / 2, helpY);
 
     const buttonHeight = mobileLandscape ? 36 : (mobile ? 42 : 46);
-    const buttonY = y + panelHeight - buttonHeight - (mobileLandscape ? 10 : 14);
+    const resumeY = y + panelHeight - buttonHeight * 2 - (mobileLandscape ? 17 : 22);
     this.button(
       "RESUME",
       width / 2 - 105,
-      buttonY,
+      resumeY,
       210,
       buttonHeight,
       () => this.callbacks.onPause?.()
     );
+    this.button(
+      "MAIN MENU",
+      width / 2 - 105,
+      resumeY + buttonHeight + (mobileLandscape ? 8 : 10),
+      210,
+      buttonHeight,
+      () => this.callbacks.onMainMenu?.(),
+      false,
+      null,
+      C.red
+    );
+  }
+
+  drawBonusMenu(width, height) {
+    const mobileLandscape = this.isMobileLandscape();
+    const mobile = mobileLandscape || width < 760 || height < 680;
+    const ctx = this.ctx;
+    ctx.fillStyle = "rgba(0,0,0,.62)";
+    ctx.fillRect(0, 0, width, height);
+
+    const panelWidth = Math.min(mobileLandscape ? 620 : (mobile ? 690 : 840), width - (mobileLandscape ? 18 : 30));
+    const panelHeight = Math.min(mobileLandscape ? height - 20 : (mobile ? 510 : 590), height - (mobileLandscape ? 20 : 30));
+    const x = (width - panelWidth) / 2;
+    const y = (height - panelHeight) / 2;
+    this.panel(x, y, panelWidth, panelHeight, C.panel, 14);
+
+    ctx.textAlign = "center";
+    ctx.fillStyle = C.text;
+    ctx.font = this.font(mobileLandscape ? 26 : (mobile ? 30 : 34));
+    ctx.shadowColor = "rgba(255,80,24,.45)";
+    ctx.shadowBlur = 10;
+    ctx.fillText("BONUS MENU", width / 2, y + (mobileLandscape ? 30 : 40));
+    ctx.shadowBlur = 0;
+
+    const tabY = y + (mobileLandscape ? 46 : 58);
+    const tabW = mobileLandscape ? 130 : 160;
+    const tabH = mobileLandscape ? 32 : 38;
+    this.button("ABOUT", width / 2 - tabW - 8, tabY, tabW, tabH, () => this.callbacks.onBonusTab?.("about"), false, null, this.bonusTab === "about" ? C.orange : C.borderHot);
+    this.button("ENEMIES", width / 2 + 8, tabY, tabW, tabH, () => this.callbacks.onBonusTab?.("enemies"), false, null, this.bonusTab === "enemies" ? C.orange : C.borderHot);
+    this.button("BACK", x + panelWidth - 98, y + 14, 80, 30, () => this.callbacks.onBonusBack?.());
+
+    if (this.bonusTab === "about") {
+      const innerX = x + 20;
+      const innerY = tabY + tabH + 18;
+      const innerW = panelWidth - 40;
+      const innerH = panelHeight - (innerY - y) - 20;
+      this.panel(innerX, innerY, innerW, innerH, C.panel2, 12);
+      ctx.textAlign = "left";
+      ctx.fillStyle = C.orangeLight;
+      ctx.font = this.dataFont(mobile ? 15 : 17, 900);
+      ctx.fillText("ABOUT", innerX + 18, innerY + 28);
+      ctx.fillStyle = C.text;
+      ctx.font = this.dataFont(mobile ? 12 : 13, 700);
+      this.multilineText([
+        "Hellgate Manor stands on the edge of a breach between this world and something far worse. Night after night, creatures pour through the Hell Gate and march toward the Manor. The only thing holding them back is you.",
+        "Destroy the invading demons, bind their souls, strengthen the Manor's defences and survive until dawn. As the night grows darker, stronger creatures emerge from the breach."
+      ], innerX + 18, innerY + 52, innerW - 36, mobile ? 18 : 21);
+      ctx.fillStyle = C.orangeLight;
+      ctx.font = this.dataFont(mobile ? 15 : 17, 900);
+      ctx.fillText("HELP", innerX + 18, innerY + (mobile ? 182 : 204));
+      ctx.fillStyle = C.text;
+      ctx.font = this.dataFont(mobile ? 12 : 13, 700);
+      this.multilineText([
+        "Grab and throw demons to destroy them. Stronger enemies may require repeated attacks or different tactics.",
+        "Collect Souls to repair and upgrade the Manor. Capture eligible demons through Soul Extraction to create Bound Souls, then assign them to your defences to make them stronger.",
+        "Watch the Manor's health carefully. Some enemies can bypass automated defences and must be dealt with directly."
+      ], innerX + 18, innerY + (mobile ? 206 : 232), innerW - 36, mobile ? 18 : 21);
+      return;
+    }
+
+    const gridY = tabY + tabH + 20;
+    const columns = mobileLandscape ? 3 : 2;
+    const gap = mobileLandscape ? 12 : 16;
+    const boxW = Math.min((panelWidth - 42 - gap * (columns - 1)) / columns, mobileLandscape ? 182 : 300);
+    const boxH = mobileLandscape ? 72 : 86;
+    const startX = x + (panelWidth - (boxW * columns + gap * (columns - 1))) / 2;
+    this.bonusEnemyDefs.forEach((entry, index) => {
+      const col = index % columns;
+      const row = Math.floor(index / columns);
+      const bx = startX + col * (boxW + gap);
+      const by = gridY + row * (boxH + gap);
+      const unlocked = !!this.bonusUnlocks[entry.key];
+      this.panel(bx, by, boxW, boxH, unlocked ? C.panel2 : "rgba(18,19,23,.95)", 12, unlocked ? C.orange : C.iron);
+      ctx.textAlign = "center";
+      ctx.fillStyle = unlocked ? C.text : C.muted;
+      ctx.font = this.dataFont(mobileLandscape ? 12 : 14, 900);
+      ctx.fillText(entry.label.toUpperCase(), bx + boxW / 2, by + (mobileLandscape ? 31 : 35));
+      ctx.font = this.dataFont(mobileLandscape ? 9 : 10, 800);
+      ctx.fillStyle = unlocked ? C.orangeLight : C.muted;
+      ctx.fillText(unlocked ? "VIEW MODEL" : "LOCKED", bx + boxW / 2, by + (mobileLandscape ? 52 : 59));
+      this.buttons.push({ x: bx, y: by, w: boxW, h: boxH, onClick: () => unlocked && this.callbacks.onOpenBonusEnemy?.(entry.key), disabled: !unlocked, onDenied: null });
+    });
+  }
+
+  drawBonusViewer(width, height) {
+    const mobileLandscape = this.isMobileLandscape();
+    const mobile = mobileLandscape || width < 760 || height < 680;
+    const ctx = this.ctx;
+    ctx.fillStyle = "rgba(0,0,0,.16)";
+    ctx.fillRect(0, 0, width, height);
+    const topW = Math.min(width - 30, mobileLandscape ? 560 : 620);
+    const topH = mobileLandscape ? 76 : 88;
+    const topX = (width - topW) / 2;
+    const topY = 16;
+    this.panel(topX, topY, topW, topH, "rgba(7,8,11,.88)", 12);
+    ctx.textAlign = "center";
+    ctx.fillStyle = C.text;
+    ctx.font = this.font(mobileLandscape ? 24 : 30);
+    const label = this.bonusEnemyDefs.find((entry) => entry.key === this.bonusViewerEnemy)?.label ?? "MODEL VIEWER";
+    ctx.fillText(label.toUpperCase(), width / 2, topY + (mobileLandscape ? 28 : 34));
+    ctx.fillStyle = C.orangeLight;
+    ctx.font = this.dataFont(mobileLandscape ? 9 : 11, 800);
+    ctx.fillText(mobileLandscape ? "DRAG TO ROTATE • PINCH/SCROLL TO ZOOM" : "DRAG TO ROTATE • SCROLL TO ZOOM", width / 2, topY + (mobileLandscape ? 49 : 58));
+    this.button("BACK", topX + topW - 96, topY + topH - 36, 80, 28, () => this.callbacks.onBonusViewerBack?.());
+    this.button("RESET", topX + 16, topY + topH - 36, 80, 28, () => this.callbacks.onBonusViewerReset?.());
+  }
+
+  multilineText(paragraphs, x, y, maxWidth, lineHeight) {
+    const ctx = this.ctx;
+    let cursorY = y;
+    for (const paragraph of paragraphs) {
+      const words = paragraph.split(/\s+/);
+      let line = "";
+      for (const word of words) {
+        const test = line ? `${line} ${word}` : word;
+        if (ctx.measureText(test).width > maxWidth && line) {
+          ctx.fillText(line, x, cursorY);
+          cursorY += lineHeight;
+          line = word;
+        } else {
+          line = test;
+        }
+      }
+      if (line) {
+        ctx.fillText(line, x, cursorY);
+        cursorY += lineHeight;
+      }
+      cursorY += Math.max(4, lineHeight * 0.28);
+    }
   }
 
   drawBanner(width, height) {
