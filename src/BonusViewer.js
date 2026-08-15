@@ -3,11 +3,11 @@ import { AssetLibrary } from "./AssetLibrary.js";
 
 const DISPLAY = Object.freeze({
   husk: { label: "Husks", fit: "height", target: 3.35, cameraY: 1.8, distance: 7.0 },
-  runner: { label: "Crawling Husks", fit: "height", target: 2.25, cameraY: 1.25, distance: 6.2 },
+  runner: { label: "Crawling Husks", fit: "height", target: 1.80, cameraY: 1.05, distance: 5.9 },
   strong: { label: "Flaming Husks", fit: "height", target: 3.35, cameraY: 1.95, distance: 7.0 },
   brute: { label: "Brute Demon", fit: "height", target: 4.15, cameraY: 2.4, distance: 8.6 },
-  siege: { label: "Siege Demon", fit: "height", target: 4.2, cameraY: 2.25, distance: 8.8 },
-  hellwing: { label: "Hell-Wings", fit: "max", target: 2.45, cameraY: 1.65, distance: 6.4 }
+  siege: { label: "Siege Demon", fit: "height", target: 6.30, cameraY: 2.95, distance: 10.2 },
+  hellwing: { label: "Hell-Wings", fit: "max", target: 0.1225, cameraY: 0.95, distance: 3.8 }
 });
 
 const TEMP_BOX = new THREE.Box3();
@@ -51,11 +51,13 @@ export class BonusViewer {
     this.root.add(this.pitchPivot);
     this.modelPivot = new THREE.Group();
     this.pitchPivot.add(this.modelPivot);
+    this.pitchPivot.rotation.x = 0;
 
     this.distance = 7.8;
     this.minDistance = 4.8;
     this.maxDistance = 10.5;
-    this.pitch = -0.08;
+    this.baseCameraY = 1.75;
+    this.cameraLift = 0;
     this.selectedKey = null;
     this.mixer = null;
     this.modelRoot = null;
@@ -181,11 +183,11 @@ export class BonusViewer {
     this.modelPivot.add(modelRoot);
     this.modelRoot = modelRoot;
     this.root.rotation.y = Math.PI * 0.62;
-    this.pitch = -0.08;
-    this.pitchPivot.rotation.x = this.pitch;
     this.distance = display.distance;
     this.minDistance = Math.max(3.8, display.distance - 2.0);
     this.maxDistance = display.distance + 3.0;
+    this.baseCameraY = display.cameraY;
+    this.cameraLift = 0;
     this.target.set(0, display.cameraY, 0);
     this.camera.position.set(0, display.cameraY + 0.45, this.distance);
     this.updateCamera();
@@ -205,14 +207,15 @@ export class BonusViewer {
   updateCamera() {
     this.camera.position.x = Math.sin(0) * this.distance;
     this.camera.position.z = Math.cos(0) * this.distance;
+    this.target.y = this.baseCameraY + this.cameraLift;
     this.camera.position.y = this.target.y + 0.45;
     this.camera.lookAt(this.target);
   }
 
   rotate(deltaX = 0, deltaY = 0) {
     this.root.rotation.y += deltaX * 0.0105;
-    this.pitch = THREE.MathUtils.clamp(this.pitch + deltaY * 0.0038, -0.42, 0.24);
-    this.pitchPivot.rotation.x = this.pitch;
+    this.cameraLift = THREE.MathUtils.clamp(this.cameraLift + deltaY * 0.0085, -1.8, 1.8);
+    this.updateCamera();
   }
 
   zoom(delta = 0) {
