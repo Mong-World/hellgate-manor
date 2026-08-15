@@ -10,6 +10,43 @@ const DISPLAY = Object.freeze({
   hellwing: { label: "Hell-Wings", fit: "max", target: 0.00735, cameraY: 0.78, distance: 3.35, floatBase: 1.14 }
 });
 
+// Viewer-only copies of the exact gameplay ember recipes used by
+// Flaming Husks and Hell-Wings. Keeping the same geometry, spawn cadence,
+// velocities, lifetimes and fading makes the gallery match the battlefield.
+const STRONG_EMBER_GEOMETRY = new THREE.IcosahedronGeometry(0.042, 0);
+const STRONG_EMBER_MATERIAL = new THREE.MeshBasicMaterial({
+  color: 0xff7b28,
+  transparent: true,
+  opacity: 1.0,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false
+});
+const STRONG_EMBER_ANCHORS = Object.freeze([
+  [-0.26, 2.78, 0.48], [0.24, 2.70, 0.52], [-0.18, 2.52, 0.56],
+  [0.18, 2.44, 0.58], [-0.10, 2.28, 0.54], [0.10, 2.22, 0.58],
+  [-0.30, 2.58, 0.30], [0.28, 2.54, 0.32], [0.00, 2.92, 0.36],
+  [0.00, 2.36, 0.24]
+]);
+const STRONG_EMBER_POOL_SIZE = 18;
+
+const HELLWING_EMBER_GEOMETRY = new THREE.IcosahedronGeometry(0.050, 0);
+const HELLWING_EMBER_MATERIAL = new THREE.MeshBasicMaterial({
+  color: 0xff7a2c,
+  transparent: true,
+  opacity: 0.96,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false
+});
+const HELLWING_EMBER_ANCHORS = Object.freeze([
+  [-0.52, 0.34, 0.00], [-0.42, 0.24, 0.18], [-0.42, 0.24, -0.18],
+  [-0.26, 0.18, 0.00], [-0.18, 0.12, 0.10], [-0.18, 0.12, -0.10]
+]);
+const HELLWING_EMBER_POOL_SIZE = 26;
+
+const EMBER_SPAWN = new THREE.Vector3();
+const EMBER_DRIFT = new THREE.Vector3();
+const EMBER_ROTATION = new THREE.Quaternion();
+
 const TEMP_BOX = new THREE.Box3();
 const TEMP_SIZE = new THREE.Vector3();
 const TEMP_CENTER = new THREE.Vector3();
@@ -128,36 +165,161 @@ export class BonusViewer {
   }
 
   setupEmbers() {
-    this.embers = [];
-    this.emberGroup = new THREE.Group();
-    this.scene.add(this.emberGroup);
-    const geometry = new THREE.IcosahedronGeometry(0.030, 0);
-    for (let i = 0; i < 18; i += 1) {
-      const material = new THREE.MeshBasicMaterial({
-        color: i % 3 === 0 ? 0xffc38a : (i % 2 ? 0xff7c30 : 0xff4d16),
-        transparent: true,
-        opacity: 0.78,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false
-      });
-      const ember = new THREE.Mesh(geometry, material);
-      const angle = (i / 18) * Math.PI * 2;
-      const radius = 1.35 + (i % 5) * 0.12;
-      ember.userData = {
-        angle,
-        radius,
-        height: 0.05 + (i % 5) * 0.055,
-        speed: 0.24 + (i % 5) * 0.04,
-        drift: 0.05 + (i % 3) * 0.018,
-        phase: i * 0.47,
-        size: 0.72 + (i % 5) * 0.10
-      };
-      this.emberGroup.add(ember);
-      this.embers.push(ember);
+    this.strongEmberPool = [];
+    this.hellwingEmberPool = [];
+    this.strongEmberSpawnTimer = 0;
+    this.hellwingEmberSpawnTimer = 0;
+
+    for (let i = 0; i < STRONG_EMBER_POOL_SIZE; i += 1) {
+      const ember = new THREE.Mesh(STRONG_EMBER_GEOMETRY, STRONG_EMBER_MATERIAL);
+      ember.visible = false;
+      ember.userData.velocity = new THREE.Vector3();
+      ember.userData.age = 0;
+      ember.userData.life = 0;
+      ember.userData.baseScale = 1;
+      ember.userData.phase = 0;
+      ember.userData.spin = 0;
+      ember.userData.sway = 0;
+      this.scene.add(ember);
+      this.strongEmberPool.push(ember);
+    }
+
+    for (let i = 0; i < HELLWING_EMBER_POOL_SIZE; i += 1) {
+      const ember = new THREE.Mesh(HELLWING_EMBER_GEOMETRY, HELLWING_EMBER_MATERIAL);
+      ember.visible = false;
+      ember.userData.velocity = new THREE.Vector3();
+      ember.userData.age = 0;
+      ember.userData.life = 0;
+      ember.userData.baseScale = 1;
+      ember.userData.phase = 0;
+      ember.userData.spin = 0;
+      ember.userData.sway = 0;
+      this.scene.add(ember);
+      this.hellwingEmberPool.push(ember);
+    }
+  }
+
+  hideViewerEmbers() {
+    this.strongEmberSpawnTimer = 0;
+    this.hellwingEmberSpawnTimer = 0;
+    this.strongEmberPool.forEach((ember) => { ember.visible = false; });
+    this.hellwingEmberPool.forEach((ember) => { ember.visible = false; });
+  }
+
+  updateStrongGameplayEmbers(dt, elapsed) {
+    if (this.selectedKey !== "strong" || !this.modelRoot) return;
+    const spawnInterval = 0.030;
+    this.strongEmberSpawnTimer -= dt;
+    while (this.strongEmberSpawnTimer <= 0) {
+      this.strongEmberSpawnTimer += spawnInterval + Math.random() * 0.02;
+      const ember = this.strongEmberPool.find((item) => !item.visible);
+      if (!ember) break;
+      const data = ember.userData;
+      const anchor = STRONG_EMBER_ANCHORS[(Math.random() * STRONG_EMBER_ANCHORS.length) | 0];
+      EMBER_SPAWN.set(
+        anchor[0] + THREE.MathUtils.randFloatSpread(0.10),
+        anchor[1] + THREE.MathUtils.randFloatSpread(0.10),
+        anchor[2] + THREE.MathUtils.randFloatSpread(0.10)
+      );
+      this.modelRoot.localToWorld(EMBER_SPAWN);
+      ember.position.copy(EMBER_SPAWN);
+
+      this.modelRoot.getWorldQuaternion(EMBER_ROTATION);
+      EMBER_DRIFT.set(
+        -THREE.MathUtils.randFloat(0.30, 0.52),
+        THREE.MathUtils.randFloat(0.62, 1.02),
+        THREE.MathUtils.randFloat(0.05, 0.16)
+      ).applyQuaternion(EMBER_ROTATION);
+
+      data.velocity.copy(EMBER_DRIFT);
+      data.age = 0;
+      data.life = THREE.MathUtils.randFloat(0.52, 0.96);
+      data.baseScale = Math.random() < 0.18
+        ? THREE.MathUtils.randFloat(1.05, 1.42)
+        : THREE.MathUtils.randFloat(0.62, 1.08);
+      data.phase = Math.random() * Math.PI * 2;
+      data.spin = THREE.MathUtils.randFloat(4.0, 7.0);
+      data.sway = THREE.MathUtils.randFloat(0.055, 0.13);
+      ember.scale.setScalar(data.baseScale);
+      ember.visible = true;
+    }
+
+    for (const ember of this.strongEmberPool) {
+      if (!ember.visible) continue;
+      const data = ember.userData;
+      data.age += dt;
+      if (data.age >= data.life) {
+        ember.visible = false;
+        continue;
+      }
+      const t = data.age / data.life;
+      const rise = 1 - Math.pow(1 - t, 2);
+      const swirlX = Math.sin(elapsed * data.spin + data.phase) * data.sway;
+      const swirlZ = Math.cos(elapsed * (data.spin * 0.82) + data.phase) * data.sway * 0.9;
+      ember.position.x += (data.velocity.x + swirlX) * dt;
+      ember.position.y += (data.velocity.y + rise * 0.30) * dt;
+      ember.position.z += (data.velocity.z + swirlZ + 0.035) * dt;
+      ember.scale.setScalar(Math.max(0.12, data.baseScale * (1 - t * 0.76)));
+    }
+  }
+
+  updateHellwingGameplayEmbers(dt, elapsed) {
+    if (this.selectedKey !== "hellwing" || !this.modelRoot) return;
+    this.hellwingEmberSpawnTimer -= dt;
+    while (this.hellwingEmberSpawnTimer <= 0) {
+      this.hellwingEmberSpawnTimer += 0.016 + Math.random() * 0.012;
+      const ember = this.hellwingEmberPool.find((item) => !item.visible);
+      if (!ember) break;
+      const data = ember.userData;
+      const anchor = HELLWING_EMBER_ANCHORS[(Math.random() * HELLWING_EMBER_ANCHORS.length) | 0];
+      EMBER_SPAWN.set(
+        anchor[0] + THREE.MathUtils.randFloatSpread(0.08),
+        anchor[1] + THREE.MathUtils.randFloatSpread(0.06),
+        anchor[2] + THREE.MathUtils.randFloatSpread(0.10)
+      );
+      this.modelRoot.localToWorld(EMBER_SPAWN);
+      ember.position.copy(EMBER_SPAWN);
+
+      this.modelRoot.getWorldQuaternion(EMBER_ROTATION);
+      EMBER_DRIFT.set(
+        -0.74 - THREE.MathUtils.randFloat(0.05, 0.16),
+        THREE.MathUtils.randFloat(0.16, 0.32),
+        THREE.MathUtils.randFloatSpread(0.12)
+      ).applyQuaternion(EMBER_ROTATION);
+
+      data.velocity.copy(EMBER_DRIFT);
+      data.age = 0;
+      data.life = THREE.MathUtils.randFloat(0.58, 0.96);
+      data.baseScale = THREE.MathUtils.randFloat(1.05, 2.10);
+      data.phase = Math.random() * Math.PI * 2;
+      data.spin = THREE.MathUtils.randFloat(4.2, 7.8);
+      data.sway = THREE.MathUtils.randFloat(0.05, 0.12);
+      ember.scale.setScalar(data.baseScale);
+      ember.visible = true;
+    }
+
+    for (const ember of this.hellwingEmberPool) {
+      if (!ember.visible) continue;
+      const data = ember.userData;
+      data.age += dt;
+      if (data.age >= data.life) {
+        ember.visible = false;
+        continue;
+      }
+      const t = data.age / data.life;
+      const alpha = 1 - t;
+      const swirlY = Math.sin(elapsed * data.spin + data.phase) * data.sway;
+      const swirlZ = Math.cos(elapsed * (data.spin * 0.8) + data.phase) * data.sway;
+      ember.position.x += data.velocity.x * dt;
+      ember.position.y += (data.velocity.y + swirlY + 0.08) * dt;
+      ember.position.z += (data.velocity.z + swirlZ) * dt;
+      ember.scale.setScalar(Math.max(0.16, data.baseScale * (1 - t * 0.62)));
+      ember.material.opacity = 0.30 + alpha * 0.66;
     }
   }
 
   clearModel() {
+    this.hideViewerEmbers();
     if (this.mixer) this.mixer.stopAllAction();
     this.mixer = null;
     if (this.modelRoot) this.modelPivot.remove(this.modelRoot);
@@ -231,19 +393,8 @@ export class BonusViewer {
       this.modelFloat += dt;
       this.modelRoot.position.y = this.modelBaseY + Math.sin(this.modelFloat * 1.4) * 0.05;
     }
-    for (const ember of this.embers) {
-      const data = ember.userData;
-      const angle = data.angle + elapsed * data.speed;
-      const radius = data.radius + Math.sin(elapsed * 1.2 + data.phase) * 0.08;
-      ember.position.set(
-        Math.cos(angle) * radius,
-        0.14 + data.height + Math.sin(elapsed * 1.8 + data.phase) * data.drift,
-        Math.sin(angle) * radius * 0.48
-      );
-      const pulse = 0.78 + Math.sin(elapsed * 3.0 + data.phase) * 0.18;
-      ember.scale.setScalar(data.size * pulse);
-      ember.material.opacity = 0.26 + pulse * 0.40;
-    }
+    this.updateStrongGameplayEmbers(dt, elapsed);
+    this.updateHellwingGameplayEmbers(dt, elapsed);
     this.updateCamera();
   }
 

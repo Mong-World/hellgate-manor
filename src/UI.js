@@ -67,6 +67,9 @@ export class UI {
     this.bestRank = null;
     this.newGamePlus = false;
     this.bonusTab = "about";
+    this.bonusInfoScroll = 0;
+    this.bonusInfoScrollMax = 0;
+    this.bonusInfoViewport = null;
     this.bonusHasNew = false;
     this.bonusViewerEnemy = null;
     this.bonusEnemyDefs = [
@@ -413,6 +416,11 @@ export class UI {
     return !!v && x >= v.x && x <= v.x + v.w && y >= v.y && y <= v.y + v.h;
   }
 
+  pointInBonusInfoViewport(x, y) {
+    const v = this.bonusInfoViewport;
+    return !!v && x >= v.x && x <= v.x + v.w && y >= v.y && y <= v.y + v.h;
+  }
+
   onPointerDown(event) {
     const x = event.clientX;
     const y = event.clientY;
@@ -428,6 +436,20 @@ export class UI {
         moved: false,
         pendingButton: button
       };
+      return;
+    }
+
+    if (this.mode === "bonus" && this.bonusTab === "about" && this.pointInBonusInfoViewport(x, y)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      this.pointerGesture = {
+        pointerId: event.pointerId,
+        mode: "bonusInfoScroll",
+        startY: y,
+        lastY: y,
+        moved: false
+      };
+      try { this.canvas.setPointerCapture?.(event.pointerId); } catch {}
       return;
     }
 
@@ -498,6 +520,17 @@ export class UI {
 
     const gesture = this.pointerGesture;
     if (!gesture || gesture.pointerId !== event.pointerId) return;
+
+    if (gesture.mode === "bonusInfoScroll") {
+      const dy = event.clientY - gesture.lastY;
+      if (Math.abs(event.clientY - gesture.startY) > 5) gesture.moved = true;
+      this.bonusInfoScroll = Math.max(0, Math.min(this.bonusInfoScrollMax, this.bonusInfoScroll - dy));
+      gesture.lastY = event.clientY;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
+
     const dy = event.clientY - gesture.lastY;
     if (Math.abs(event.clientY - gesture.startY) > 7) gesture.moved = true;
     if (gesture.moved && this.shopScrollMax > 0) {
@@ -540,11 +573,22 @@ export class UI {
     if (!gesture || gesture.pointerId !== event.pointerId) return;
     event.preventDefault();
     event.stopImmediatePropagation();
+    if (gesture.mode === "bonusInfoScroll") {
+      try { this.canvas.releasePointerCapture?.(event.pointerId); } catch {}
+      this.pointerGesture = null;
+      return;
+    }
     if (gesture.mode !== "bonusViewer" && !gesture.moved && gesture.pendingButton) this.activateButton(gesture.pendingButton);
     this.pointerGesture = null;
   }
 
   onWheel(event) {
+    if (this.mode === "bonus" && this.bonusTab === "about" && this.pointInBonusInfoViewport(event.clientX, event.clientY)) {
+      this.bonusInfoScroll = Math.max(0, Math.min(this.bonusInfoScrollMax, this.bonusInfoScroll + event.deltaY));
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
     if (this.mode === "bonusViewer") {
       this.callbacks.onBonusViewerZoom?.(event.deltaY);
       event.preventDefault();
@@ -894,7 +938,7 @@ export class UI {
 
     buttonY += bonusSectionGap;
     this.button(
-      "BONUS",
+      "EXTRAS",
       width / 2 - 105,
       buttonY,
       210,
@@ -1360,14 +1404,14 @@ export class UI {
     ctx.font = this.font(mobileLandscape ? 26 : (mobile ? 30 : 34));
     ctx.shadowColor = "rgba(255,80,24,.45)";
     ctx.shadowBlur = 10;
-    ctx.fillText("BONUS MENU", width / 2, y + (mobileLandscape ? 30 : 40));
+    ctx.fillText("EXTRAS", width / 2, y + (mobileLandscape ? 30 : 40));
     ctx.shadowBlur = 0;
 
     const tabY = y + (mobileLandscape ? 46 : 58);
-    const tabW = mobileLandscape ? 130 : 160;
+    const tabW = mobileLandscape ? 190 : 220;
     const tabH = mobileLandscape ? 32 : 38;
     this.button("ABOUT", width / 2 - tabW - 8, tabY, tabW, tabH, () => this.callbacks.onBonusTab?.("about"), false, null, this.bonusTab === "about" ? C.orange : C.borderHot);
-    this.button("ENEMIES", width / 2 + 8, tabY, tabW, tabH, () => this.callbacks.onBonusTab?.("enemies"), false, null, this.bonusTab === "enemies" ? C.orange : C.borderHot);
+    this.button("ENEMIES (MODEL VIEWER)", width / 2 + 8, tabY, tabW, tabH, () => this.callbacks.onBonusTab?.("enemies"), false, null, this.bonusTab === "enemies" ? C.orange : C.borderHot);
     this.button("BACK", x + panelWidth - 98, y + 14, 80, 30, () => this.callbacks.onBonusBack?.());
 
     if (this.bonusTab === "about") {
@@ -1376,28 +1420,66 @@ export class UI {
       const innerW = panelWidth - 40;
       const innerH = panelHeight - (innerY - y) - 20;
       this.panel(innerX, innerY, innerW, innerH, C.panel2, 12);
+
+      const pad = mobile ? 18 : 22;
+      const viewX = innerX + 4;
+      const viewY = innerY + 8;
+      const viewW = innerW - 8;
+      const viewH = innerH - 16;
+      this.bonusInfoViewport = { x: viewX, y: viewY, w: viewW, h: viewH };
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(viewX, viewY, viewW, viewH);
+      ctx.clip();
+      ctx.translate(0, -this.bonusInfoScroll);
       ctx.textAlign = "left";
+
+      let cy = innerY + 36;
       ctx.fillStyle = C.orangeLight;
       ctx.font = this.dataFont(mobile ? 17 : 20, 900);
-      ctx.fillText("ABOUT", innerX + 18, innerY + 28);
+      ctx.fillText("ABOUT", innerX + pad, cy);
+      cy += mobile ? 30 : 36;
       ctx.fillStyle = C.text;
       ctx.font = this.dataFont(mobile ? 15 : 17, 700);
-      this.multilineText([
+      cy = this.multilineText([
         "Hellgate Manor stands on the edge of a breach between this world and something far worse. Night after night, creatures pour through the Hell Gate and march toward the Manor. The only thing holding them back is you.",
         "Destroy the invading demons, bind their souls, strengthen the Manor's defences and survive until dawn. As the night grows darker, stronger creatures emerge from the breach."
-      ], innerX + 18, innerY + 56, innerW - 36, mobile ? 22 : 26);
+      ], innerX + pad, cy, innerW - pad * 2, mobile ? 22 : 26);
+
+      cy += mobile ? 24 : 32;
       ctx.fillStyle = C.orangeLight;
       ctx.font = this.dataFont(mobile ? 17 : 20, 900);
-      ctx.fillText("HELP", innerX + 18, innerY + (mobile ? 214 : 250));
+      ctx.fillText("HELP", innerX + pad, cy);
+      cy += mobile ? 30 : 36;
       ctx.fillStyle = C.text;
       ctx.font = this.dataFont(mobile ? 15 : 17, 700);
-      this.multilineText([
+      cy = this.multilineText([
         "Grab and throw demons to destroy them. Stronger enemies may require repeated attacks or different tactics.",
         "Collect Souls to repair and upgrade the Manor. Capture eligible demons through Soul Extraction to create Bound Souls, then assign them to your defences to make them stronger.",
         "Watch the Manor's health carefully. Some enemies can bypass automated defences and must be dealt with directly."
-      ], innerX + 18, innerY + (mobile ? 242 : 282), innerW - 36, mobile ? 22 : 26);
+      ], innerX + pad, cy, innerW - pad * 2, mobile ? 22 : 26);
+      cy += 20;
+      ctx.restore();
+
+      this.bonusInfoScrollMax = Math.max(0, cy - viewY - viewH + 12);
+      this.bonusInfoScroll = Math.max(0, Math.min(this.bonusInfoScrollMax, this.bonusInfoScroll));
+
+      if (this.bonusInfoScrollMax > 0) {
+        const trackX = innerX + innerW - 8;
+        const trackY = viewY + 8;
+        const trackH = viewH - 16;
+        const thumbH = Math.max(34, trackH * (viewH / (viewH + this.bonusInfoScrollMax)));
+        const thumbY = trackY + (trackH - thumbH) * (this.bonusInfoScroll / this.bonusInfoScrollMax);
+        ctx.fillStyle = "rgba(255,255,255,.08)";
+        ctx.fillRect(trackX, trackY, 3, trackH);
+        ctx.fillStyle = C.orange;
+        ctx.fillRect(trackX, thumbY, 3, thumbH);
+      }
       return;
     }
+
+    this.bonusInfoViewport = null;
 
     const gridY = tabY + tabH + 20;
     const columns = mobileLandscape ? 3 : 2;
@@ -1468,6 +1550,7 @@ export class UI {
       }
       cursorY += Math.max(4, lineHeight * 0.28);
     }
+    return cursorY;
   }
 
   drawBanner(width, height) {
