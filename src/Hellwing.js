@@ -6,7 +6,7 @@ function findClip(animations, pattern) {
   return animations.find((clip) => pattern.test(clip.name));
 }
 
-const HELLWING_EMBER_GEOMETRY = new THREE.IcosahedronGeometry(0.032, 0);
+const HELLWING_EMBER_GEOMETRY = new THREE.IcosahedronGeometry(0.050, 0);
 const HELLWING_EMBER_MATERIAL = new THREE.MeshBasicMaterial({
   color: 0xff7a2c,
   transparent: true,
@@ -22,7 +22,7 @@ const HELLWING_EMBER_ANCHORS = Object.freeze([
   [-0.18, 0.12, 0.10],
   [-0.18, 0.12, -0.10]
 ]);
-const HELLWING_EMBER_POOL_SIZE = 16;
+const HELLWING_EMBER_POOL_SIZE = 26;
 const HELLWING_SPAWN = new THREE.Vector3();
 const HELLWING_DRIFT = new THREE.Vector3();
 const HELLWING_ROTATION = new THREE.Quaternion();
@@ -167,10 +167,10 @@ export class Hellwing {
       return;
     }
 
-    const previewRate = this.preview ? 0.040 : 0.028;
+    const previewRate = this.preview ? 0.024 : 0.016;
     this.emberSpawnTimer -= dt;
     while (this.emberSpawnTimer <= 0) {
-      this.emberSpawnTimer += previewRate + Math.random() * 0.018;
+      this.emberSpawnTimer += previewRate + Math.random() * 0.012;
       const ember = this.emberPool.find((item) => !item.visible);
       if (!ember) break;
       const data = ember.userData;
@@ -184,20 +184,20 @@ export class Hellwing {
       ember.position.copy(HELLWING_SPAWN);
 
       this.group.getWorldQuaternion(HELLWING_ROTATION);
-      const baseTrail = this.preview ? -0.46 : (-this.flySpeed * 0.06 - 0.10);
+      const baseTrail = this.preview ? -0.58 : (-this.flySpeed * 0.075 - 0.14);
       HELLWING_DRIFT.set(
         baseTrail - THREE.MathUtils.randFloat(0.05, 0.16),
-        THREE.MathUtils.randFloat(0.12, 0.26),
+        THREE.MathUtils.randFloat(0.16, 0.32),
         THREE.MathUtils.randFloatSpread(0.12)
       ).applyQuaternion(HELLWING_ROTATION);
 
       data.velocity.copy(HELLWING_DRIFT);
       data.age = 0;
-      data.life = THREE.MathUtils.randFloat(this.preview ? 0.52 : 0.40, this.preview ? 0.88 : 0.72);
-      data.baseScale = THREE.MathUtils.randFloat(0.62, 1.32);
+      data.life = THREE.MathUtils.randFloat(this.preview ? 0.72 : 0.58, this.preview ? 1.16 : 0.96);
+      data.baseScale = THREE.MathUtils.randFloat(1.05, 2.10);
       data.phase = Math.random() * Math.PI * 2;
       data.spin = THREE.MathUtils.randFloat(4.2, 7.8);
-      data.sway = THREE.MathUtils.randFloat(0.04, 0.10);
+      data.sway = THREE.MathUtils.randFloat(0.05, 0.12);
       ember.scale.setScalar(data.baseScale);
       ember.visible = true;
     }
@@ -215,10 +215,10 @@ export class Hellwing {
       const swirlY = Math.sin(elapsed * data.spin + data.phase) * data.sway;
       const swirlZ = Math.cos(elapsed * (data.spin * 0.8) + data.phase) * data.sway;
       ember.position.x += data.velocity.x * dt;
-      ember.position.y += (data.velocity.y + swirlY + 0.05) * dt;
+      ember.position.y += (data.velocity.y + swirlY + 0.08) * dt;
       ember.position.z += (data.velocity.z + swirlZ) * dt;
-      ember.scale.setScalar(Math.max(0.10, data.baseScale * (1 - t * 0.72)));
-      ember.material.opacity = 0.18 + alpha * 0.78;
+      ember.scale.setScalar(Math.max(0.16, data.baseScale * (1 - t * 0.62)));
+      ember.material.opacity = 0.30 + alpha * 0.66;
     }
   }
 
