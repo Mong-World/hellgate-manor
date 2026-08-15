@@ -6,6 +6,27 @@ function findClip(animations, pattern) {
   return animations.find((clip) => pattern.test(clip.name));
 }
 
+const HELLWING_EMBER_GEOMETRY = new THREE.IcosahedronGeometry(0.032, 0);
+const HELLWING_EMBER_MATERIAL = new THREE.MeshBasicMaterial({
+  color: 0xff7a2c,
+  transparent: true,
+  opacity: 0.96,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false
+});
+const HELLWING_EMBER_ANCHORS = Object.freeze([
+  [-0.52, 0.34, 0.00],
+  [-0.42, 0.24, 0.18],
+  [-0.42, 0.24, -0.18],
+  [-0.26, 0.18, 0.00],
+  [-0.18, 0.12, 0.10],
+  [-0.18, 0.12, -0.10]
+]);
+const HELLWING_EMBER_POOL_SIZE = 16;
+const HELLWING_SPAWN = new THREE.Vector3();
+const HELLWING_DRIFT = new THREE.Vector3();
+const HELLWING_ROTATION = new THREE.Quaternion();
+
 export class Hellwing {
   constructor({ id, scene, assets, position, onDestroyed, onManorImpact }) {
     this.scene = scene;
@@ -72,7 +93,23 @@ export class Hellwing {
     this.modelRoot.add(model);
     this.model = model;
 
-    const grabGeometry = new THREE.BoxGeometry(2.2, 1.9, 2.2);
+    this.emberPool = [];
+    this.emberSpawnTimer = 0;
+    for (let i = 0; i < HELLWING_EMBER_POOL_SIZE; i += 1) {
+      const ember = new THREE.Mesh(HELLWING_EMBER_GEOMETRY, HELLWING_EMBER_MATERIAL);
+      ember.visible = false;
+      ember.userData.velocity = new THREE.Vector3();
+      ember.userData.age = 0;
+      ember.userData.life = 0;
+      ember.userData.baseScale = 1;
+      ember.userData.phase = 0;
+      ember.userData.spin = 0;
+      ember.userData.sway = 0;
+      this.scene.add(ember);
+      this.emberPool.push(ember);
+    }
+
+    const grabGeometry = new THREE.BoxGeometry(1.0, 0.82, 1.1);
     const grabMaterial = new THREE.MeshBasicMaterial({
       transparent: true,
       opacity: 0,
@@ -80,7 +117,7 @@ export class Hellwing {
       depthTest: false
     });
     this.grabCollider = new THREE.Mesh(grabGeometry, grabMaterial);
-    this.grabCollider.position.y = 0.82;
+    this.grabCollider.position.y = 0.36;
     this.grabCollider.userData.enemy = this;
     this.modelRoot.add(this.grabCollider);
 
@@ -120,9 +157,75 @@ export class Hellwing {
     if (Math.abs(this.velocity.y) < 2.4) this.velocity.y = Math.max(this.velocity.y, 2.4);
   }
 
+  updateEmbers(dt, elapsed) {
+    if (!this.emberPool) return;
+
+    const active = !this.dead && !this.removed && this.state !== "pooled";
+    if (!active) {
+      this.emberSpawnTimer = 0;
+      this.emberPool.forEach((ember) => { ember.visible = false; });
+      return;
+    }
+
+    const previewRate = this.preview ? 0.040 : 0.028;
+    this.emberSpawnTimer -= dt;
+    while (this.emberSpawnTimer <= 0) {
+      this.emberSpawnTimer += previewRate + Math.random() * 0.018;
+      const ember = this.emberPool.find((item) => !item.visible);
+      if (!ember) break;
+      const data = ember.userData;
+      const anchor = HELLWING_EMBER_ANCHORS[(Math.random() * HELLWING_EMBER_ANCHORS.length) | 0];
+      HELLWING_SPAWN.set(
+        anchor[0] + THREE.MathUtils.randFloatSpread(0.08),
+        anchor[1] + THREE.MathUtils.randFloatSpread(0.06),
+        anchor[2] + THREE.MathUtils.randFloatSpread(0.10)
+      );
+      this.group.localToWorld(HELLWING_SPAWN);
+      ember.position.copy(HELLWING_SPAWN);
+
+      this.group.getWorldQuaternion(HELLWING_ROTATION);
+      const baseTrail = this.preview ? -0.46 : (-this.flySpeed * 0.06 - 0.10);
+      HELLWING_DRIFT.set(
+        baseTrail - THREE.MathUtils.randFloat(0.05, 0.16),
+        THREE.MathUtils.randFloat(0.12, 0.26),
+        THREE.MathUtils.randFloatSpread(0.12)
+      ).applyQuaternion(HELLWING_ROTATION);
+
+      data.velocity.copy(HELLWING_DRIFT);
+      data.age = 0;
+      data.life = THREE.MathUtils.randFloat(this.preview ? 0.52 : 0.40, this.preview ? 0.88 : 0.72);
+      data.baseScale = THREE.MathUtils.randFloat(0.62, 1.32);
+      data.phase = Math.random() * Math.PI * 2;
+      data.spin = THREE.MathUtils.randFloat(4.2, 7.8);
+      data.sway = THREE.MathUtils.randFloat(0.04, 0.10);
+      ember.scale.setScalar(data.baseScale);
+      ember.visible = true;
+    }
+
+    for (const ember of this.emberPool) {
+      if (!ember.visible) continue;
+      const data = ember.userData;
+      data.age += dt;
+      if (data.age >= data.life) {
+        ember.visible = false;
+        continue;
+      }
+      const t = data.age / data.life;
+      const alpha = 1 - t;
+      const swirlY = Math.sin(elapsed * data.spin + data.phase) * data.sway;
+      const swirlZ = Math.cos(elapsed * (data.spin * 0.8) + data.phase) * data.sway;
+      ember.position.x += data.velocity.x * dt;
+      ember.position.y += (data.velocity.y + swirlY + 0.05) * dt;
+      ember.position.z += (data.velocity.z + swirlZ) * dt;
+      ember.scale.setScalar(Math.max(0.10, data.baseScale * (1 - t * 0.72)));
+      ember.material.opacity = 0.18 + alpha * 0.78;
+    }
+  }
+
   update(dt, elapsed, held, manorBarrierX = 13) {
     if (this.dead || this.removed || dt <= 0) return;
     this.mixer?.update(dt);
+    this.updateEmbers(dt, elapsed);
 
     // Developer preview keeps the bat fixed in world space while allowing its
     // authored wing/flap animation to play for easy visual inspection.
@@ -164,6 +267,7 @@ export class Hellwing {
     this.state = "impact";
     this.group.visible = false;
     this.mixer?.stopAllAction();
+    if (this.emberPool) this.emberPool.forEach((ember) => { ember.visible = false; });
     this.onManorImpact?.(this);
   }
 
@@ -173,6 +277,7 @@ export class Hellwing {
     this.state = "dead";
     this.group.visible = false;
     this.mixer?.stopAllAction();
+    if (this.emberPool) this.emberPool.forEach((ember) => { ember.visible = false; });
     this.onDestroyed?.({ enemy: this, reason, position: this.position.clone() });
   }
 
@@ -193,6 +298,8 @@ export class Hellwing {
     this.baseZ = position.z;
     this.phase = Math.random() * Math.PI * 2;
     this.peakWorldY = position.y;
+    this.emberSpawnTimer = 0;
+    if (this.emberPool) this.emberPool.forEach((ember) => { ember.visible = false; });
     this.mixer?.stopAllAction();
     if (this.action) this.action.reset().setLoop(THREE.LoopRepeat, Infinity).play();
   }
@@ -206,6 +313,7 @@ export class Hellwing {
     this.velocity.set(0, 0, 0);
     this.group.rotation.set(0, 0, 0);
     this.modelRoot.rotation.set(0, 0, 0);
+    if (this.emberPool) this.emberPool.forEach((ember) => { ember.visible = false; });
     this.mixer?.stopAllAction();
   }
 
@@ -220,6 +328,12 @@ export class Hellwing {
     this.mixer?.stopAllAction();
     this.grabCollider?.geometry?.dispose();
     this.grabCollider?.material?.dispose();
+    if (this.emberPool) {
+      this.emberPool.forEach((ember) => {
+        ember.visible = false;
+        this.scene.remove(ember);
+      });
+    }
     this.scene.remove(this.group);
   }
 }
