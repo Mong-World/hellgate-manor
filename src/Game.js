@@ -121,6 +121,7 @@ export class Game {
       onDevToggleNGPlus: () => this.toggleDeveloperNewGamePlus(),
       onDevMidpoint40: () => this.startDeveloperMidpointTest(0.40),
       onDevMidpoint100: () => this.startDeveloperMidpointTest(1.00),
+      onDevHellwingPreview: () => this.showDeveloperHellwingPreview(),
       onDevClose: () => this.closeDeveloperPanel()
     });
 
@@ -1544,6 +1545,21 @@ export class Game {
     if (system === "extraction") this.extractionLevel = Math.max(1, this.extractionLevel);
     this.applyUpgradeState();
     this.syncUI();
+  }
+
+  showDeveloperHellwingPreview() {
+    this.prepareDeveloperTransition();
+    this.waveManager?.clearDeveloperHellwingPreview?.();
+    const enemy = this.waveManager?.showDeveloperHellwingPreview?.(new THREE.Vector3(1.8, 3.3, 0));
+    if (!enemy) {
+      this.ui.showBanner("HELLWING PREVIEW FAILED", "NO FREE HELLWING IN POOL", 2.4);
+      return;
+    }
+    this.gameplayActive = true;
+    this.paused = false;
+    this.grabSystem?.setEnabled(false);
+    this.ui.setMode("playing");
+    this.ui.showBanner("HELLWING PREVIEW", "ESC TO PAUSE — REOPEN DEV PANEL TO CONTINUE", 3.2);
   }
 
   startDeveloperMidpointTest(healthRatio = 0.40) {

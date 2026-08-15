@@ -2047,10 +2047,11 @@ export class UI {
       const midpointW = (panelWidth - 40 - midpointGap) / 2;
       this.button("W50 MID 40%", x + 20, midpointY, midpointW, 34, () => this.callbacks.onDevMidpoint40?.(), false, null, C.purple);
       this.button("W50 MID 100%", x + 20 + midpointW + midpointGap, midpointY, midpointW, 34, () => this.callbacks.onDevMidpoint100?.(), false, null, C.purple);
+      this.button("SHOW HELLWING", width / 2 - 92, y + 289, 184, 34, () => this.callbacks.onDevHellwingPreview?.(), false, null, C.red);
 
       ctx.fillStyle = C.muted;
       ctx.font = this.dataFont(8, 800);
-      ctx.fillText(`${this.souls} SOULS • ${this.boundSouls} BOUND SOULS`, width / 2, y + 292);
+      ctx.fillText(`${this.souls} SOULS • ${this.boundSouls} BOUND SOULS`, width / 2, y + 334);
       this.button("CLOSE", width / 2 - 80, y + panelHeight - 43, 160, 34, () => this.callbacks.onDevClose?.());
       return;
     }
@@ -2077,10 +2078,11 @@ export class UI {
     const midpointY = row2 + 58;
     this.button("W50 MIDPOINT — 40% HEALTH", x + 92, midpointY, 250, 42, () => this.callbacks.onDevMidpoint40?.(), false, null, C.purple);
     this.button("W50 MIDPOINT — 100% HEALTH", x + panelWidth - 342, midpointY, 250, 42, () => this.callbacks.onDevMidpoint100?.(), false, null, C.purple);
+    this.button("SHOW HELLWING", width / 2 - 105, midpointY + 54, 210, 40, () => this.callbacks.onDevHellwingPreview?.(), false, null, C.red);
 
     ctx.fillStyle = C.orangeLight;
     ctx.font = this.dataFont(12, 900);
-    ctx.fillText("UNLOCK SYSTEMS", width / 2, row2 + 124);
+    ctx.fillText("UNLOCK SYSTEMS", width / 2, row2 + 174);
 
     const unlocks = [
       ["EXTRACTION", "extraction"],
@@ -2094,12 +2096,12 @@ export class UI {
     const totalW = unlocks.length * buttonW + (unlocks.length - 1) * gap;
     const startX = width / 2 - totalW / 2;
     unlocks.forEach(([label, key], index) => {
-      this.button(label, startX + index * (buttonW + gap), row2 + 138, buttonW, 42, () => this.callbacks.onDevUnlock?.(key), false, null, C.purple);
+      this.button(label, startX + index * (buttonW + gap), row2 + 188, buttonW, 42, () => this.callbacks.onDevUnlock?.(key), false, null, C.purple);
     });
 
     ctx.fillStyle = C.muted;
     ctx.font = this.dataFont(10, 800);
-    ctx.fillText(`CURRENT: ${this.souls} SOULS • ${this.boundSouls} BOUND SOULS`, width / 2, row2 + 208);
+    ctx.fillText(`CURRENT: ${this.souls} SOULS • ${this.boundSouls} BOUND SOULS`, width / 2, row2 + 258);
 
     const perf = this.performanceStats ?? {};
     const misses = perf.poolMisses ?? {};
@@ -2108,18 +2110,18 @@ export class UI {
     ctx.fillText(
       `PERF  ${perf.fps ?? 0} FPS • ${perf.calls ?? 0} DRAWS • ${Number(perf.triangles ?? 0).toLocaleString()} TRIANGLES • ${perf.programs ?? 0} PROGRAMS`,
       width / 2,
-      row2 + 233
+      row2 + 283
     );
     ctx.fillStyle = C.muted;
     ctx.fillText(
       `GPU  ${perf.geometries ?? 0} GEOMETRIES • ${perf.textures ?? 0} TEXTURES`,
       width / 2,
-      row2 + 251
+      row2 + 301
     );
     ctx.fillText(
       `POOL MISSES  H:${misses.husk ?? 0}  ST:${misses.strong ?? 0}  R:${misses.runner ?? 0}  B:${misses.brute ?? 0}  SG:${misses.siege ?? 0}`,
       width / 2,
-      row2 + 269
+      row2 + 319
     );
 
     this.button("CLOSE", width / 2 - 95, y + panelHeight - 62, 190, 44, () => this.callbacks.onDevClose?.());

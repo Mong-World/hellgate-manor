@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { AssetLibrary } from "./AssetLibrary.js";
+import { CONFIG } from "./Config.js";
 
 function findClip(animations, pattern) {
   return animations.find((clip) => pattern.test(clip.name));
@@ -16,6 +17,7 @@ export class Hellwing {
     this.dead = false;
     this.removed = false;
     this.state = "pooled";
+    this.preview = false;
     this.velocity = new THREE.Vector3();
     this.peakWorldY = 0;
     this.group = new THREE.Group();
@@ -37,11 +39,30 @@ export class Hellwing {
     const clone = this.assets.createHellwingClone();
     const model = clone.scene;
     AssetLibrary.prepareModel(model);
-    // Keep the special enemy deliberately small/lightweight on screen.
-    AssetLibrary.fitModelToHeight(model, 1.65, Math.PI / 2);
+    // Hellwing proportions are extremely wide, so fitting by height alone can
+    // make the wingspan enormous. Scale by the model's largest dimension
+    // instead, keeping it visibly smaller than a standing Husk.
+    model.rotation.y = Math.PI / 2;
+    model.updateMatrixWorld(true);
+    const sourceBox = new THREE.Box3().setFromObject(model);
+    const sourceSize = sourceBox.getSize(new THREE.Vector3());
+    const largestDimension = Math.max(sourceSize.x, sourceSize.y, sourceSize.z, 0.001);
+    model.scale.setScalar((CONFIG?.hellwing?.maxVisualDimension ?? 3.0) / largestDimension);
+    model.updateMatrixWorld(true);
+    const fittedBox = new THREE.Box3().setFromObject(model);
+    const fittedCentre = fittedBox.getCenter(new THREE.Vector3());
+    model.position.x -= fittedCentre.x;
+    model.position.z -= fittedCentre.z;
+    model.position.y -= fittedBox.min.y;
+    model.updateMatrixWorld(true);
+
     model.traverse((object) => {
       if (!object.isMesh) return;
       object.userData.enemy = this;
+      // Avoid the oversized moving ground shadow that made the first version
+      // read as a giant silhouette rather than a small flying threat.
+      object.castShadow = false;
+      object.receiveShadow = false;
     });
     this.modelRoot.add(model);
     this.model = model;
@@ -98,6 +119,10 @@ export class Hellwing {
     if (this.dead || this.removed || dt <= 0) return;
     this.mixer?.update(dt);
 
+    // Developer preview keeps the bat fixed in world space while allowing its
+    // authored wing/flap animation to play for easy visual inspection.
+    if (this.preview) return;
+
     if (held || this.state === "grabbed") {
       this.state = "grabbed";
       return;
@@ -146,7 +171,7 @@ export class Hellwing {
     this.onDestroyed?.({ enemy: this, reason, position: this.position.clone() });
   }
 
-  resetForSpawn(id, position, { tutorial = false } = {}) {
+  resetForSpawn(id, position, { tutorial = false, preview = false } = {}) {
     this.id = id;
     this.dead = false;
     this.removed = false;
@@ -157,6 +182,7 @@ export class Hellwing {
     this.modelRoot.scale.set(1, 1, 1);
     this.velocity.set(0, 0, 0);
     this.state = "flying";
+    this.preview = !!preview;
     this.flySpeed = tutorial ? 5.6 : THREE.MathUtils.randFloat(7.2, 8.7);
     this.baseY = position.y;
     this.baseZ = position.z;
@@ -170,6 +196,7 @@ export class Hellwing {
     this.dead = false;
     this.removed = true;
     this.state = "pooled";
+    this.preview = false;
     this.group.visible = false;
     this.velocity.set(0, 0, 0);
     this.group.rotation.set(0, 0, 0);

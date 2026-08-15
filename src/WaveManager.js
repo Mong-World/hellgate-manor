@@ -297,6 +297,25 @@ export class WaveManager {
     return count;
   }
 
+  showDeveloperHellwingPreview(position = new THREE.Vector3(1.8, 3.3, 0)) {
+    this.clearDeveloperHellwingPreview();
+    const enemy = this.acquireHellwing(
+      this.nextEnemyId++,
+      position,
+      { preview: true }
+    );
+    if (!enemy) return null;
+    this.developerHellwingPreview = enemy;
+    return enemy;
+  }
+
+  clearDeveloperHellwingPreview() {
+    const enemy = this.developerHellwingPreview;
+    if (!enemy) return;
+    this.developerHellwingPreview = null;
+    this.releaseHellwing(enemy);
+  }
+
   spawnHellwing({ tutorial = false, adaptive = false } = {}) {
     if (this.getActiveHellwingCount() >= 2) return false;
     const z = THREE.MathUtils.randFloat(-4.4, 4.4);
@@ -658,6 +677,7 @@ export class WaveManager {
   clearActiveOnly() {
     [...this.enemies].forEach((enemy) => this.releaseEnemy(enemy));
     this.enemies = [];
+    this.developerHellwingPreview = null;
     [...this.hellwings].forEach((enemy) => this.releaseHellwing(enemy));
     this.hellwings = [];
     this.activeExtractions.clear();
