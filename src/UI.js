@@ -100,6 +100,7 @@ export class UI {
     this.shopViewport = null;
     this.activeButtonClip = null;
     this.pointerGesture = null;
+    this.bonusViewerPointers = new Map();
     this.tutorialDemonImage = new Image();
     this.tutorialDemonImage.decoding = "async";
     this.tutorialDemonImage.src = "./assets/demon-image.png";
@@ -177,7 +178,10 @@ export class UI {
       this.shopPage = 0;
       this.shopScroll = 0;
     }
-    if (mode !== "bonusViewer") this.pointerGesture = null;
+    if (mode !== "bonusViewer") {
+      this.pointerGesture = null;
+      this.bonusViewerPointers.clear();
+    }
   }
 
   setHUD(data) {
@@ -428,12 +432,24 @@ export class UI {
     }
 
     if (this.mode === "bonusViewer" && !button) {
-      this.pointerGesture = {
-        pointerId: event.pointerId,
-        mode: "bonusViewer",
-        lastX: x,
-        lastY: y
-      };
+      this.bonusViewerPointers.set(event.pointerId, { x, y });
+      const points = [...this.bonusViewerPointers.values()];
+      if (points.length >= 2) {
+        const a = points[0];
+        const b = points[1];
+        this.pointerGesture = {
+          mode: "bonusViewerPinch",
+          lastDistance: Math.hypot(a.x - b.x, a.y - b.y)
+        };
+      } else {
+        this.pointerGesture = {
+          pointerId: event.pointerId,
+          mode: "bonusViewer",
+          lastX: x,
+          lastY: y
+        };
+      }
+      try { this.canvas.setPointerCapture?.(event.pointerId); } catch {}
       event.preventDefault();
       event.stopImmediatePropagation();
       return;
@@ -447,20 +463,41 @@ export class UI {
   }
 
   onPointerMove(event) {
-    const gesture = this.pointerGesture;
-    if (!gesture || gesture.pointerId !== event.pointerId) return;
-
-    if (gesture.mode === "bonusViewer") {
-      const dx = event.clientX - gesture.lastX;
-      const dy = event.clientY - gesture.lastY;
-      gesture.lastX = event.clientX;
-      gesture.lastY = event.clientY;
-      this.callbacks.onBonusViewerRotate?.(dx, dy);
+    if (this.mode === "bonusViewer" && this.bonusViewerPointers.has(event.pointerId)) {
+      this.bonusViewerPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      const points = [...this.bonusViewerPointers.values()];
+      if (points.length >= 2) {
+        const a = points[0];
+        const b = points[1];
+        const distance = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
+        const previous = this.pointerGesture?.mode === "bonusViewerPinch" ? this.pointerGesture.lastDistance : distance;
+        const delta = previous - distance;
+        this.pointerGesture = { mode: "bonusViewerPinch", lastDistance: distance };
+        this.callbacks.onBonusViewerZoom?.(delta * 2.4);
+      } else if (points.length === 1) {
+        const gesture = this.pointerGesture;
+        if (gesture?.mode === "bonusViewer" && gesture.pointerId === event.pointerId) {
+          const dx = event.clientX - gesture.lastX;
+          const dy = event.clientY - gesture.lastY;
+          gesture.lastX = event.clientX;
+          gesture.lastY = event.clientY;
+          this.callbacks.onBonusViewerRotate?.(dx, dy);
+        } else {
+          this.pointerGesture = {
+            pointerId: event.pointerId,
+            mode: "bonusViewer",
+            lastX: event.clientX,
+            lastY: event.clientY
+          };
+        }
+      }
       event.preventDefault();
       event.stopImmediatePropagation();
       return;
     }
 
+    const gesture = this.pointerGesture;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
     const dy = event.clientY - gesture.lastY;
     if (Math.abs(event.clientY - gesture.startY) > 7) gesture.moved = true;
     if (gesture.moved && this.shopScrollMax > 0) {
@@ -472,6 +509,33 @@ export class UI {
   }
 
   onPointerUp(event) {
+    if (this.mode === "bonusViewer" && this.bonusViewerPointers.has(event.pointerId)) {
+      this.bonusViewerPointers.delete(event.pointerId);
+      const remaining = [...this.bonusViewerPointers.entries()];
+      if (remaining.length === 1) {
+        const [pointerId, point] = remaining[0];
+        this.pointerGesture = {
+          pointerId,
+          mode: "bonusViewer",
+          lastX: point.x,
+          lastY: point.y
+        };
+      } else if (remaining.length >= 2) {
+        const a = remaining[0][1];
+        const b = remaining[1][1];
+        this.pointerGesture = {
+          mode: "bonusViewerPinch",
+          lastDistance: Math.hypot(a.x - b.x, a.y - b.y)
+        };
+      } else {
+        this.pointerGesture = null;
+      }
+      try { this.canvas.releasePointerCapture?.(event.pointerId); } catch {}
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
+
     const gesture = this.pointerGesture;
     if (!gesture || gesture.pointerId !== event.pointerId) return;
     event.preventDefault();

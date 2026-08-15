@@ -7,7 +7,7 @@ const DISPLAY = Object.freeze({
   strong: { label: "Flaming Husks", fit: "height", target: 3.35, cameraY: 1.95, distance: 7.0, floatBase: 0.42 },
   brute: { label: "Brute Demon", fit: "height", target: 4.15, cameraY: 2.4, distance: 8.6, floatBase: 0.42 },
   siege: { label: "Siege Demon", fit: "height", target: 6.30, cameraY: 2.95, distance: 10.2, floatBase: 0.42 },
-  hellwing: { label: "Hell-Wings", fit: "max", target: 0.006125, cameraY: 0.72, distance: 3.2, floatBase: 1.08 }
+  hellwing: { label: "Hell-Wings", fit: "max", target: 0.00735, cameraY: 0.78, distance: 3.35, floatBase: 1.14 }
 });
 
 const TEMP_BOX = new THREE.Box3();
@@ -131,26 +131,26 @@ export class BonusViewer {
     this.embers = [];
     this.emberGroup = new THREE.Group();
     this.scene.add(this.emberGroup);
-    const geometry = new THREE.IcosahedronGeometry(0.022, 0);
-    for (let i = 0; i < 14; i += 1) {
+    const geometry = new THREE.IcosahedronGeometry(0.030, 0);
+    for (let i = 0; i < 18; i += 1) {
       const material = new THREE.MeshBasicMaterial({
         color: i % 3 === 0 ? 0xffc38a : (i % 2 ? 0xff7c30 : 0xff4d16),
         transparent: true,
-        opacity: 0.68,
+        opacity: 0.78,
         blending: THREE.AdditiveBlending,
         depthWrite: false
       });
       const ember = new THREE.Mesh(geometry, material);
-      const angle = (i / 14) * Math.PI * 2;
-      const radius = 1.45 + (i % 4) * 0.10;
+      const angle = (i / 18) * Math.PI * 2;
+      const radius = 1.35 + (i % 5) * 0.12;
       ember.userData = {
         angle,
         radius,
-        height: 0.02 + (i % 4) * 0.06,
-        speed: 0.22 + (i % 5) * 0.04,
-        drift: 0.04 + (i % 3) * 0.015,
+        height: 0.05 + (i % 5) * 0.055,
+        speed: 0.24 + (i % 5) * 0.04,
+        drift: 0.05 + (i % 3) * 0.018,
         phase: i * 0.47,
-        size: 0.58 + (i % 5) * 0.10
+        size: 0.72 + (i % 5) * 0.10
       };
       this.emberGroup.add(ember);
       this.embers.push(ember);
@@ -186,7 +186,7 @@ export class BonusViewer {
     this.modelRoot = modelRoot;
     this.root.rotation.y = Math.PI * 0.62;
     this.distance = display.distance;
-    this.minDistance = Math.max(3.8, display.distance - 2.0);
+    this.minDistance = Math.max(1.8, display.distance - 1.6);
     this.maxDistance = display.distance + 3.0;
     this.baseCameraY = display.cameraY;
     this.cameraLift = 0;
@@ -237,12 +237,12 @@ export class BonusViewer {
       const radius = data.radius + Math.sin(elapsed * 1.2 + data.phase) * 0.08;
       ember.position.set(
         Math.cos(angle) * radius,
-        0.10 + data.height + Math.sin(elapsed * 1.8 + data.phase) * data.drift,
+        0.14 + data.height + Math.sin(elapsed * 1.8 + data.phase) * data.drift,
         Math.sin(angle) * radius * 0.48
       );
       const pulse = 0.78 + Math.sin(elapsed * 3.0 + data.phase) * 0.18;
       ember.scale.setScalar(data.size * pulse);
-      ember.material.opacity = 0.18 + pulse * 0.34;
+      ember.material.opacity = 0.26 + pulse * 0.40;
     }
     this.updateCamera();
   }
