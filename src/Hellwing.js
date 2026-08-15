@@ -47,7 +47,12 @@ export class Hellwing {
     const sourceBox = new THREE.Box3().setFromObject(model);
     const sourceSize = sourceBox.getSize(new THREE.Vector3());
     const largestDimension = Math.max(sourceSize.x, sourceSize.y, sourceSize.z, 0.001);
-    model.scale.setScalar((CONFIG?.hellwing?.maxVisualDimension ?? 3.0) / largestDimension);
+    // This particular GLB reports bounds that still produce an oversized
+    // on-screen result after normalisation. Keep the bound-based fit, then
+    // apply a deliberate visual reduction so the bat reads as a small aerial
+    // threat rather than filling the camera.
+    const fittedScale = (CONFIG?.hellwing?.maxVisualDimension ?? 3.0) / largestDimension;
+    model.scale.setScalar(fittedScale * (CONFIG?.hellwing?.visualScaleMultiplier ?? 0.18));
     model.updateMatrixWorld(true);
     const fittedBox = new THREE.Box3().setFromObject(model);
     const fittedCentre = fittedBox.getCenter(new THREE.Vector3());
