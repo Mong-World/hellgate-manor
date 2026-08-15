@@ -288,6 +288,20 @@ export class UI {
     };
   }
 
+  showHellwingTutorial(onClose = null) {
+    this.tutorial = {
+      simple: true,
+      compact: true,
+      title: "HELLWINGS",
+      lines: [
+        "Manor defences cannot target Hellwings.",
+        "Knock them out of the air yourself.",
+        "If one reaches the Manor, it deals devastating damage."
+      ],
+      onClose
+    };
+  }
+
   setWaveResults(results) {
     this.waveResults = { ...this.waveResults, ...results };
   }

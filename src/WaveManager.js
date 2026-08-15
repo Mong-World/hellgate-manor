@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { CONFIG } from "./Config.js";
 import { Husk } from "./Husk.js";
+import { Hellwing } from "./Hellwing.js";
 
 const TYPES = ["husk", "strong", "runner", "brute", "siege"];
 
@@ -15,7 +16,11 @@ export class WaveManager {
     onEnemyExtracted,
     onWaveComplete,
     onSiegeClick,
-    onWaveMidpoint
+    onWaveMidpoint,
+    onHellwingSpawn,
+    onHellwingDestroyed,
+    onHellwingImpact,
+    getManorHealthRatio
   }) {
     this.scene = scene;
     this.assets = assets;
@@ -27,6 +32,10 @@ export class WaveManager {
     this.onWaveComplete = onWaveComplete;
     this.onSiegeClick = onSiegeClick;
     this.onWaveMidpoint = onWaveMidpoint;
+    this.onHellwingSpawn = onHellwingSpawn;
+    this.onHellwingDestroyed = onHellwingDestroyed;
+    this.onHellwingImpact = onHellwingImpact;
+    this.getManorHealthRatio = getManorHealthRatio;
 
     this.waveIndex = -1;
     this.config = null;
@@ -49,6 +58,12 @@ export class WaveManager {
     this.midpointTriggered = false;
     this.midpointPauseTimer = 0;
     this.midpointHold = false;
+    this.hellwings = [];
+    this.hellwingPool = [];
+    this.hellwingPoolMisses = 0;
+    this.hellwingGuaranteedSpawned = 0;
+    this.hellwingAdaptiveSpawned = 0;
+    this.hellwingAdaptiveChecksDone = new Set();
   }
 
   setNewGamePlus(enabled) {
@@ -182,6 +197,30 @@ export class WaveManager {
         await new Promise((resolve) => requestAnimationFrame(resolve));
       }
     }
+
+    const hellwingCount = CONFIG.hellwing?.poolSize ?? 4;
+    for (let index = 0; index < hellwingCount; index += 1) {
+      const hellwing = this.createHellwing({
+        id: -(10000 + index),
+        position: new THREE.Vector3(-45, 9, 0)
+      });
+      hellwing.preWarmAllActions();
+      hellwing.deactivateForPool();
+      this.hellwingPool.push(hellwing);
+      onProgress?.(1);
+      if (index % 2 === 1) await new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+  }
+
+  createHellwing({ id, position }) {
+    return new Hellwing({
+      id,
+      scene: this.scene,
+      assets: this.assets,
+      position,
+      onDestroyed: (data) => this.handleHellwingDestroyed(data),
+      onManorImpact: (enemy) => this.handleHellwingImpact(enemy)
+    });
   }
 
   createEnemy({ id, type, position }) {
@@ -201,11 +240,11 @@ export class WaveManager {
   }
 
   getWarmupSamples() {
-    return TYPES.map((type) => this.pools[type][0]).filter(Boolean);
+    return [...TYPES.map((type) => this.pools[type][0]).filter(Boolean), this.hellwingPool[0]].filter(Boolean);
   }
 
   getAllPooledEnemies() {
-    return Object.values(this.pools).flat();
+    return [...Object.values(this.pools).flat(), ...this.hellwingPool];
   }
 
   acquireEnemy(type, id, position) {
@@ -229,6 +268,105 @@ export class WaveManager {
     enemy.deactivateForPool();
     this.pools[enemy.type].push(enemy);
     this.pooledEnemies.add(enemy);
+  }
+
+  acquireHellwing(id, position, options = {}) {
+    const enemy = this.hellwingPool.pop();
+    if (!enemy) {
+      this.hellwingPoolMisses += 1;
+      return null;
+    }
+    enemy.resetForSpawn(id, position, options);
+    this.hellwings.push(enemy);
+    return enemy;
+  }
+
+  releaseHellwing(enemy) {
+    if (!enemy || enemy.removed) return;
+    enemy.deactivateForPool();
+    const index = this.hellwings.indexOf(enemy);
+    if (index >= 0) this.hellwings.splice(index, 1);
+    this.hellwingPool.push(enemy);
+  }
+
+  getActiveHellwingCount() {
+    let count = 0;
+    for (const enemy of this.hellwings) {
+      if (!enemy.dead && !enemy.removed) count += 1;
+    }
+    return count;
+  }
+
+  spawnHellwing({ tutorial = false, adaptive = false } = {}) {
+    if (this.getActiveHellwingCount() >= 2) return false;
+    const z = THREE.MathUtils.randFloat(-4.4, 4.4);
+    const y = THREE.MathUtils.randFloat(7.6, 10.2);
+    const x = tutorial ? -14.5 : THREE.MathUtils.randFloat(-23.0, -21.2);
+    const enemy = this.acquireHellwing(
+      this.nextEnemyId++,
+      new THREE.Vector3(x, y, z),
+      { tutorial }
+    );
+    if (!enemy) return false;
+    if (adaptive) this.hellwingAdaptiveSpawned += 1;
+    else this.hellwingGuaranteedSpawned += 1;
+    this.onHellwingSpawn?.(enemy, { tutorial, adaptive, wave: this.waveIndex + 1 });
+    return true;
+  }
+
+  handleHellwingDestroyed(data) {
+    const enemy = data?.enemy;
+    if (!enemy) return;
+    this.onHellwingDestroyed?.(data);
+    window.setTimeout(() => this.releaseHellwing(enemy), 80);
+  }
+
+  handleHellwingImpact(enemy) {
+    if (!enemy) return;
+    this.onHellwingImpact?.(enemy);
+    window.setTimeout(() => this.releaseHellwing(enemy), 80);
+  }
+
+  updateHellwingPressure() {
+    const wave = this.waveIndex + 1;
+    if (wave < (CONFIG.hellwing?.unlockWave ?? 45) || !this.running || !this.config) return;
+    const total = Math.max(1, this.queue.length);
+    const progress = this.spawned / total;
+    const remaining = total - this.spawned;
+    const guaranteed = CONFIG.hellwing?.guaranteedByWave?.[wave] ?? 0;
+
+    if (this.hellwingGuaranteedSpawned < guaranteed) {
+      const index = this.hellwingGuaranteedSpawned;
+      const thresholds = wave === 50
+        ? [0.10, 0.28, 0.43, 0.60, 0.76, 0.90]
+        : [0.40];
+      const threshold = thresholds[Math.min(index, thresholds.length - 1)] ?? 0.40;
+      if (progress >= threshold) {
+        const tutorial = wave === 45 && index === 0;
+        this.spawnHellwing({ tutorial, adaptive: false });
+      }
+    }
+
+    const adaptiveMax = CONFIG.hellwing?.adaptiveMaxByWave?.[wave] ?? 0;
+    if (adaptiveMax <= 0 || this.hellwingAdaptiveSpawned >= adaptiveMax) return;
+    const healthRatio = THREE.MathUtils.clamp(this.getManorHealthRatio?.() ?? 1, 0, 1);
+    const stopAt = wave === 50
+      ? (CONFIG.hellwing?.finalAdaptiveStopHealth ?? 0.30)
+      : (CONFIG.hellwing?.adaptiveStopHealth ?? 0.50);
+    if (healthRatio <= stopAt) return;
+
+    const checks = wave === 50
+      ? [0.24, 0.48, 0.68, 0.84, 0.94]
+      : [Math.max(0, 1 - 100 / total), Math.max(0, 1 - 45 / total), 0.94];
+    const healthGate = wave === 50 ? 0.58 : 0.72;
+    for (let index = 0; index < checks.length; index += 1) {
+      if (this.hellwingAdaptiveSpawned >= adaptiveMax) break;
+      if (this.hellwingAdaptiveChecksDone.has(index) || progress < checks[index]) continue;
+      this.hellwingAdaptiveChecksDone.add(index);
+      if (healthRatio >= healthGate && this.getActiveHellwingCount() < 2) {
+        this.spawnHellwing({ adaptive: true });
+      }
+    }
   }
 
   makeQueue(counts) {
@@ -275,11 +413,16 @@ export class WaveManager {
     this.midpointTriggered = false;
     this.midpointPauseTimer = 0;
     this.midpointHold = false;
+    this.hellwingGuaranteedSpawned = 0;
+    this.hellwingAdaptiveSpawned = 0;
+    this.hellwingAdaptiveChecksDone.clear();
     this.running = true;
   }
 
   update(dt) {
     if (!this.running || !this.config) return;
+
+    this.updateHellwingPressure();
 
     // Compact the active list in place instead of allocating a new filtered
     // array every frame. This reduces garbage-collector pressure in long waves.
@@ -305,7 +448,8 @@ export class WaveManager {
     if (
       waitingForMidpointClear &&
       this.resolved >= this.midpointCount &&
-      this.countActiveCombatEnemies() === 0
+      this.countActiveCombatEnemies() === 0 &&
+      this.getActiveHellwingCount() === 0
     ) {
       this.midpointTriggered = true;
       this.midpointHold = true;
@@ -353,7 +497,8 @@ export class WaveManager {
     if (
       this.spawned >= this.queue.length &&
       this.resolved >= this.queue.length &&
-      this.countActiveCombatEnemies() === 0
+      this.countActiveCombatEnemies() === 0 &&
+      this.getActiveHellwingCount() === 0
     ) {
       this.running = false;
       this.onWaveComplete?.(this.waveIndex);
@@ -445,6 +590,9 @@ export class WaveManager {
     for (const enemy of this.enemies) {
       if (!enemy.dead && !enemy.removed) this.aliveScratch.push(enemy);
     }
+    for (const enemy of this.hellwings) {
+      if (!enemy.dead && !enemy.removed) this.aliveScratch.push(enemy);
+    }
     return this.aliveScratch;
   }
 
@@ -466,8 +614,8 @@ export class WaveManager {
 
   getPoolDiagnostics() {
     return {
-      misses: this.poolMisses,
-      free: Object.fromEntries(TYPES.map((type) => [type, this.pools[type].length]))
+      misses: { ...this.poolMisses, hellwing: this.hellwingPoolMisses },
+      free: { ...Object.fromEntries(TYPES.map((type) => [type, this.pools[type].length])), hellwing: this.hellwingPool.length }
     };
   }
 
@@ -508,8 +656,10 @@ export class WaveManager {
   }
 
   clearActiveOnly() {
-    this.enemies.forEach((enemy) => this.releaseEnemy(enemy));
+    [...this.enemies].forEach((enemy) => this.releaseEnemy(enemy));
     this.enemies = [];
+    [...this.hellwings].forEach((enemy) => this.releaseHellwing(enemy));
+    this.hellwings = [];
     this.activeExtractions.clear();
     this.running = false;
   }
@@ -524,6 +674,8 @@ export class WaveManager {
       this.pools[type].forEach((enemy) => enemy.dispose());
       this.pools[type] = [];
     }
+    this.hellwingPool.forEach((enemy) => enemy.dispose());
+    this.hellwingPool = [];
     this.pooledEnemies.clear();
   }
 }

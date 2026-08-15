@@ -26,7 +26,7 @@ function makeWave(wave) {
   else if (wave === 47) total = 420;
   else if (wave === 48) total = 475;
   else if (wave === 49) total = 550;
-  else total = 800;
+  else total = 1000;
 
   let runner = 0;
   let strong = 0;
@@ -109,6 +109,7 @@ export const CONFIG = Object.freeze({
   assets: {
     husk: "./assets/husk.glb",
     strong: "./assets/strong-husk.glb",
+    hellwing: "./assets/hellwing.glb",
     runner: "./assets/running-crawl.glb",
     brute: "./assets/slow-walk.glb",
     siege: "./assets/skinny-monster.glb",
@@ -304,6 +305,16 @@ export const CONFIG = Object.freeze({
     effects: 44
   },
 
+
+  hellwing: {
+    unlockWave: 45,
+    impactHealthFraction: 0.10,
+    adaptiveStopHealth: 0.50,
+    finalAdaptiveStopHealth: 0.30,
+    guaranteedByWave: { 45: 1, 46: 1, 47: 1, 48: 1, 49: 1, 50: 6 },
+    adaptiveMaxByWave: { 45: 1, 46: 1, 47: 2, 48: 2, 49: 3, 50: 4 },
+    poolSize: 4
+  },
 
   mobileDifficulty: {
     lateWaveStart: 35,

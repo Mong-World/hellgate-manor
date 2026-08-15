@@ -15,7 +15,7 @@ export class AssetLibrary {
     // Loading several multi-megabyte GLBs simultaneously inside Portals can
     // occasionally fail even when every file exists, so this deliberately
     // uses a controlled sequential loader with retries.
-    const orderedKeys = ["husk", "strong", "manor", "runner", "brute", "siege", "shed"];
+    const orderedKeys = ["husk", "strong", "hellwing", "manor", "runner", "brute", "siege", "shed"];
     let completed = 0;
 
     for (const key of orderedKeys) {
@@ -128,6 +128,19 @@ export class AssetLibrary {
 
     this.materialVariants.set(key, clone);
     return clone;
+  }
+
+  createHellwingClone() {
+    const asset = this.getAsset("hellwing");
+    const scene = SkeletonUtils.clone(asset.scene);
+    scene.traverse((object) => {
+      if (!object.isMesh || !object.material) return;
+      // Keep the authored Hellwing material, but clone it once per clone so
+      // later visual tweaks never alter the loaded source asset.
+      if (Array.isArray(object.material)) object.material = object.material.map((material) => material.clone());
+      else object.material = object.material.clone();
+    });
+    return { scene, animations: asset.animations ?? [] };
   }
 
   createManorClone() {

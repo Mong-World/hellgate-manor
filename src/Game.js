@@ -171,7 +171,8 @@ export class Game {
       demolition: false,
       undercroft: false,
       occult: false,
-      overcharge: false
+      overcharge: false,
+      hellwing: false
     };
     this.firstWaveTutorialPending = false;
     this.firstWaveTutorialVisibleTimer = 0;
@@ -231,7 +232,11 @@ export class Game {
       onEnemyExtracted: (enemy) => this.handleEnemyExtracted(enemy),
       onWaveComplete: () => this.handleWaveComplete(),
       onSiegeClick: (enemy) => this.handleSiegeClick(enemy),
-      onWaveMidpoint: (index) => this.handleWaveMidpoint(index)
+      onWaveMidpoint: (index) => this.handleWaveMidpoint(index),
+      onHellwingSpawn: (enemy, meta) => this.handleHellwingSpawn(enemy, meta),
+      onHellwingDestroyed: (data) => this.handleHellwingDestroyed(data),
+      onHellwingImpact: (enemy) => this.handleHellwingImpact(enemy),
+      getManorHealthRatio: () => this.manorMaxHealth > 0 ? this.manorHealth / this.manorMaxHealth : 0
     });
     this.waveManager.setMobileDifficulty?.(this.mobileOptimized);
 
@@ -852,6 +857,47 @@ export class Game {
     }
   }
 
+  handleHellwingSpawn(enemy, { tutorial = false, wave = 0 } = {}) {
+    if (!tutorial || wave !== 45 || this.tutorialsSeen.hellwing) return;
+    this.tutorialsSeen.hellwing = true;
+    this.saveGame(this.waveIndex);
+    this.paused = true;
+    this.grabSystem?.setEnabled(false);
+    this.ui.showHellwingTutorial?.(() => {
+      if (!this.gameplayActive || this.ui.mode !== "playing") return;
+      this.paused = false;
+      this.grabSystem?.setEnabled(true);
+    });
+  }
+
+  handleHellwingDestroyed({ enemy, position } = {}) {
+    if (!enemy) return;
+    const impactPosition = position ?? enemy.position;
+    this.effectPool?.ash(impactPosition, false, 0.85);
+    this.effectPool?.ring(impactPosition.clone().setY(Math.max(0.08, impactPosition.y)), 7, 0xff5722);
+    this.audio.play("ash", { volume: 0.48, pitchMin: 1.05, pitchMax: 1.24 });
+    this.audio.play("whoosh", { volume: 0.34, pitchMin: 1.05, pitchMax: 1.18 });
+    this.cameraShake = Math.max(this.cameraShake, 0.07);
+  }
+
+  handleHellwingImpact(enemy) {
+    if (!this.gameplayActive || this.manorHealth <= 0 || !enemy) return;
+    const baseDamage = Math.max(1, Math.round(this.manorMaxHealth * (CONFIG.hellwing?.impactHealthFraction ?? 0.10)));
+    const damageMultiplier = this.overchargeActive ? (1 - (CONFIG.overcharge?.manorDamageReduction ?? 0.20)) : 1;
+    const appliedDamage = Math.max(1, Math.round(baseDamage * damageMultiplier));
+    const damageTaken = Math.min(this.manorHealth, appliedDamage);
+    this.manorHealth = Math.max(0, this.manorHealth - appliedDamage);
+    this.totalManorDamageTaken += damageTaken;
+    this.world.triggerManorDamageDust?.(enemy.position, "siege");
+    if (this.overchargeActive) this.world.pulseOverchargeShield?.();
+    this.audio.play("attack", { volume: 0.92, pitchMin: 1.16, pitchMax: 1.30, cooldown: 0 });
+    this.audio.play("whoosh", { volume: 0.58, pitchMin: 0.82, pitchMax: 0.96, cooldown: 0 });
+    this.ui.flashHealth();
+    this.cameraShake = Math.max(this.cameraShake, 0.30);
+    this.syncUI();
+    if (this.manorHealth <= 0) this.failWave();
+  }
+
   handleManorAttack(enemy) {
     if (!this.gameplayActive || this.manorHealth <= 0 || !enemy || enemy.dead) return;
     const damageMultiplier = this.overchargeActive ? (1 - (CONFIG.overcharge?.manorDamageReduction ?? 0.20)) : 1;
@@ -1289,6 +1335,7 @@ export class Game {
 
   checkWorldCollisions() {
     for (const enemy of this.waveManager.getAliveEnemies()) {
+      if (enemy.type === "hellwing") continue;
       // If a throwable demon gets launched completely behind the manor and
       // survives, recover it to the attack line rather than letting it become
       // inaccessible behind the model.
