@@ -29,7 +29,7 @@ const STRONG_EMBER_ANCHORS = Object.freeze([
 ]);
 const STRONG_EMBER_POOL_SIZE = 18;
 
-const HELLWING_EMBER_GEOMETRY = new THREE.IcosahedronGeometry(0.050, 0);
+const HELLWING_EMBER_GEOMETRY = new THREE.IcosahedronGeometry(0.030, 0);
 const HELLWING_EMBER_MATERIAL = new THREE.MeshBasicMaterial({
   color: 0xff7a2c,
   transparent: true,
@@ -316,7 +316,7 @@ export class BonusViewer {
       data.velocity.copy(EMBER_DRIFT);
       data.age = 0;
       data.life = THREE.MathUtils.randFloat(0.58, 0.96);
-      data.baseScale = THREE.MathUtils.randFloat(1.05, 2.10);
+      data.baseScale = THREE.MathUtils.randFloat(0.55, 1.05);
       data.phase = Math.random() * Math.PI * 2;
       data.spin = THREE.MathUtils.randFloat(4.2, 7.8);
       data.sway = THREE.MathUtils.randFloat(0.05, 0.12);
@@ -339,7 +339,7 @@ export class BonusViewer {
       ember.position.x += data.velocity.x * dt;
       ember.position.y += (data.velocity.y + swirlY + 0.08) * dt;
       ember.position.z += (data.velocity.z + swirlZ) * dt;
-      ember.scale.setScalar(Math.max(0.16, data.baseScale * (1 - t * 0.62)));
+      ember.scale.setScalar(Math.max(0.08, data.baseScale * (1 - t * 0.62)));
       ember.material.opacity = 0.30 + alpha * 0.66;
     }
   }
