@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#050609" />
+  <title>Hellgate Manor</title>
+  <script type="module" crossorigin src="./assets/index-Ixh7Z5cG.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-N2pxKokf.css">
+</head>
+<body>
+  <main id="game-shell" aria-label="Hellgate Manor"></main>
+  <canvas id="ui-canvas" aria-label="Game interface"></canvas>
+
+  <div id="rotate-device" aria-live="polite">
+    <div class="rotate-card">
+      <div class="rotate-phone" aria-hidden="true"><span></span></div>
+      <div class="rotate-title">ROTATE YOUR DEVICE</div>
+      <div class="rotate-copy">Hellgate Manor is played in landscape.</div>
+    </div>
+  </div>
+
+  <div id="loading" role="status" aria-live="polite">
+    <canvas id="loading-embers-canvas" aria-hidden="true"></canvas>
+    <div class="loading-panel">
+      <div class="loading-title">HELLGATE MANOR</div>
+      <img class="loading-studio-logo" src="./assets/moofstudiogame-BSMp_eWr.png" alt="A Moof Studios Game" />
+      <div class="loading-track"><div id="loading-progress"></div></div>
+      <div id="loading-percent">0%</div>
+    </div>
+  </div>
+
+
+  <script>
+    (() => {
+      const canvas = document.getElementById("loading-embers-canvas");
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d", { alpha: true });
+      const particles = [];
+      const COUNT = 120;
+      let last = 0;
+      let raf = 0;
+
+      const reset = (p, initial = false) => {
+        p.x = Math.random() * window.innerWidth;
+        p.y = initial ? Math.random() * window.innerHeight : window.innerHeight + Math.random() * 28;
+        p.vy = 28 + Math.random() * 55;
+        p.vx = -9 + Math.random() * 18;
+        p.size = 1 + Math.random() * 2.6;
+        p.alpha = 0.28 + Math.random() * 0.58;
+        p.phase = Math.random() * Math.PI * 2;
+      };
+
+      const resize = () => {
+        // Intentionally render loading particles at CSS-pixel resolution.
+        // This keeps the effect cheap even on high-DPI phones/desktops.
+        canvas.width = Math.max(1, Math.floor(window.innerWidth));
+        canvas.height = Math.max(1, Math.floor(window.innerHeight));
+      };
+
+      resize();
+      for (let i = 0; i < COUNT; i += 1) {
+        const p = {}; reset(p, true); particles.push(p);
+      }
+
+      const frame = (now) => {
+        if (!canvas.isConnected) return;
+        raf = requestAnimationFrame(frame);
+        if (now - last < 33) return; // cap at ~30fps during expensive asset loading
+        const dt = Math.min(0.05, Math.max(0.016, (now - last) / 1000 || 0.033));
+        last = now;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        for (const p of particles) {
+          p.phase += dt * 2.0;
+          p.x += (p.vx + Math.sin(p.phase) * 7) * dt;
+          p.y -= p.vy * dt;
+          if (p.y < -12 || p.x < -20 || p.x > canvas.width + 20) reset(p);
+          const fade = Math.min(1, (canvas.height - p.y + 20) / 90);
+          ctx.globalAlpha = p.alpha * Math.max(0.12, fade);
+          ctx.fillStyle = p.size > 2.8 ? "#ff9a4f" : "#ff6a28";
+          ctx.fillRect(p.x, p.y, p.size, p.size);
+        }
+        ctx.globalAlpha = 1;
+      };
+      raf = requestAnimationFrame(frame);
+      window.addEventListener("resize", resize, { passive: true });
+    })();
+  </script>
+</body>
+</html>
