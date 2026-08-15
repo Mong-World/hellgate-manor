@@ -685,9 +685,10 @@ export class UI {
     this.angularPath(x, y, width, height, Math.min(8, height * 0.2));
 
     let fill = disabled ? "rgba(35,35,39,.96)" : "rgba(48,23,17,.98)";
-    let stroke = disabled ? "rgba(120,120,120,.25)" : accent;
-    let text = disabled ? "#777" : C.text;
+    let stroke = disabled ? "rgba(120,120,120,.25)" : (typeof accent === "object" ? accent.stroke : accent);
+    let text = disabled ? "#777" : (typeof accent === "object" && accent.text ? accent.text : C.text);
     let lineWidth = disabled ? 1 : 1.5;
+    if (!disabled && typeof accent === "object" && accent.fill) fill = accent.fill;
 
     if (visualState === "locked") {
       fill = "rgba(31,32,36,.98)";
@@ -754,7 +755,7 @@ export class UI {
   drawStart(width, height) {
     const mobileLandscape = this.isMobileLandscape();
     const mobile = mobileLandscape || width < 700 || height < 620;
-    const buttonCount = 2 + (this.hasSave && !this.developerMode ? 1 : 0) + (this.ngPlusUnlocked && !this.developerMode ? 1 : 0);
+    const gameplayButtonCount = 1 + (this.hasSave && !this.developerMode ? 1 : 0) + (this.ngPlusUnlocked && !this.developerMode ? 1 : 0);
 
     // Keep the start menu tightly wrapped around its content. Earlier builds
     // reserved far more vertical space than the branding/buttons actually
@@ -766,13 +767,14 @@ export class UI {
     );
     const buttonHeight = mobileLandscape ? 38 : (mobile ? 46 : 50);
     const buttonGap = mobileLandscape ? 7 : 10;
+    const bonusSectionGap = mobileLandscape ? 14 : 18;
     const topBlockHeight = mobileLandscape ? 103 : (mobile ? 128 : 137);
     const bestRankExtra = this.bestRank && !this.developerMode ? (mobileLandscape ? 18 : 23) : 0;
     const developerExtra = this.developerMode ? (mobileLandscape ? 27 : 36) : 0;
     const bottomPadding = mobileLandscape ? 15 : 24;
     const panelHeight = topBlockHeight + bestRankExtra +
-      buttonCount * buttonHeight + Math.max(0, buttonCount - 1) * buttonGap +
-      bottomPadding + developerExtra;
+      gameplayButtonCount * buttonHeight + Math.max(0, gameplayButtonCount - 1) * buttonGap +
+      bonusSectionGap + buttonHeight + bottomPadding + developerExtra;
 
     const x = (width - panelWidth) / 2;
     const y = (height - panelHeight) / 2;
@@ -816,7 +818,28 @@ export class UI {
     this.button("NEW GAME", width / 2 - 105, buttonY, 210, buttonHeight, () => this.callbacks.onNewGame?.());
     buttonY += buttonHeight + buttonGap;
 
-    this.button("BONUS", width / 2 - 105, buttonY, 210, buttonHeight, () => this.callbacks.onOpenBonus?.());
+    if (this.hasSave && !this.developerMode) {
+      this.button("CONTINUE", width / 2 - 105, buttonY, 210, buttonHeight, () => this.callbacks.onContinueSave?.());
+      buttonY += buttonHeight + buttonGap;
+    }
+
+    if (this.ngPlusUnlocked && !this.developerMode) {
+      this.button("NEW GAME+ (HELL MODE)", width / 2 - 130, buttonY, 260, buttonHeight, () => this.callbacks.onNewGamePlus?.(), false, null, C.red);
+      buttonY += buttonHeight + buttonGap;
+    }
+
+    buttonY += bonusSectionGap;
+    this.button(
+      "BONUS",
+      width / 2 - 105,
+      buttonY,
+      210,
+      buttonHeight,
+      () => this.callbacks.onOpenBonus?.(),
+      false,
+      null,
+      { fill: "rgba(22,25,31,.98)", stroke: "rgba(236,152,102,.92)", text: C.orangeLight }
+    );
     if (this.bonusHasNew) {
       const dotX = width / 2 + 74;
       const dotY = buttonY + buttonHeight / 2;
@@ -831,16 +854,6 @@ export class UI {
       ctx.fill();
     }
     buttonY += buttonHeight + buttonGap;
-
-    if (this.hasSave && !this.developerMode) {
-      this.button("CONTINUE", width / 2 - 105, buttonY, 210, buttonHeight, () => this.callbacks.onContinueSave?.());
-      buttonY += buttonHeight + buttonGap;
-    }
-
-    if (this.ngPlusUnlocked && !this.developerMode) {
-      this.button("NEW GAME+ (HELL MODE)", width / 2 - 130, buttonY, 260, buttonHeight, () => this.callbacks.onNewGamePlus?.(), false, null, C.red);
-      buttonY += buttonHeight + buttonGap;
-    }
 
     if (this.developerMode) {
       ctx.fillStyle = C.purple;
@@ -1301,24 +1314,24 @@ export class UI {
       this.panel(innerX, innerY, innerW, innerH, C.panel2, 12);
       ctx.textAlign = "left";
       ctx.fillStyle = C.orangeLight;
-      ctx.font = this.dataFont(mobile ? 15 : 17, 900);
+      ctx.font = this.dataFont(mobile ? 17 : 20, 900);
       ctx.fillText("ABOUT", innerX + 18, innerY + 28);
       ctx.fillStyle = C.text;
-      ctx.font = this.dataFont(mobile ? 12 : 13, 700);
+      ctx.font = this.dataFont(mobile ? 15 : 17, 700);
       this.multilineText([
         "Hellgate Manor stands on the edge of a breach between this world and something far worse. Night after night, creatures pour through the Hell Gate and march toward the Manor. The only thing holding them back is you.",
         "Destroy the invading demons, bind their souls, strengthen the Manor's defences and survive until dawn. As the night grows darker, stronger creatures emerge from the breach."
-      ], innerX + 18, innerY + 52, innerW - 36, mobile ? 18 : 21);
+      ], innerX + 18, innerY + 56, innerW - 36, mobile ? 22 : 26);
       ctx.fillStyle = C.orangeLight;
-      ctx.font = this.dataFont(mobile ? 15 : 17, 900);
-      ctx.fillText("HELP", innerX + 18, innerY + (mobile ? 182 : 204));
+      ctx.font = this.dataFont(mobile ? 17 : 20, 900);
+      ctx.fillText("HELP", innerX + 18, innerY + (mobile ? 214 : 250));
       ctx.fillStyle = C.text;
-      ctx.font = this.dataFont(mobile ? 12 : 13, 700);
+      ctx.font = this.dataFont(mobile ? 15 : 17, 700);
       this.multilineText([
         "Grab and throw demons to destroy them. Stronger enemies may require repeated attacks or different tactics.",
         "Collect Souls to repair and upgrade the Manor. Capture eligible demons through Soul Extraction to create Bound Souls, then assign them to your defences to make them stronger.",
         "Watch the Manor's health carefully. Some enemies can bypass automated defences and must be dealt with directly."
-      ], innerX + 18, innerY + (mobile ? 206 : 232), innerW - 36, mobile ? 18 : 21);
+      ], innerX + 18, innerY + (mobile ? 242 : 282), innerW - 36, mobile ? 22 : 26);
       return;
     }
 
@@ -1350,23 +1363,23 @@ export class UI {
     const mobileLandscape = this.isMobileLandscape();
     const mobile = mobileLandscape || width < 760 || height < 680;
     const ctx = this.ctx;
-    ctx.fillStyle = "rgba(0,0,0,.16)";
+    ctx.fillStyle = "rgba(0,0,0,.08)";
     ctx.fillRect(0, 0, width, height);
-    const topW = Math.min(width - 30, mobileLandscape ? 560 : 620);
-    const topH = mobileLandscape ? 76 : 88;
-    const topX = (width - topW) / 2;
-    const topY = 16;
-    this.panel(topX, topY, topW, topH, "rgba(7,8,11,.88)", 12);
+    const panelW = Math.min(width - 30, mobileLandscape ? 640 : 700);
+    const panelH = mobileLandscape ? 84 : 98;
+    const panelX = (width - panelW) / 2;
+    const panelY = height - panelH - 18;
+    this.panel(panelX, panelY, panelW, panelH, "rgba(7,8,11,.90)", 12);
     ctx.textAlign = "center";
     ctx.fillStyle = C.text;
     ctx.font = this.font(mobileLandscape ? 24 : 30);
     const label = this.bonusEnemyDefs.find((entry) => entry.key === this.bonusViewerEnemy)?.label ?? "MODEL VIEWER";
-    ctx.fillText(label.toUpperCase(), width / 2, topY + (mobileLandscape ? 28 : 34));
+    ctx.fillText(label.toUpperCase(), width / 2, panelY + (mobileLandscape ? 28 : 34));
     ctx.fillStyle = C.orangeLight;
     ctx.font = this.dataFont(mobileLandscape ? 9 : 11, 800);
-    ctx.fillText(mobileLandscape ? "DRAG TO ROTATE • PINCH/SCROLL TO ZOOM" : "DRAG TO ROTATE • SCROLL TO ZOOM", width / 2, topY + (mobileLandscape ? 49 : 58));
-    this.button("BACK", topX + topW - 96, topY + topH - 36, 80, 28, () => this.callbacks.onBonusViewerBack?.());
-    this.button("RESET", topX + 16, topY + topH - 36, 80, 28, () => this.callbacks.onBonusViewerReset?.());
+    ctx.fillText(mobileLandscape ? "DRAG TO ROTATE • PINCH/SCROLL TO ZOOM" : "DRAG TO ROTATE • SCROLL TO ZOOM", width / 2, panelY + (mobileLandscape ? 49 : 58));
+    this.button("RESET", panelX + 16, panelY + panelH - 36, 80, 28, () => this.callbacks.onBonusViewerReset?.());
+    this.button("BACK", panelX + panelW - 96, panelY + panelH - 36, 80, 28, () => this.callbacks.onBonusViewerBack?.());
   }
 
   multilineText(paragraphs, x, y, maxWidth, lineHeight) {
